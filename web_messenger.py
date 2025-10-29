@@ -1,120 +1,49 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, String, Integer, Boolean, DateTime, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from datetime import datetime
 import json
 import uuid
-import os
-import base64
-from io import BytesIO
-from typing import Dict, List, Optional
+from typing import Dict, List
 import uvicorn
-import aiofiles
 
 # Конфигурация
 class Config:
-    SECRET_KEY = "tandau-secret-key-2024-mobile-simple"
-    ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = 1440
-    DATABASE_URL = "sqlite:///./tandau.db"
-    
     THEME = {
         'primary': '#6366F1',
-        'primary_dark': '#4F46E5',
+        'primary_dark': '#4F46E5', 
         'primary_light': '#8B5CF6',
         'secondary': '#10B981',
         'accent': '#F59E0B',
         'danger': '#EF4444',
         'success': '#10B981',
-        'warning': '#F59E0B',
         'background': '#0F0F1A',
         'surface': '#1A1B2E',
         'card': '#252642',
         'text_primary': '#FFFFFF',
         'text_secondary': '#A0A0B8',
-        'text_light': '#6B6B8B',
         'border': '#373755',
-        'white': '#FFFFFF',
-        'gradient_start': '#6366F1',
-        'gradient_end': '#8B5CF6'
     }
 
-# Создаем директории
-os.makedirs("uploads/images", exist_ok=True)
-os.makedirs("uploads/voices", exist_ok=True)
-os.makedirs("uploads/files", exist_ok=True)
-os.makedirs("user_avatars", exist_ok=True)
-
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, index=True)
-    password_hash = Column(String(255))
-    is_admin = Column(Boolean, default=False)
-    avatar_path = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-class Message(Base):
-    __tablename__ = "messages"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50))
-    content = Column(Text)
-    message_type = Column(String(20), default="text")
-    file_path = Column(String(255))
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    chat_type = Column(String(20), default="public")
-
-engine = create_engine(Config.DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base.metadata.create_all(bind=engine)
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=Config.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, Config.SECRET_KEY, algorithm=Config.ALGORITHM)
-
-def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=[Config.ALGORITHM])
-        return payload.get("sub")
-    except JWTError:
-        return None
-
+# Менеджер соединений
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
-        self.user_data: Dict[str, dict] = {}
         self.messages_history = []
+        self.users = {}  # Простое хранилище пользователей
 
-    async def connect(self, websocket: WebSocket, username: str, user_data: dict = None):
+    async def connect(self, websocket: WebSocket, username: str):
         await websocket.accept()
         if username not in self.active_connections:
             self.active_connections[username] = []
         self.active_connections[username].append(websocket)
         
-        if user_data:
-            self.user_data[username] = user_data
+        self.users[username] = {
+            'joined_at': datetime.now(),
+            'is_online': True
+        }
         
-        # Отправляем историю сообщений
-        for msg in self.messages_history[-50:]:
+        # Отправляем историю новому пользователю
+        for msg in self.messages_history[-20:]:
             await websocket.send_text(json.dumps(msg))
         
         await self.broadcast_system_message(f"🟢 {username} присоединился к чату")
@@ -125,8 +54,8 @@ class ConnectionManager:
             self.active_connections[username].remove(websocket)
             if not self.active_connections[username]:
                 del self.active_connections[username]
-                if username in self.user_data:
-                    del self.user_data[username]
+                if username in self.users:
+                    self.users[username]['is_online'] = False
 
     async def send_to_user(self, username: str, message: str):
         if username in self.active_connections:
@@ -145,19 +74,10 @@ class ConnectionManager:
                     continue
 
     async def broadcast_user_list(self):
-        users = list(self.active_connections.keys())
-        user_data = []
-        for username in users:
-            user_info = {
-                "username": username,
-                "is_online": True,
-                "is_admin": self.user_data.get(username, {}).get("is_admin", False)
-            }
-            user_data.append(user_info)
-        
+        online_users = list(self.active_connections.keys())
         await self.broadcast(json.dumps({
             "type": "user_list", 
-            "users": user_data
+            "users": online_users
         }))
 
     async def broadcast_system_message(self, message: str):
@@ -176,62 +96,16 @@ class ConnectionManager:
             "id": str(uuid.uuid4()),
             "username": message_data["username"],
             "content": message_data["content"],
-            "message_type": message_data.get("message_type", "text"),
-            "file_data": message_data.get("file_data"),
-            "timestamp": datetime.now().isoformat(),
-            "is_admin": message_data.get("is_admin", False)
+            "timestamp": datetime.now().isoformat()
         }
         self.messages_history.append(message)
         await self.broadcast(json.dumps(message))
 
-class UserRegister(BaseModel):
-    username: str
-    password: str
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-app = FastAPI(title="Tandau Messenger Mobile")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/user_avatars", StaticFiles(directory="user_avatars"), name="user_avatars")
-
+# FastAPI приложение
+app = FastAPI(title="Tandau Messenger")
 manager = ConnectionManager()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-async def save_uploaded_file(file: UploadFile, folder: str) -> str:
-    file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'file'
-    filename = f"{uuid.uuid4()}.{file_extension}"
-    file_path = f"uploads/{folder}/{filename}"
-    
-    async with aiofiles.open(file_path, 'wb') as buffer:
-        content = await file.read()
-        await buffer.write(content)
-    
-    return file_path
-
-def get_user_avatar_url(username: str, db) -> str:
-    user = db.query(User).filter(User.username == username).first()
-    if user and user.avatar_path:
-        return f"/user_avatars/{os.path.basename(user.avatar_path)}"
-    return None
-
-# HTML с адаптивным дизайном (упрощенный)
+# HTML с адаптивным дизайном
 HTML = """
 <!DOCTYPE html>
 <html lang="ru">
@@ -256,14 +130,13 @@ HTML = """
             overflow: hidden;
         }
         
-        /* Контейнеры */
         .container { 
             display: flex; 
             height: 100vh;
             height: 100dvh;
         }
         
-        /* Боковая панель - скрыта на мобильных */
+        /* Боковая панель */
         .sidebar {
             width: 300px;
             background: #1A1B2E;
@@ -335,7 +208,7 @@ HTML = """
             margin-bottom: 0.2rem;
         }
         
-        /* Адаптивные стили для мобильных */
+        /* Адаптивные стили */
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed;
@@ -391,10 +264,6 @@ HTML = """
                 padding-bottom: calc(1rem + env(safe-area-inset-bottom));
             }
             
-            .input-container {
-                gap: 0.5rem;
-            }
-            
             .message-input {
                 padding: 0.8rem 1rem;
                 font-size: 1rem;
@@ -403,25 +272,10 @@ HTML = """
             .send-button {
                 padding: 0.8rem 1.2rem;
                 font-size: 0.9rem;
-                white-space: nowrap;
             }
             
             .chat-header {
-                padding: 1rem;
                 display: none;
-            }
-            
-            .chat-actions {
-                gap: 0.5rem;
-            }
-            
-            .action-btn {
-                padding: 0.4rem 0.8rem;
-                font-size: 0.8rem;
-            }
-            
-            .message-image {
-                max-width: 250px !important;
             }
         }
         
@@ -430,44 +284,26 @@ HTML = """
                 max-width: 80% !important;
             }
             
-            .message-bubble {
-                max-width: 100%;
-            }
-            
             .user-avatar {
                 width: 35px !important;
                 height: 35px !important;
-                font-size: 0.8rem !important;
             }
             
             .message-avatar {
                 width: 32px !important;
                 height: 32px !important;
-                font-size: 0.8rem !important;
             }
             
             .auth-form {
                 width: 90% !important;
                 padding: 1.5rem !important;
             }
-            
-            .auth-left h1 {
-                font-size: 2.5rem !important;
-            }
         }
         
         /* Десктоп стили */
         @media (min-width: 769px) {
-            .mobile-header {
+            .mobile-header, .mobile-nav {
                 display: none !important;
-            }
-            
-            .mobile-nav {
-                display: none !important;
-            }
-            
-            .sidebar {
-                transform: translateX(0) !important;
             }
         }
         
@@ -476,12 +312,6 @@ HTML = """
             background: linear-gradient(135deg, #6366F1, #8B5CF6);
             padding: 2rem;
             text-align: center;
-        }
-        
-        .sidebar-header h1 {
-            font-size: 1.8rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
         }
         
         .user-info {
@@ -504,9 +334,6 @@ HTML = """
             justify-content: center;
             font-weight: bold;
             font-size: 1.2rem;
-            flex-shrink: 0;
-            background-size: cover;
-            background-position: center;
         }
         
         .chat-area {
@@ -519,9 +346,6 @@ HTML = """
             background: #1A1B2E;
             padding: 1.5rem 2rem;
             border-bottom: 1px solid #373755;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         
         .messages-container {
@@ -551,7 +375,6 @@ HTML = """
             justify-content: center;
             font-weight: bold;
             font-size: 0.9rem;
-            flex-shrink: 0;
         }
         
         .message-content {
@@ -703,28 +526,6 @@ HTML = """
             flex: 1;
             overflow-y: auto;
         }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-        }
-        
-        .modal-content {
-            background: #1A1B2E;
-            padding: 2rem;
-            border-radius: 12px;
-            max-width: 500px;
-            width: 100%;
-        }
     </style>
 </head>
 <body>
@@ -733,9 +534,9 @@ HTML = """
         <div class="auth-left">
             <div style="text-align: center;">
                 <h1 style="font-size: 3rem; margin-bottom: 1rem;">Tandau</h1>
-                <p style="font-size: 1.2rem; margin-bottom: 2rem;">Адаптивный мессенджер</p>
+                <p style="font-size: 1.2rem; margin-bottom: 2rem;">Простой мессенджер</p>
                 <div style="text-align: left;">
-                    <div style="margin: 1rem 0; font-size: 1.1rem;">📱 Полная адаптивность</div>
+                    <div style="margin: 1rem 0; font-size: 1.1rem;">📱 Адаптивный дизайн</div>
                     <div style="margin: 1rem 0; font-size: 1.1rem;">🌐 Реальное время</div>
                     <div style="margin: 1rem 0; font-size: 1.1rem;">💬 Групповой чат</div>
                 </div>
@@ -743,22 +544,12 @@ HTML = """
         </div>
         <div class="auth-right">
             <div class="auth-form">
-                <h2 id="authTitle">Вход в систему</h2>
-                <div id="loginForm">
-                    <input type="text" id="loginUsername" class="form-input" placeholder="Имя пользователя">
-                    <input type="password" id="loginPassword" class="form-input" placeholder="Пароль">
-                    <button class="auth-button" onclick="login()">Войти</button>
-                    <div style="text-align: center; color: #6366F1; cursor: pointer;" onclick="showRegister()">
-                        Нет аккаунта? Зарегистрироваться
-                    </div>
-                </div>
-                <div id="registerForm" style="display: none;">
-                    <input type="text" id="registerUsername" class="form-input" placeholder="Имя пользователя">
-                    <input type="password" id="registerPassword" class="form-input" placeholder="Пароль">
-                    <input type="password" id="registerConfirm" class="form-input" placeholder="Повторите пароль">
-                    <button class="auth-button" onclick="register()">Зарегистрироваться</button>
-                    <div style="text-align: center; color: #6366F1; cursor: pointer;" onclick="showLogin()">
-                        Уже есть аккаунт? Войти
+                <h2>Вход в чат</h2>
+                <div>
+                    <input type="text" id="usernameInput" class="form-input" placeholder="Введите ваше имя">
+                    <button class="auth-button" onclick="login()">Войти в чат</button>
+                    <div style="text-align: center; color: #A0A0B8;">
+                        Просто введите имя и начинайте общаться!
                     </div>
                 </div>
             </div>
@@ -770,7 +561,7 @@ HTML = """
         <!-- Мобильный хедер -->
         <div class="mobile-header">
             <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
-            <h2 id="mobileChatTitle">🌐 Публичный чат</h2>
+            <h2>💬 Чат</h2>
             <button class="mobile-menu-btn" onclick="showMobileMenu()">⋯</button>
         </div>
 
@@ -778,7 +569,7 @@ HTML = """
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h1>Tandau</h1>
-                <p>Mobile Messenger</p>
+                <p>Simple Messenger</p>
             </div>
             
             <div class="user-info">
@@ -829,9 +620,9 @@ HTML = """
                     <i>👥</i>
                     <span>Люди</span>
                 </button>
-                <button class="nav-tab" onclick="switchMobileTab('profile')">
-                    <i>👤</i>
-                    <span>Профиль</span>
+                <button class="nav-tab" onclick="showInfo()">
+                    <i>ℹ️</i>
+                    <span>Инфо</span>
                 </button>
             </div>
         </div>
@@ -840,7 +631,6 @@ HTML = """
     <script>
         let ws = null;
         let currentUser = null;
-        let token = null;
         let isMobile = window.innerWidth <= 768;
 
         // Мобильные функции
@@ -863,86 +653,33 @@ HTML = """
         }
 
         function showMobileMenu() {
-            alert('Мобильное меню:\n1. Настройки\n2. Сменить чат\n3. Выйти');
+            const action = confirm('Действия:\nOK - Обновить чат\nОтмена - Выйти');
+            if (!action) {
+                location.reload();
+            }
+        }
+
+        function showInfo() {
+            alert('Tandau Messenger v1.0\nПростой чат в реальном времени');
         }
 
         // Аутентификация
-        async function login() {
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
-
-            if (!username || !password) {
-                alert('Пожалуйста, заполните все поля');
+        function login() {
+            const username = document.getElementById('usernameInput').value.trim();
+            
+            if (!username) {
+                alert('Пожалуйста, введите ваше имя');
                 return;
             }
 
-            try {
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password})
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    token = data.access_token;
-                    currentUser = username;
-                    startWebSocket();
-                    showMainScreen();
-                } else {
-                    alert(data.detail || 'Ошибка входа');
-                }
-            } catch (error) {
-                alert('Ошибка подключения к серверу');
-            }
-        }
-
-        async function register() {
-            const username = document.getElementById('registerUsername').value;
-            const password = document.getElementById('registerPassword').value;
-            const confirm = document.getElementById('registerConfirm').value;
-
-            if (!username || !password || !confirm) {
-                alert('Пожалуйста, заполните все поля');
+            if (username.length < 2) {
+                alert('Имя должно быть не менее 2 символов');
                 return;
             }
 
-            if (password !== confirm) {
-                alert('Пароли не совпадают');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/auth/register', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password})
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    alert('Регистрация успешна!');
-                    showLogin();
-                } else {
-                    alert(data.detail || 'Ошибка регистрации');
-                }
-            } catch (error) {
-                alert('Ошибка подключения к серверу');
-            }
-        }
-
-        function showLogin() {
-            document.getElementById('authTitle').textContent = 'Вход в систему';
-            document.getElementById('loginForm').style.display = 'block';
-            document.getElementById('registerForm').style.display = 'none';
-        }
-
-        function showRegister() {
-            document.getElementById('authTitle').textContent = 'Регистрация';
-            document.getElementById('loginForm').style.display = 'none';
-            document.getElementById('registerForm').style.display = 'block';
+            currentUser = username;
+            startWebSocket();
+            showMainScreen();
         }
 
         function showMainScreen() {
@@ -953,20 +690,19 @@ HTML = """
             document.getElementById('messageInput').disabled = false;
             document.getElementById('sendButton').disabled = false;
             
-            if (isMobile) {
-                document.getElementById('mobileChatTitle').textContent = '💬 Чат';
-            }
+            // Фокус на поле ввода
+            document.getElementById('messageInput').focus();
         }
 
         // WebSocket
         function startWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`;
+            const wsUrl = `${protocol}//${window.location.host}/ws?username=${encodeURIComponent(currentUser)}`;
             
             ws = new WebSocket(wsUrl);
 
             ws.onopen = function() {
-                console.log('Connected');
+                console.log('WebSocket connected');
             };
 
             ws.onmessage = function(event) {
@@ -975,10 +711,17 @@ HTML = """
             };
 
             ws.onclose = function() {
-                console.log('Disconnected');
+                console.log('WebSocket disconnected');
+                // Пытаемся переподключиться
                 setTimeout(() => {
-                    if (currentUser) startWebSocket();
+                    if (currentUser) {
+                        startWebSocket();
+                    }
                 }, 3000);
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
             };
         }
 
@@ -1038,7 +781,7 @@ HTML = """
                 userDiv.style.cssText = 'padding: 0.5rem; margin: 0.2rem 0; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem;';
                 userDiv.innerHTML = `
                     <div style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></div>
-                    <span>${user.username}</span>
+                    <span>${user}</span>
                 `;
                 container.appendChild(userDiv);
             });
@@ -1049,7 +792,11 @@ HTML = """
             const content = input.value.trim();
             
             if (content && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({content: content}));
+                const message = {
+                    content: content
+                };
+                
+                ws.send(JSON.stringify(message));
                 input.value = '';
                 adjustTextareaHeight(input);
             }
@@ -1078,9 +825,14 @@ HTML = """
             adjustTextareaHeight(this);
         });
 
+        document.getElementById('usernameInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+
         window.addEventListener('resize', checkMobile);
         checkMobile();
-        showLogin();
     </script>
 </body>
 </html>
@@ -1090,60 +842,19 @@ HTML = """
 async def root():
     return HTMLResponse(HTML)
 
-@app.post("/api/auth/register")
-async def register(user: UserRegister, db: SessionLocal = Depends(get_db)):
-    existing_user = db.query(User).filter(User.username == user.username).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
-    
-    hashed_password = get_password_hash(user.password)
-    db_user = User(username=user.username, password_hash=hashed_password)
-    db.add(db_user)
-    db.commit()
-    
-    return {"message": "User created successfully"}
-
-@app.post("/api/auth/login")
-async def login(user: UserLogin, db: SessionLocal = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == user.username).first()
-    if not db_user or not verify_password(user.password, db_user.password_hash):
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
-    
-    access_token = create_access_token(data={"sub": db_user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
-
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str):
-    username = verify_token(token)
-    if not username:
-        await websocket.close()
-        return
-
-    db = SessionLocal()
-    user = db.query(User).filter(User.username == username).first()
-    user_data = {"is_admin": user.is_admin if user else False}
-    db.close()
-
-    await manager.connect(websocket, username, user_data)
+async def websocket_endpoint(websocket: WebSocket, username: str = "Anonymous"):
+    await manager.connect(websocket, username)
     
     try:
         while True:
             data = await websocket.receive_text()
             message_data = json.loads(data)
             
-            db = SessionLocal()
-            db_message = Message(
-                username=username,
-                content=message_data["content"]
-            )
-            db.add(db_message)
-            db.commit()
-            db.close()
-            
+            # Отправляем сообщение всем
             await manager.send_message({
                 "username": username,
-                "content": message_data["content"],
-                "is_admin": user_data["is_admin"]
+                "content": message_data["content"]
             })
             
     except WebSocketDisconnect:
