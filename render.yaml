@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: tandau-messenger-pro
+    name: tandau-messenger-mobile
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
