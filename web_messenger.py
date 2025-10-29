@@ -16,12 +16,11 @@ import base64
 from io import BytesIO
 from typing import Dict, List, Optional
 import uvicorn
-from PIL import Image
 import aiofiles
 
 # Конфигурация
 class Config:
-    SECRET_KEY = "tandau-secret-key-2024-mobile"
+    SECRET_KEY = "tandau-secret-key-2024-mobile-simple"
     ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 1440
     DATABASE_URL = "sqlite:///./tandau.db"
@@ -103,6 +102,7 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.user_data: Dict[str, dict] = {}
+        self.messages_history = []
 
     async def connect(self, websocket: WebSocket, username: str, user_data: dict = None):
         await websocket.accept()
@@ -112,6 +112,10 @@ class ConnectionManager:
         
         if user_data:
             self.user_data[username] = user_data
+        
+        # Отправляем историю сообщений
+        for msg in self.messages_history[-50:]:
+            await websocket.send_text(json.dumps(msg))
         
         await self.broadcast_system_message(f"🟢 {username} присоединился к чату")
         await self.broadcast_user_list()
@@ -157,12 +161,14 @@ class ConnectionManager:
         }))
 
     async def broadcast_system_message(self, message: str):
-        await self.broadcast(json.dumps({
+        system_msg = {
             "type": "system",
             "id": str(uuid.uuid4()),
             "content": message,
             "timestamp": datetime.now().isoformat()
-        }))
+        }
+        self.messages_history.append(system_msg)
+        await self.broadcast(json.dumps(system_msg))
 
     async def send_message(self, message_data: dict):
         message = {
@@ -175,6 +181,7 @@ class ConnectionManager:
             "timestamp": datetime.now().isoformat(),
             "is_admin": message_data.get("is_admin", False)
         }
+        self.messages_history.append(message)
         await self.broadcast(json.dumps(message))
 
 class UserRegister(BaseModel):
@@ -208,7 +215,7 @@ def get_db():
         db.close()
 
 async def save_uploaded_file(file: UploadFile, folder: str) -> str:
-    file_extension = file.filename.split('.')[-1]
+    file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'file'
     filename = f"{uuid.uuid4()}.{file_extension}"
     file_path = f"uploads/{folder}/{filename}"
     
@@ -218,31 +225,13 @@ async def save_uploaded_file(file: UploadFile, folder: str) -> str:
     
     return file_path
 
-async def process_image(image: UploadFile) -> dict:
-    file_path = await save_uploaded_file(image, "images")
-    
-    with Image.open(file_path) as img:
-        if img.mode in ('RGBA', 'LA', 'P'):
-            img = img.convert('RGB')
-        
-        # Для мобильных делаем меньше превью
-        img.thumbnail((400, 400))
-        preview_path = f"uploads/images/preview_{os.path.basename(file_path)}"
-        img.save(preview_path, "JPEG", quality=85)
-    
-    return {
-        "original": file_path,
-        "preview": preview_path,
-        "filename": image.filename
-    }
-
 def get_user_avatar_url(username: str, db) -> str:
     user = db.query(User).filter(User.username == username).first()
     if user and user.avatar_path:
         return f"/user_avatars/{os.path.basename(user.avatar_path)}"
     return None
 
-# АДАПТИВНЫЙ HTML ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ
+# HTML с адаптивным дизайном (упрощенный)
 HTML = """
 <!DOCTYPE html>
 <html lang="ru">
@@ -265,8 +254,6 @@ HTML = """
             height: 100vh;
             height: 100dvh;
             overflow: hidden;
-            position: fixed;
-            width: 100%;
         }
         
         /* Контейнеры */
@@ -274,7 +261,6 @@ HTML = """
             display: flex; 
             height: 100vh;
             height: 100dvh;
-            position: relative;
         }
         
         /* Боковая панель - скрыта на мобильных */
@@ -285,10 +271,6 @@ HTML = """
             display: flex;
             flex-direction: column;
             transition: transform 0.3s ease;
-        }
-        
-        .mobile-hidden {
-            display: none;
         }
         
         /* Мобильная навигация */
@@ -362,6 +344,7 @@ HTML = """
                 height: 100%;
                 z-index: 1000;
                 transform: translateX(-100%);
+                width: 280px;
             }
             
             .sidebar.mobile-visible {
@@ -387,7 +370,7 @@ HTML = """
             
             .messages-container {
                 padding: 1rem;
-                padding-bottom: 80px; /* Место для навигации */
+                padding-bottom: 80px;
             }
             
             .message {
@@ -423,12 +406,9 @@ HTML = """
                 white-space: nowrap;
             }
             
-            .media-buttons {
-                display: none; /* Скрываем на мобильных для экономии места */
-            }
-            
             .chat-header {
                 padding: 1rem;
+                display: none;
             }
             
             .chat-actions {
@@ -476,7 +456,22 @@ HTML = """
             }
         }
         
-        /* Базовые стили (остаются как были) */
+        /* Десктоп стили */
+        @media (min-width: 769px) {
+            .mobile-header {
+                display: none !important;
+            }
+            
+            .mobile-nav {
+                display: none !important;
+            }
+            
+            .sidebar {
+                transform: translateX(0) !important;
+            }
+        }
+        
+        /* Базовые стили */
         .sidebar-header {
             background: linear-gradient(135deg, #6366F1, #8B5CF6);
             padding: 2rem;
@@ -514,48 +509,10 @@ HTML = """
             background-position: center;
         }
         
-        .user-details h3 {
-            font-size: 1.1rem;
-            margin-bottom: 0.2rem;
-        }
-        
-        .status-online {
-            color: #10B981;
-            font-size: 0.9rem;
-        }
-        
-        .nav-menu {
-            padding: 1rem;
-        }
-        
-        .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 1rem;
-            margin: 0.5rem 0;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: #A0A0B8;
-        }
-        
-        .nav-item:hover, .nav-item.active {
-            background: #252642;
-            color: #6366F1;
-        }
-        
-        .nav-item i {
-            font-size: 1.2rem;
-            margin-right: 1rem;
-            width: 20px;
-            text-align: center;
-        }
-        
         .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
-            width: calc(100% - 300px);
         }
         
         .chat-header {
@@ -567,33 +524,11 @@ HTML = """
             align-items: center;
         }
         
-        .chat-header h2 {
-            font-size: 1.5rem;
-        }
-        
-        .chat-actions {
-            display: flex;
-            gap: 1rem;
-        }
-        
-        .action-btn {
-            background: #252642;
-            border: none;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
         .messages-container {
             flex: 1;
             overflow-y: auto;
             padding: 2rem;
             background: #0F0F1A;
-            padding-bottom: 100px;
         }
         
         .message {
@@ -617,8 +552,6 @@ HTML = """
             font-weight: bold;
             font-size: 0.9rem;
             flex-shrink: 0;
-            background-size: cover;
-            background-position: center;
         }
         
         .message-content {
@@ -636,17 +569,8 @@ HTML = """
             margin-bottom: 0.5rem;
         }
         
-        .message.own .message-header {
-            justify-content: flex-end;
-        }
-        
         .message-username {
             font-weight: bold;
-        }
-        
-        .admin-badge {
-            color: #F59E0B;
-            font-size: 0.8rem;
         }
         
         .message-time {
@@ -667,23 +591,6 @@ HTML = """
             background: #6366F1;
         }
         
-        .message-image {
-            max-width: 300px;
-            border-radius: 12px;
-            margin-top: 0.5rem;
-            cursor: pointer;
-        }
-        
-        .message-file {
-            background: #1A1B2E;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-top: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
         .system-message {
             text-align: center;
             color: #A0A0B8;
@@ -695,31 +602,12 @@ HTML = """
             background: #1A1B2E;
             padding: 1.5rem 2rem;
             border-top: 1px solid #373755;
-            position: sticky;
-            bottom: 0;
         }
         
         .input-container {
             display: flex;
             gap: 1rem;
             align-items: center;
-        }
-        
-        .media-buttons {
-            display: flex;
-            gap: 0.5rem;
-        }
-        
-        .media-btn {
-            background: #252642;
-            border: none;
-            border-radius: 8px;
-            padding: 0.75rem;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         
         .message-input {
@@ -736,10 +624,6 @@ HTML = """
             font-family: inherit;
         }
         
-        .message-input:focus {
-            border-color: #6366F1;
-        }
-        
         .send-button {
             background: #6366F1;
             color: white;
@@ -748,17 +632,11 @@ HTML = """
             padding: 1rem 2rem;
             font-size: 1rem;
             cursor: pointer;
-            transition: background 0.3s ease;
-        }
-        
-        .send-button:hover {
-            background: #4F46E5;
         }
         
         .auth-container {
             display: flex;
             height: 100vh;
-            height: 100dvh;
             background: linear-gradient(135deg, #4F46E5, #0F0F1A);
             flex-direction: column;
         }
@@ -779,16 +657,6 @@ HTML = """
             padding: 2rem;
         }
         
-        .auth-left-content {
-            text-align: center;
-            max-width: 400px;
-        }
-        
-        .auth-left h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        
         .auth-right {
             flex: 1;
             background: #1A1B2E;
@@ -803,12 +671,6 @@ HTML = """
             padding: 2rem;
         }
         
-        .auth-form h2 {
-            font-size: 2rem;
-            margin-bottom: 2rem;
-            text-align: center;
-        }
-        
         .form-input {
             width: 100%;
             background: #252642;
@@ -819,10 +681,6 @@ HTML = """
             font-size: 1rem;
             margin-bottom: 1.5rem;
             outline: none;
-        }
-        
-        .form-input:focus {
-            border-color: #6366F1;
         }
         
         .auth-button {
@@ -837,12 +695,6 @@ HTML = """
             margin-bottom: 1rem;
         }
         
-        .auth-switch {
-            text-align: center;
-            color: #6366F1;
-            cursor: pointer;
-        }
-        
         .users-list {
             background: #252642;
             margin: 1rem;
@@ -850,32 +702,6 @@ HTML = """
             border-radius: 12px;
             flex: 1;
             overflow-y: auto;
-        }
-        
-        .user-list-item {
-            padding: 0.5rem;
-            margin: 0.2rem 0;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-        }
-        
-        .user-list-item:hover {
-            background: #1A1B2E;
-        }
-        
-        .user-online-indicator {
-            width: 8px;
-            height: 8px;
-            background: #10B981;
-            border-radius: 50%;
-        }
-        
-        .user-admin-indicator {
-            color: #F59E0B;
-            margin-left: auto;
         }
         
         .modal {
@@ -898,43 +724,6 @@ HTML = """
             border-radius: 12px;
             max-width: 500px;
             width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        
-        .image-preview {
-            max-width: 100%;
-            max-height: 400px;
-            border-radius: 8px;
-        }
-        
-        .recording-indicator {
-            display: none;
-            color: #EF4444;
-            align-items: center;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-        
-        .pulse {
-            animation: pulse 1s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        /* Специальные стили для iOS */
-        @supports (-webkit-touch-callout: none) {
-            .messages-container {
-                padding-bottom: 120px;
-            }
-            
-            .input-area {
-                padding-bottom: calc(1rem + env(safe-area-inset-bottom));
-            }
         }
     </style>
 </head>
@@ -942,14 +731,13 @@ HTML = """
     <!-- Экран аутентификации -->
     <div id="authScreen" class="auth-container">
         <div class="auth-left">
-            <div class="auth-left-content">
-                <h1>Tandau</h1>
+            <div style="text-align: center;">
+                <h1 style="font-size: 3rem; margin-bottom: 1rem;">Tandau</h1>
                 <p style="font-size: 1.2rem; margin-bottom: 2rem;">Адаптивный мессенджер</p>
                 <div style="text-align: left;">
                     <div style="margin: 1rem 0; font-size: 1.1rem;">📱 Полная адаптивность</div>
                     <div style="margin: 1rem 0; font-size: 1.1rem;">🌐 Реальное время</div>
-                    <div style="margin: 1rem 0; font-size: 1.1rem;">👥 Приватные чаты</div>
-                    <div style="margin: 1rem 0; font-size: 1.1rem;">📎 Медиа и файлы</div>
+                    <div style="margin: 1rem 0; font-size: 1.1rem;">💬 Групповой чат</div>
                 </div>
             </div>
         </div>
@@ -960,7 +748,7 @@ HTML = """
                     <input type="text" id="loginUsername" class="form-input" placeholder="Имя пользователя">
                     <input type="password" id="loginPassword" class="form-input" placeholder="Пароль">
                     <button class="auth-button" onclick="login()">Войти</button>
-                    <div class="auth-switch" onclick="showRegister()">
+                    <div style="text-align: center; color: #6366F1; cursor: pointer;" onclick="showRegister()">
                         Нет аккаунта? Зарегистрироваться
                     </div>
                 </div>
@@ -969,7 +757,7 @@ HTML = """
                     <input type="password" id="registerPassword" class="form-input" placeholder="Пароль">
                     <input type="password" id="registerConfirm" class="form-input" placeholder="Повторите пароль">
                     <button class="auth-button" onclick="register()">Зарегистрироваться</button>
-                    <div class="auth-switch" onclick="showLogin()">
+                    <div style="text-align: center; color: #6366F1; cursor: pointer;" onclick="showLogin()">
                         Уже есть аккаунт? Войти
                     </div>
                 </div>
@@ -983,7 +771,7 @@ HTML = """
         <div class="mobile-header">
             <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
             <h2 id="mobileChatTitle">🌐 Публичный чат</h2>
-            <button class="mobile-menu-btn" onclick="showMobileActions()">⋯</button>
+            <button class="mobile-menu-btn" onclick="showMobileMenu()">⋯</button>
         </div>
 
         <!-- Боковая панель -->
@@ -995,28 +783,9 @@ HTML = """
             
             <div class="user-info">
                 <div class="user-avatar" id="userAvatar">US</div>
-                <div class="user-details">
+                <div>
                     <h3 id="userName">User</h3>
-                    <div class="status-online">🟢 В сети</div>
-                </div>
-            </div>
-
-            <div class="nav-menu">
-                <div class="nav-item active" onclick="switchChat('public')">
-                    <i>🌐</i>
-                    <span>Публичный чат</span>
-                </div>
-                <div class="nav-item" onclick="showPrivateChats()">
-                    <i>👥</i>
-                    <span>Приватные чаты</span>
-                </div>
-                <div class="nav-item" onclick="showChannels()">
-                    <i>📢</i>
-                    <span>Каналы</span>
-                </div>
-                <div class="nav-item" onclick="showSettings()">
-                    <i>⚙️</i>
-                    <span>Настройки</span>
+                    <div style="color: #10B981;">🟢 В сети</div>
                 </div>
             </div>
 
@@ -1028,19 +797,8 @@ HTML = """
 
         <!-- Область чата -->
         <div class="chat-area">
-            <div class="chat-header mobile-hidden">
-                <h2 id="chatTitle">🌐 Публичный чат</h2>
-                <div class="chat-actions">
-                    <button class="action-btn" onclick="showFileUpload()">
-                        <i>📎</i> Файл
-                    </button>
-                    <button class="action-btn" onclick="startVoiceRecording()">
-                        <i>🎤</i> Запись
-                    </button>
-                    <button class="action-btn" onclick="takePhoto()">
-                        <i>📷</i> Фото
-                    </button>
-                </div>
+            <div class="chat-header">
+                <h2>🌐 Публичный чат</h2>
             </div>
 
             <div class="messages-container" id="messagesContainer">
@@ -1051,23 +809,11 @@ HTML = """
 
             <div class="input-area">
                 <div class="input-container">
-                    <div class="media-buttons">
-                        <button class="media-btn" onclick="showEmojiPicker()">
-                            <i>😊</i>
-                        </button>
-                        <button class="media-btn" onclick="showImageUpload()">
-                            <i>🖼️</i>
-                        </button>
-                    </div>
                     <textarea id="messageInput" class="message-input" 
                            placeholder="Введите сообщение..." disabled rows="1"></textarea>
                     <button id="sendButton" class="send-button" onclick="sendMessage()" disabled>
                         Отправить
                     </button>
-                </div>
-                <div id="recordingIndicator" class="recording-indicator">
-                    <div class="pulse">●</div> Запись голосового сообщения...
-                    <button onclick="stopVoiceRecording()">Остановить</button>
                 </div>
             </div>
         </div>
@@ -1079,45 +825,15 @@ HTML = """
                     <i>💬</i>
                     <span>Чат</span>
                 </button>
-                <button class="nav-tab" onclick="switchMobileTab('contacts')">
+                <button class="nav-tab" onclick="switchMobileTab('users')">
                     <i>👥</i>
-                    <span>Контакты</span>
+                    <span>Люди</span>
                 </button>
-                <button class="nav-tab" onclick="switchMobileTab('channels')">
-                    <i>📢</i>
-                    <span>Каналы</span>
-                </button>
-                <button class="nav-tab" onclick="switchMobileTab('settings')">
-                    <i>⚙️</i>
-                    <span>Настройки</span>
+                <button class="nav-tab" onclick="switchMobileTab('profile')">
+                    <i>👤</i>
+                    <span>Профиль</span>
                 </button>
             </div>
-        </div>
-    </div>
-
-    <!-- Модальные окна -->
-    <div id="imageModal" class="modal">
-        <div class="modal-content">
-            <img id="modalImage" class="image-preview" src="" alt="Preview">
-            <button onclick="closeModal('imageModal')" style="margin-top: 1rem; width: 100%;">Закрыть</button>
-        </div>
-    </div>
-
-    <div id="fileUploadModal" class="modal">
-        <div class="modal-content">
-            <h3 style="margin-bottom: 1rem;">Загрузка файла</h3>
-            <input type="file" id="fileInput" style="margin-bottom: 1rem; width: 100%;">
-            <button onclick="uploadFile()" style="margin-right: 0.5rem;">Загрузить</button>
-            <button onclick="closeModal('fileUploadModal')">Отмена</button>
-        </div>
-    </div>
-
-    <div id="imageUploadModal" class="modal">
-        <div class="modal-content">
-            <h3 style="margin-bottom: 1rem;">Загрузка изображения</h3>
-            <input type="file" id="imageInput" accept="image/*" style="margin-bottom: 1rem; width: 100%;">
-            <button onclick="uploadImage()" style="margin-right: 0.5rem;">Загрузить</button>
-            <button onclick="closeModal('imageUploadModal')">Отмена</button>
         </div>
     </div>
 
@@ -1125,115 +841,315 @@ HTML = """
         let ws = null;
         let currentUser = null;
         let token = null;
-        let currentChat = 'public';
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let isRecording = false;
         let isMobile = window.innerWidth <= 768;
 
-        // Определение мобильного устройства
+        // Мобильные функции
         function checkMobile() {
             isMobile = window.innerWidth <= 768;
-            if (isMobile) {
-                document.body.classList.add('mobile');
-                document.getElementById('mobileChatTitle').textContent = '🌐 Публичный чат';
-            } else {
-                document.body.classList.remove('mobile');
-            }
         }
 
-        // Мобильное меню
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('mobile-visible');
         }
 
         function switchMobileTab(tab) {
-            // Обновляем активные табы
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             
-            switch(tab) {
-                case 'chat':
-                    // Показываем чат
+            if (tab === 'users') {
+                toggleSidebar();
+            }
+        }
+
+        function showMobileMenu() {
+            alert('Мобильное меню:\n1. Настройки\n2. Сменить чат\n3. Выйти');
+        }
+
+        // Аутентификация
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!username || !password) {
+                alert('Пожалуйста, заполните все поля');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    token = data.access_token;
+                    currentUser = username;
+                    startWebSocket();
+                    showMainScreen();
+                } else {
+                    alert(data.detail || 'Ошибка входа');
+                }
+            } catch (error) {
+                alert('Ошибка подключения к серверу');
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+            const confirm = document.getElementById('registerConfirm').value;
+
+            if (!username || !password || !confirm) {
+                alert('Пожалуйста, заполните все поля');
+                return;
+            }
+
+            if (password !== confirm) {
+                alert('Пароли не совпадают');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('Регистрация успешна!');
+                    showLogin();
+                } else {
+                    alert(data.detail || 'Ошибка регистрации');
+                }
+            } catch (error) {
+                alert('Ошибка подключения к серверу');
+            }
+        }
+
+        function showLogin() {
+            document.getElementById('authTitle').textContent = 'Вход в систему';
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registerForm').style.display = 'none';
+        }
+
+        function showRegister() {
+            document.getElementById('authTitle').textContent = 'Регистрация';
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+        }
+
+        function showMainScreen() {
+            document.getElementById('authScreen').style.display = 'none';
+            document.getElementById('mainScreen').style.display = 'flex';
+            document.getElementById('userName').textContent = currentUser;
+            document.getElementById('userAvatar').textContent = currentUser.substring(0, 2).toUpperCase();
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendButton').disabled = false;
+            
+            if (isMobile) {
+                document.getElementById('mobileChatTitle').textContent = '💬 Чат';
+            }
+        }
+
+        // WebSocket
+        function startWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`;
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                console.log('Connected');
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+
+            ws.onclose = function() {
+                console.log('Disconnected');
+                setTimeout(() => {
+                    if (currentUser) startWebSocket();
+                }, 3000);
+            };
+        }
+
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'message':
+                    displayMessage(data);
                     break;
-                case 'contacts':
-                    alert('Контакты в разработке');
+                case 'system':
+                    displaySystemMessage(data);
                     break;
-                case 'channels':
-                    alert('Каналы в разработке');
-                    break;
-                case 'settings':
-                    alert('Настройки в разработке');
+                case 'user_list':
+                    updateOnlineUsers(data.users);
                     break;
             }
         }
 
-        function showMobileActions() {
-            // Мобильное меню действий
-            if (confirm('Выберите действие:\nOK - Загрузить файл\nОтмена - Сделать фото')) {
-                showFileUpload();
-            } else {
-                takePhoto();
+        function displayMessage(message) {
+            const container = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.username === currentUser ? 'own' : ''}`;
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar">
+                    ${message.username.substring(0, 2).toUpperCase()}
+                </div>
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-username">${message.username}</span>
+                        <span class="message-time">${formatTime(message.timestamp)}</span>
+                    </div>
+                    <div class="message-bubble">
+                        ${message.content}
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function displaySystemMessage(message) {
+            const container = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'system-message';
+            messageDiv.textContent = message.content;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function updateOnlineUsers(users) {
+            const container = document.getElementById('onlineUsersList');
+            container.innerHTML = '';
+            
+            users.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.style.cssText = 'padding: 0.5rem; margin: 0.2rem 0; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem;';
+                userDiv.innerHTML = `
+                    <div style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></div>
+                    <span>${user.username}</span>
+                `;
+                container.appendChild(userDiv);
+            });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            
+            if (content && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({content: content}));
+                input.value = '';
+                adjustTextareaHeight(input);
             }
         }
 
-        // Адаптация текстового поля
+        function formatTime(timestamp) {
+            return new Date(timestamp).toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', minute: '2-digit' 
+            });
+        }
+
         function adjustTextareaHeight(textarea) {
             textarea.style.height = 'auto';
-            const newHeight = Math.min(textarea.scrollHeight, isMobile ? 80 : 120);
-            textarea.style.height = newHeight + 'px';
+            textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px';
         }
 
-        // Адаптация интерфейса при изменении размера
-        window.addEventListener('resize', checkMobile);
-        window.addEventListener('orientationchange', function() {
-            setTimeout(checkMobile, 100);
+        // Обработчики событий
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
         });
 
-        // Остальной JavaScript код остается таким же как в предыдущей версии
-        // (функции login, register, WebSocket, отправка сообщений и т.д.)
-        // ... [здесь должен быть весь остальной JavaScript код из предыдущей версии]
+        document.getElementById('messageInput').addEventListener('input', function() {
+            adjustTextareaHeight(this);
+        });
 
-        // Инициализация при загрузке
+        window.addEventListener('resize', checkMobile);
         checkMobile();
         showLogin();
-
-        // Добавляем обработчик для свайпов (опционально)
-        let startX = 0;
-        document.addEventListener('touchstart', e => {
-            startX = e.touches[0].clientX;
-        });
-
-        document.addEventListener('touchend', e => {
-            const endX = e.changedTouches[0].clientX;
-            const diff = startX - endX;
-            
-            if (Math.abs(diff) > 50) { // Минимальная дистанция свайпа
-                if (diff > 0 && isMobile) {
-                    // Свайп влево - скрыть сайдбар
-                    document.getElementById('sidebar').classList.remove('mobile-visible');
-                } else if (diff < 0 && isMobile) {
-                    // Свайп вправо - показать сайдбар
-                    document.getElementById('sidebar').classList.add('mobile-visible');
-                }
-            }
-        });
-
-        // Предотвращаем zoom на полях ввода на мобильных
-        document.addEventListener('touchstart', function(e) {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                document.body.style.zoom = "100%";
-            }
-        });
-
     </script>
 </body>
 </html>
 """
 
-# Остальной Python код остается таким же
-# ... [здесь должен быть весь остальной Python код из предыдущей версии]
+@app.get("/")
+async def root():
+    return HTMLResponse(HTML)
+
+@app.post("/api/auth/register")
+async def register(user: UserRegister, db: SessionLocal = Depends(get_db)):
+    existing_user = db.query(User).filter(User.username == user.username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    hashed_password = get_password_hash(user.password)
+    db_user = User(username=user.username, password_hash=hashed_password)
+    db.add(db_user)
+    db.commit()
+    
+    return {"message": "User created successfully"}
+
+@app.post("/api/auth/login")
+async def login(user: UserLogin, db: SessionLocal = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if not db_user or not verify_password(user.password, db_user.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    
+    access_token = create_access_token(data={"sub": db_user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    username = verify_token(token)
+    if not username:
+        await websocket.close()
+        return
+
+    db = SessionLocal()
+    user = db.query(User).filter(User.username == username).first()
+    user_data = {"is_admin": user.is_admin if user else False}
+    db.close()
+
+    await manager.connect(websocket, username, user_data)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            
+            db = SessionLocal()
+            db_message = Message(
+                username=username,
+                content=message_data["content"]
+            )
+            db.add(db_message)
+            db.commit()
+            db.close()
+            
+            await manager.send_message({
+                "username": username,
+                "content": message_data["content"],
+                "is_admin": user_data["is_admin"]
+            })
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, username)
+        await manager.broadcast_system_message(f"🔴 {username} покинул чат")
+        await manager.broadcast_user_list()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
