@@ -1,14 +1,15 @@
-# simple_messenger.py - Упрощенная версия Tandau Messenger
+# web_messenger.py - Упрощенная версия Tandau Messenger
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 import random
+import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'tandau-secret-key-2024'
-socketio = SocketIO(app)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tandau-secret-key-2024')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Инициализация базы данных
 def init_db():
@@ -644,4 +645,6 @@ if __name__ == '__main__':
     init_db()
     print("🚀 Tandau Web Messenger запущен!")
     print("📍 Доступен по адресу: http://localhost:5000")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    
+    # Для продакшена используем allow_unsafe_werkzeug=True
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
