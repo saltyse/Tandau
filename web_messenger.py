@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger с рабочими личными чатами
+# web_messenger.py - Tandau Messenger с личными чатами и каналами
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -36,8 +36,38 @@ def init_db():
                 message TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 room TEXT DEFAULT 'public',
-                recipient TEXT
+                recipient TEXT,
+                message_type TEXT DEFAULT 'text'
             )
+        ''')
+        
+        # Таблица каналов
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS channels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                created_by TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_private BOOLEAN DEFAULT FALSE
+            )
+        ''')
+        
+        # Таблица участников каналов
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS channel_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id INTEGER,
+                username TEXT NOT NULL,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (channel_id) REFERENCES channels (id)
+            )
+        ''')
+        
+        # Создаем основной канал по умолчанию
+        cursor.execute('''
+            INSERT OR IGNORE INTO channels (name, description, created_by) 
+            VALUES ('general', 'Основной канал', 'system')
         ''')
         
         conn.commit()
@@ -65,6 +95,14 @@ def create_user(username, password):
                 'INSERT INTO users (username, password_hash, avatar_color) VALUES (?, ?, ?)',
                 (username, password_hash, avatar_color)
             )
+            # Добавляем пользователя в основной канал
+            cursor.execute('SELECT id FROM channels WHERE name = "general"')
+            general_channel = cursor.fetchone()
+            if general_channel:
+                cursor.execute(
+                    'INSERT OR IGNORE INTO channel_members (channel_id, username) VALUES (?, ?)',
+                    (general_channel[0], username)
+                )
             conn.commit()
             return True
         except sqlite3.IntegrityError:
@@ -89,12 +127,12 @@ def generate_avatar_color():
     colors = ['#6366F1', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#3B82F6']
     return random.choice(colors)
 
-def save_message(username, message, room='public', recipient=None):
+def save_message(username, message, room='public', recipient=None, message_type='text'):
     with sqlite3.connect('messenger.db') as conn:
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO messages (username, message, room, recipient) VALUES (?, ?, ?, ?)',
-            (username, message, room, recipient)
+            'INSERT INTO messages (username, message, room, recipient, message_type) VALUES (?, ?, ?, ?, ?)',
+            (username, message, room, recipient, message_type)
         )
         conn.commit()
         return cursor.lastrowid
@@ -103,7 +141,7 @@ def get_recent_messages(room='public', limit=50):
     with sqlite3.connect('messenger.db') as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT username, message, timestamp
+            SELECT username, message, timestamp, message_type
             FROM messages 
             WHERE room = ? 
             ORDER BY timestamp ASC 
@@ -113,7 +151,8 @@ def get_recent_messages(room='public', limit=50):
         return [{
             'user': msg[0],
             'message': msg[1],
-            'timestamp': msg[2]
+            'timestamp': msg[2],
+            'type': msg[3]
         } for msg in messages]
 
 def get_private_messages(user1, user2, limit=50):
@@ -122,7 +161,7 @@ def get_private_messages(user1, user2, limit=50):
         room = f'private_{min(user1, user2)}_{max(user1, user2)}'
         
         cursor.execute('''
-            SELECT username, message, timestamp
+            SELECT username, message, timestamp, message_type
             FROM messages 
             WHERE room = ? 
             ORDER BY timestamp ASC 
@@ -133,7 +172,8 @@ def get_private_messages(user1, user2, limit=50):
         return [{
             'user': msg[0],
             'message': msg[1],
-            'timestamp': msg[2]
+            'timestamp': msg[2],
+            'type': msg[3]
         } for msg in messages]
 
 def get_private_chats(username):
@@ -176,6 +216,89 @@ def get_online_users():
         cursor = conn.cursor()
         cursor.execute('SELECT username, avatar_color FROM users WHERE is_online = TRUE AND username != ?', (session.get('username', ''),))
         return [{'username': user[0], 'avatar_color': user[1]} for user in cursor.fetchall()]
+
+# Утилиты для работы с каналами
+def get_all_channels():
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT c.id, c.name, c.description, c.created_by, c.created_at, 
+                   COUNT(cm.username) as member_count
+            FROM channels c
+            LEFT JOIN channel_members cm ON c.id = cm.channel_id
+            WHERE c.is_private = FALSE
+            GROUP BY c.id
+            ORDER BY c.created_at DESC
+        ''')
+        channels = cursor.fetchall()
+        return [{
+            'id': channel[0],
+            'name': channel[1],
+            'description': channel[2],
+            'created_by': channel[3],
+            'created_at': channel[4],
+            'member_count': channel[5]
+        } for channel in channels]
+
+def get_user_channels(username):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT c.id, c.name, c.description, c.created_by
+            FROM channels c
+            JOIN channel_members cm ON c.id = cm.channel_id
+            WHERE cm.username = ?
+            ORDER BY c.name
+        ''', (username,))
+        channels = cursor.fetchall()
+        return [{
+            'id': channel[0],
+            'name': channel[1],
+            'description': channel[2],
+            'created_by': channel[3]
+        } for channel in channels]
+
+def create_channel(name, description, created_by):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                'INSERT INTO channels (name, description, created_by) VALUES (?, ?, ?)',
+                (name, description, created_by)
+            )
+            channel_id = cursor.lastrowid
+            # Добавляем создателя в канал
+            cursor.execute(
+                'INSERT INTO channel_members (channel_id, username) VALUES (?, ?)',
+                (channel_id, created_by)
+            )
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+def join_channel(channel_id, username):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                'INSERT OR IGNORE INTO channel_members (channel_id, username) VALUES (?, ?)',
+                (channel_id, username)
+            )
+            conn.commit()
+            return True
+        except:
+            return False
+
+def get_channel_messages(channel_id, limit=50):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT name FROM channels WHERE id = ?', (channel_id,))
+        channel = cursor.fetchone()
+        if channel:
+            room = f'channel_{channel[0]}'
+            return get_recent_messages(room, limit)
+        return []
 
 # Маршруты Flask
 @app.route('/')
@@ -434,533 +557,43 @@ def chat():
     online_users = get_online_users()
     all_users = get_all_users()
     private_chats = get_private_chats(session['username'])
+    user_channels = get_user_channels(session['username'])
+    all_channels = get_all_channels()
     
-    return f'''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Tandau Messenger - Чат</title>
-    <style>
-        body {{
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background: #f0f2f5;
-            height: 100vh;
-            overflow: hidden;
-        }}
-        .container {{
-            display: flex;
-            height: 100vh;
-        }}
-        .sidebar {{
-            width: 300px;
-            background: white;
-            border-right: 1px solid #ddd;
-            display: flex;
-            flex-direction: column;
-        }}
-        .header {{
-            background: #667eea;
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }}
-        .user-info {{
-            padding: 15px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #ddd;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-        .user-avatar {{
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #667eea;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 16px;
-        }}
-        .nav {{
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px 0;
-        }}
-        .nav-section {{
-            margin-bottom: 20px;
-        }}
-        .nav-title {{
-            padding: 10px 15px;
-            font-size: 14px;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: bold;
-            border-bottom: 1px solid #eee;
-        }}
-        .nav-item {{
-            padding: 12px 15px;
-            cursor: pointer;
-            border-left: 3px solid transparent;
-            transition: all 0.3s ease;
-        }}
-        .nav-item:hover {{
-            background: #f8f9fa;
-        }}
-        .nav-item.active {{
-            background: #f8f9fa;
-            border-left-color: #667eea;
-        }}
-        .private-chat-item {{
-            padding: 10px 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #f0f0f0;
-            transition: background 0.3s ease;
-        }}
-        .private-chat-item:hover {{
-            background: #f8f9fa;
-        }}
-        .private-chat-item.active {{
-            background: #f8f9fa;
-        }}
-        .private-chat-avatar {{
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 12px;
-            flex-shrink: 0;
-        }}
-        .private-chat-info {{
-            flex: 1;
-            min-width: 0;
-        }}
-        .private-chat-name {{
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }}
-        .private-chat-last {{
-            font-size: 12px;
-            color: #666;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-        .user-item {{
-            padding: 8px 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #f0f0f0;
-            transition: background 0.3s ease;
-        }}
-        .user-item:hover {{
-            background: #f8f9fa;
-        }}
-        .user-avatar-small {{
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 11px;
-            flex-shrink: 0;
-        }}
-        .online-indicator {{
-            width: 8px;
-            height: 8px;
-            background: #10B981;
-            border-radius: 50%;
-            margin-left: auto;
-            flex-shrink: 0;
-        }}
-        .offline-indicator {{
-            width: 8px;
-            height: 8px;
-            background: #6B7280;
-            border-radius: 50%;
-            margin-left: auto;
-            flex-shrink: 0;
-        }}
-        .chat-area {{
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }}
-        .chat-header {{
-            background: white;
-            padding: 15px 20px;
-            border-bottom: 1px solid #ddd;
-        }}
-        .chat-title {{
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-        }}
-        .messages {{
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background: white;
-        }}
-        .message {{
-            margin-bottom: 15px;
-            padding: 10px 15px;
-            border-radius: 10px;
-            max-width: 70%;
-            word-wrap: break-word;
-        }}
-        .message.own {{
-            background: #667eea;
-            color: white;
-            margin-left: auto;
-        }}
-        .message.other {{
-            background: #f1f3f4;
-            color: #333;
-        }}
-        .message-user {{
-            font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 14px;
-        }}
-        .input-area {{
-            padding: 20px;
-            background: white;
-            border-top: 1px solid #ddd;
-        }}
-        .input-container {{
-            display: flex;
-            gap: 10px;
-        }}
-        .message-input {{
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 25px;
-            font-size: 16px;
-        }}
-        .send-btn {{
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            cursor: pointer;
-            font-size: 18px;
-        }}
-        .logout-btn {{
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 10px;
-            margin: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-        }}
-        .user-list {{
-            max-height: 200px;
-            overflow-y: auto;
-        }}
-        .welcome-message {{
-            text-align: center;
-            padding: 40px 20px;
-            color: #666;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="sidebar">
-            <div class="header">
-                <h2>Tandau Messenger</h2>
-            </div>
-            <div class="user-info">
-                <div class="user-avatar">{session['username'][:2].upper()}</div>
-                <div>
-                    <strong>{session['username']}</strong>
-                    <div style="font-size: 12px; color: #666;">🟢 В сети</div>
-                </div>
-            </div>
-            
-            <div class="nav">
-                <div class="nav-section">
-                    <div class="nav-title">Чаты</div>
-                    <div class="nav-item active" onclick="switchRoom('public', '🌐 Общий чат')">
-                        🌐 Общий чат
-                    </div>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-title">Личные чаты</div>
-                    <div id="private-chats-list">
-                        {"".join(f'''
-                        <div class="private-chat-item" onclick="openPrivateChat('{chat['partner']}')">
-                            <div class="private-chat-avatar" style="background: {chat['avatar_color']};">
-                                {chat['partner'][:2].upper()}
-                            </div>
-                            <div class="private-chat-info">
-                                <div class="private-chat-name">{chat['partner']}</div>
-                                <div class="private-chat-last">{chat['last_message'][:30]}{'...' if len(chat['last_message']) > 30 else ''}</div>
-                            </div>
-                            <div class="{'online-indicator' if chat['is_online'] else 'offline-indicator'}"></div>
-                        </div>
-                        ''' for chat in private_chats)}
-                        {"<div style='padding: 10px 15px; color: #666; font-size: 14px;'>Нет личных чатов</div>" if not private_chats else ""}
-                    </div>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-title">Все пользователи</div>
-                    <div class="user-list" id="all-users-list">
-                        {"".join(f'''
-                        <div class="user-item" onclick="startPrivateChat('{user['username']}', '{user['avatar_color']}')">
-                            <div class="user-avatar-small" style="background: {user['avatar_color']};">
-                                {user['username'][:2].upper()}
-                            </div>
-                            <span style="flex: 1;">{user['username']}</span>
-                            <div class="{'online-indicator' if user['is_online'] else 'offline-indicator'}"></div>
-                        </div>
-                        ''' for user in all_users)}
-                    </div>
-                </div>
-            </div>
-            
-            <button class="logout-btn" onclick="logout()">Выйти</button>
-        </div>
-        
-        <div class="chat-area">
-            <div class="chat-header">
-                <div class="chat-title" id="chat-title">🌐 Общий чат</div>
-            </div>
-            
-            <div class="messages" id="messages">
-                {"".join(f'''
-                <div class="message {'own' if msg['user'] == session['username'] else 'other'}">
-                    <div class="message-user">{msg['user']}</div>
-                    <div>{msg['message']}</div>
-                </div>
-                ''' for msg in messages)}
-                {"<div class='welcome-message'><div style='font-size: 18px; margin-bottom: 10px;'>Добро пожаловать в Tandau Messenger!</div><div>Начните общение, отправив первое сообщение</div></div>" if not messages else ""}
-            </div>
-            
-            <div class="input-area">
-                <div class="input-container">
-                    <input type="text" class="message-input" id="message-input" placeholder="Введите сообщение..." autocomplete="off">
-                    <button class="send-btn" onclick="sendMessage()">➤</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    return render_template('chat.html', 
+                         username=session['username'],
+                         messages=messages,
+                         online_users=online_users,
+                         all_users=all_users,
+                         private_chats=private_chats,
+                         user_channels=user_channels,
+                         all_channels=all_channels)
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script>
-        const socket = io();
-        const username = "{session['username']}";
-        let currentRoom = 'public';
-        let currentChatType = 'public';
-        let currentPartner = null;
-        
-        socket.on('connect', function() {{
-            console.log('Connected to server');
-            joinRoom('public');
-        }});
-        
-        socket.on('new_message', function(data) {{
-            console.log('New message received:', data);
-            if (data.room === currentRoom) {{
-                addMessage(data);
-            }}
-        }});
-        
-        socket.on('private_message', function(data) {{
-            console.log('Private message received:', data);
-            if (data.room === currentRoom) {{
-                addMessage(data);
-            }} else {{
-                showNotification(`Новое сообщение от ${{data.user}}`);
-                updatePrivateChats();
-            }}
-        }});
-        
-        socket.on('user_joined', function(data) {{
-            updateOnlineUsers(data.online_users);
-        }});
-        
-        socket.on('user_left', function(data) {{
-            updateOnlineUsers(data.online_users);
-        }});
-        
-        function joinRoom(room) {{
-            socket.emit('join_room', {{ room: room }});
-        }}
-        
-        function switchRoom(room, chatTitle = '🌐 Общий чат', chatType = 'public', partner = null) {{
-            if (currentRoom && currentRoom !== room) {{
-                socket.emit('leave_room', {{ room: currentRoom }});
-            }}
-            
-            currentRoom = room;
-            currentChatType = chatType;
-            currentPartner = partner;
-            document.getElementById('chat-title').textContent = chatTitle;
-            
-            joinRoom(room);
-            loadMessages();
-            updateActiveNavItem(room, chatType);
-        }}
-        
-        function openPrivateChat(partner) {{
-            const room = `private_${{Math.min(username, partner)}}_${{Math.max(username, partner)}}`;
-            const chatTitle = `👤 ${{partner}}`;
-            switchRoom(room, chatTitle, 'private', partner);
-        }}
-        
-        function startPrivateChat(partner, avatarColor) {{
-            openPrivateChat(partner);
-        }}
-        
-        function loadMessages() {{
-            const messagesContainer = document.getElementById('messages');
-            messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Загрузка сообщений...</div>';
-            
-            fetch(`/api/messages?room=${{currentRoom}}`)
-                .then(response => response.json())
-                .then(messages => {{
-                    messagesContainer.innerHTML = '';
-                    if (messages.length === 0) {{
-                        messagesContainer.innerHTML = `
-                            <div class="welcome-message">
-                                <div style="font-size: 18px; margin-bottom: 10px;">Начните общение!</div>
-                                <div>Это начало ${{currentChatType === 'public' ? 'общего' : 'личного'}} чата</div>
-                            </div>
-                        `;
-                    }} else {{
-                        messages.forEach(addMessage);
-                    }}
-                    scrollToBottom();
-                }})
-                .catch(error => {{
-                    console.error('Error loading messages:', error);
-                    messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Ошибка загрузки сообщений</div>';
-                }});
-        }}
-        
-        function addMessage(data) {{
-            const messages = document.getElementById('messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${{data.user === username ? 'own' : 'other'}}`;
-            messageDiv.innerHTML = `
-                <div class="message-user">${{data.user}}</div>
-                <div>${{data.message}}</div>
-            `;
-            messages.appendChild(messageDiv);
-            scrollToBottom();
-        }}
-        
-        function sendMessage() {{
-            const input = document.getElementById('message-input');
-            const message = input.value.trim();
-            
-            if (message) {{
-                const messageData = {{
-                    message: message,
-                    room: currentRoom,
-                    chat_type: currentChatType
-                }};
-                
-                if (currentChatType === 'private' && currentPartner) {{
-                    messageData.recipient = currentPartner;
-                }}
-                
-                console.log('Sending message:', messageData);
-                socket.emit('send_message', messageData);
-                input.value = '';
-            }}
-        }}
-        
-        function updateOnlineUsers(users) {{
-            console.log('Online users updated:', users);
-        }}
-        
-        function updatePrivateChats() {{
-            // В реальном приложении лучше сделать AJAX запрос
-            window.location.reload();
-        }}
-        
-        function updateActiveNavItem(room, chatType) {{
-            document.querySelectorAll('.nav-item.active, .private-chat-item.active').forEach(item => {{
-                item.classList.remove('active');
-            }});
-            
-            if (chatType === 'public') {{
-                document.querySelector('.nav-item').classList.add('active');
-            }} else {{
-                const partner = room.split('_')[1] === username ? room.split('_')[2] : room.split('_')[1];
-                document.querySelectorAll('.private-chat-item').forEach(item => {{
-                    if (item.querySelector('.private-chat-name').textContent === partner) {{
-                        item.classList.add('active');
-                    }}
-                }});
-            }}
-        }}
-        
-        function showNotification(message) {{
-            if ('Notification' in window && Notification.permission === 'granted') {{
-                new Notification('Tandau Messenger', {{
-                    body: message,
-                    icon: '/favicon.ico'
-                }});
-            }} else {{
-                alert(message);
-            }}
-        }}
-        
-        function logout() {{
-            if (confirm('Вы уверены, что хотите выйти?')) {{
-                window.location.href = '/logout';
-            }}
-        }}
-        
-        document.getElementById('message-input').addEventListener('keypress', function(e) {{
-            if (e.key === 'Enter') {{
-                sendMessage();
-            }}
-        }});
-        
-        if ('Notification' in window) {{
-            Notification.requestPermission();
-        }}
-        
-        window.addEventListener('load', function() {{
-            scrollToBottom();
-        }});
-        
-        function scrollToBottom() {{
-            const messages = document.getElementById('messages');
-            messages.scrollTop = messages.scrollHeight;
-        }}
-    </script>
-</body>
-</html>
-    '''
+@app.route('/create_channel', methods=['POST'])
+def create_channel_route():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    
+    name = request.form.get('name')
+    description = request.form.get('description', '')
+    
+    if not name:
+        return jsonify({'success': False, 'error': 'Название канала обязательно'})
+    
+    if create_channel(name, description, session['username']):
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Канал с таким именем уже существует'})
+
+@app.route('/join_channel/<int:channel_id>')
+def join_channel_route(channel_id):
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    
+    if join_channel(channel_id, session['username']):
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Ошибка присоединения к каналу'})
 
 @app.route('/logout')
 def logout():
@@ -983,16 +616,793 @@ def get_messages():
             messages = get_private_messages(user1, user2)
         else:
             messages = []
+    elif room.startswith('channel_'):
+        messages = get_recent_messages(room)
     else:
         messages = get_recent_messages(room)
     
     return jsonify(messages)
 
+# Шаблон чата
+@app.route('/templates/chat.html')
+def serve_chat_template():
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tandau Messenger - Чат</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .user-info {
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .nav {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+        .nav-section {
+            margin-bottom: 20px;
+        }
+        .nav-title {
+            padding: 10px 15px;
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: bold;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .add-btn {
+            background: #10B981;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nav-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .nav-item:hover {
+            background: #f8f9fa;
+        }
+        .nav-item.active {
+            background: #f8f9fa;
+            border-left-color: #667eea;
+        }
+        .private-chat-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.3s ease;
+        }
+        .private-chat-item:hover {
+            background: #f8f9fa;
+        }
+        .private-chat-item.active {
+            background: #f8f9fa;
+        }
+        .private-chat-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .private-chat-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .private-chat-name {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .private-chat-last {
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .user-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.3s ease;
+        }
+        .user-item:hover {
+            background: #f8f9fa;
+        }
+        .start-chat-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+        .user-avatar-small {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+        .online-indicator {
+            width: 8px;
+            height: 8px;
+            background: #10B981;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .offline-indicator {
+            width: 8px;
+            height: 8px;
+            background: #6B7280;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .channel-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.3s ease;
+        }
+        .channel-item:hover {
+            background: #f8f9fa;
+        }
+        .channel-item.active {
+            background: #f8f9fa;
+        }
+        .channel-icon {
+            color: #667eea;
+            font-size: 16px;
+        }
+        .channel-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .channel-name {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .channel-desc {
+            font-size: 12px;
+            color: #666;
+        }
+        .join-channel-btn {
+            background: #10B981;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .chat-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: white;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 10px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        .message.own {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+        .message.other {
+            background: #f1f3f4;
+            color: #333;
+        }
+        .message-user {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #ddd;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        .message-input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 16px;
+        }
+        .send-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .user-list, .channel-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .welcome-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .modal-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h2>Tandau Messenger</h2>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">{{ username[:2].upper() }}</div>
+                <div>
+                    <strong>{{ username }}</strong>
+                    <div style="font-size: 12px; color: #666;">🟢 В сети</div>
+                </div>
+            </div>
+            
+            <div class="nav">
+                <div class="nav-section">
+                    <div class="nav-title">
+                        <span>Каналы</span>
+                        <button class="add-btn" onclick="showCreateChannelModal()">+</button>
+                    </div>
+                    <div class="channel-list">
+                        {% for channel in user_channels %}
+                        <div class="channel-item" onclick="switchRoom('channel_{{ channel.name }}', '# {{ channel.name }}')">
+                            <div class="channel-icon">#</div>
+                            <div class="channel-info">
+                                <div class="channel-name">{{ channel.name }}</div>
+                                <div class="channel-desc">{{ channel.description or 'Без описания' }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-title">Личные чаты</div>
+                    <div id="private-chats-list">
+                        {% for chat in private_chats %}
+                        <div class="private-chat-item" onclick="openPrivateChat('{{ chat.partner }}')">
+                            <div class="private-chat-avatar" style="background: {{ chat.avatar_color }};">
+                                {{ chat.partner[:2].upper() }}
+                            </div>
+                            <div class="private-chat-info">
+                                <div class="private-chat-name">{{ chat.partner }}</div>
+                                <div class="private-chat-last">{{ chat.last_message[:30] }}{'...' if chat.last_message|length > 30 else ''}</div>
+                            </div>
+                            <div class="{{ 'online-indicator' if chat.is_online else 'offline-indicator' }}"></div>
+                        </div>
+                        {% endfor %}
+                        {% if not private_chats %}
+                        <div style="padding: 10px 15px; color: #666; font-size: 14px;">Нет личных чатов</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-title">Все пользователи</div>
+                    <div class="user-list" id="all-users-list">
+                        {% for user in all_users %}
+                        <div class="user-item">
+                            <div class="user-avatar-small" style="background: {{ user.avatar_color }};">
+                                {{ user.username[:2].upper() }}
+                            </div>
+                            <span style="flex: 1;">{{ user.username }}</span>
+                            <div class="{{ 'online-indicator' if user.is_online else 'offline-indicator' }}"></div>
+                            <button class="start-chat-btn" onclick="startPrivateChat('{{ user.username }}', '{{ user.avatar_color }}')">Чат</button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">Доступные каналы</div>
+                    <div class="channel-list">
+                        {% for channel in all_channels %}
+                        {% if channel.name not in user_channels|map(attribute='name') %}
+                        <div class="channel-item">
+                            <div class="channel-icon">#</div>
+                            <div class="channel-info">
+                                <div class="channel-name">{{ channel.name }}</div>
+                                <div class="channel-desc">{{ channel.description or 'Без описания' }} ({{ channel.member_count }} участников)</div>
+                            </div>
+                            <button class="join-channel-btn" onclick="joinChannel({{ channel.id }})">Войти</button>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <button class="logout-btn" onclick="logout()">Выйти</button>
+        </div>
+        
+        <div class="chat-area">
+            <div class="chat-header">
+                <div class="chat-title" id="chat-title"># general</div>
+            </div>
+            
+            <div class="messages" id="messages">
+                {% for msg in messages %}
+                <div class="message {{ 'own' if msg.user == username else 'other' }}">
+                    <div class="message-user">{{ msg.user }}</div>
+                    <div>{{ msg.message }}</div>
+                </div>
+                {% endfor %}
+                {% if not messages %}
+                <div class="welcome-message">
+                    <div style="font-size: 18px; margin-bottom: 10px;">Добро пожаловать в Tandau Messenger!</div>
+                    <div>Начните общение, отправив первое сообщение</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="input-area">
+                <div class="input-container">
+                    <input type="text" class="message-input" id="message-input" placeholder="Введите сообщение..." autocomplete="off">
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания канала -->
+    <div id="createChannelModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Создать канал</h3>
+                <span class="close" onclick="closeCreateChannelModal()">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="channelName">Название канала:</label>
+                <input type="text" id="channelName" placeholder="Введите название канала">
+            </div>
+            <div class="form-group">
+                <label for="channelDescription">Описание (необязательно):</label>
+                <textarea id="channelDescription" placeholder="Введите описание канала" rows="3"></textarea>
+            </div>
+            <button class="modal-btn" onclick="createChannel()">Создать канал</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const username = "{{ username }}";
+        let currentRoom = 'channel_general';
+        let currentChatType = 'channel';
+        let currentPartner = null;
+        
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            joinRoom('channel_general');
+        });
+        
+        socket.on('new_message', function(data) {
+            console.log('New message received:', data);
+            if (data.room === currentRoom) {
+                addMessage(data);
+            }
+        });
+        
+        socket.on('private_message', function(data) {
+            console.log('Private message received:', data);
+            if (data.room === currentRoom) {
+                addMessage(data);
+            } else {
+                showNotification(`Новое сообщение от ${data.user}`);
+                updatePrivateChats();
+            }
+        });
+        
+        socket.on('user_joined', function(data) {
+            updateOnlineUsers(data.online_users);
+        });
+        
+        socket.on('user_left', function(data) {
+            updateOnlineUsers(data.online_users);
+        });
+        
+        function joinRoom(room) {
+            socket.emit('join_room', { room: room });
+        }
+        
+        function switchRoom(room, chatTitle = '# general', chatType = 'channel', partner = null) {
+            if (currentRoom && currentRoom !== room) {
+                socket.emit('leave_room', { room: currentRoom });
+            }
+            
+            currentRoom = room;
+            currentChatType = chatType;
+            currentPartner = partner;
+            document.getElementById('chat-title').textContent = chatTitle;
+            
+            joinRoom(room);
+            loadMessages();
+            updateActiveNavItem(room, chatType);
+        }
+        
+        function openPrivateChat(partner) {
+            const room = `private_${Math.min(username, partner)}_${Math.max(username, partner)}`;
+            const chatTitle = `👤 ${partner}`;
+            switchRoom(room, chatTitle, 'private', partner);
+        }
+        
+        function startPrivateChat(partner, avatarColor) {
+            openPrivateChat(partner);
+        }
+        
+        function loadMessages() {
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Загрузка сообщений...</div>';
+            
+            fetch(`/api/messages?room=${currentRoom}`)
+                .then(response => response.json())
+                .then(messages => {
+                    messagesContainer.innerHTML = '';
+                    if (messages.length === 0) {
+                        messagesContainer.innerHTML = `
+                            <div class="welcome-message">
+                                <div style="font-size: 18px; margin-bottom: 10px;">Начните общение!</div>
+                                <div>Это начало ${currentChatType === 'channel' ? 'канала' : 'личного'} чата</div>
+                            </div>
+                        `;
+                    } else {
+                        messages.forEach(addMessage);
+                    }
+                    scrollToBottom();
+                })
+                .catch(error => {
+                    console.error('Error loading messages:', error);
+                    messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Ошибка загрузки сообщений</div>';
+                });
+        }
+        
+        function addMessage(data) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${data.user === username ? 'own' : 'other'}`;
+            messageDiv.innerHTML = `
+                <div class="message-user">${data.user}</div>
+                <div>${data.message}</div>
+            `;
+            messages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message) {
+                const messageData = {
+                    message: message,
+                    room: currentRoom,
+                    chat_type: currentChatType
+                };
+                
+                if (currentChatType === 'private' && currentPartner) {
+                    messageData.recipient = currentPartner;
+                }
+                
+                console.log('Sending message:', messageData);
+                socket.emit('send_message', messageData);
+                input.value = '';
+            }
+        }
+        
+        function updateOnlineUsers(users) {
+            console.log('Online users updated:', users);
+        }
+        
+        function updatePrivateChats() {
+            window.location.reload();
+        }
+        
+        function updateActiveNavItem(room, chatType) {
+            document.querySelectorAll('.nav-item.active, .private-chat-item.active, .channel-item.active').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            if (chatType === 'channel') {
+                const channelName = room.replace('channel_', '');
+                document.querySelectorAll('.channel-item').forEach(item => {
+                    if (item.querySelector('.channel-name').textContent === channelName) {
+                        item.classList.add('active');
+                    }
+                });
+            } else if (chatType === 'private') {
+                const partner = room.split('_')[1] === username ? room.split('_')[2] : room.split('_')[1];
+                document.querySelectorAll('.private-chat-item').forEach(item => {
+                    if (item.querySelector('.private-chat-name').textContent === partner) {
+                        item.classList.add('active');
+                    }
+                });
+            }
+        }
+        
+        function showCreateChannelModal() {
+            document.getElementById('createChannelModal').style.display = 'block';
+        }
+        
+        function closeCreateChannelModal() {
+            document.getElementById('createChannelModal').style.display = 'none';
+        }
+        
+        async function createChannel() {
+            const name = document.getElementById('channelName').value.trim();
+            const description = document.getElementById('channelDescription').value.trim();
+            
+            if (!name) {
+                alert('Введите название канала');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('description', description);
+            
+            try {
+                const response = await fetch('/create_channel', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    closeCreateChannelModal();
+                    window.location.reload();
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                alert('Ошибка создания канала');
+            }
+        }
+        
+        async function joinChannel(channelId) {
+            try {
+                const response = await fetch(`/join_channel/${channelId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                alert('Ошибка присоединения к каналу');
+            }
+        }
+        
+        function showNotification(message) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Tandau Messenger', {
+                    body: message,
+                    icon: '/favicon.ico'
+                });
+            } else {
+                alert(message);
+            }
+        }
+        
+        function logout() {
+            if (confirm('Вы уверены, что хотите выйти?')) {
+                window.location.href = '/logout';
+            }
+        }
+        
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+        
+        window.addEventListener('load', function() {
+            scrollToBottom();
+        });
+        
+        function scrollToBottom() {
+            const messages = document.getElementById('messages');
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        // Закрытие модального окна при клике вне его
+        window.onclick = function(event) {
+            const modal = document.getElementById('createChannelModal');
+            if (event.target === modal) {
+                closeCreateChannelModal();
+            }
+        }
+    </script>
+</body>
+</html>
+    '''
+
 # WebSocket события
 @socketio.on('connect')
 def handle_connect():
     if 'username' in session:
-        join_room('public')
+        join_room('channel_general')
         join_room(f"user_{session['username']}")
         update_user_online_status(session['username'], True)
         
@@ -1000,7 +1410,7 @@ def handle_connect():
         emit('user_joined', {
             'username': session['username'],
             'online_users': online_users
-        }, room='public', include_self=False)
+        }, room='channel_general', include_self=False)
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -1010,7 +1420,7 @@ def handle_disconnect():
         emit('user_left', {
             'username': session['username'],
             'online_users': online_users
-        }, room='public')
+        }, room='channel_general')
 
 @socketio.on('join_room')
 def handle_join_room(data):
@@ -1078,7 +1488,8 @@ if __name__ == '__main__':
     print("🚀 Tandau Web Messenger запущен!")
     print("📍 Доступен по адресу: http://localhost:5000")
     print("💬 Поддерживает общие и личные чаты")
-    print("👥 Личные чаты теперь работают!")
+    print("📢 Добавлены каналы!")
+    print("👥 Кнопка для личных чатов!")
     
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
