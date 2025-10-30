@@ -4,7 +4,6 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python web_messenger.py
+    startCommand: gunicorn -k eventlet -w 1 "web_messenger:create_app()"
     envVars:
-      - key: SECRET_KEY
-        generateValue: true
+      PYTHON_VERSION: 3.13
