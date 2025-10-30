@@ -1,4 +1,4 @@
-# web_messenger.py - Упрощенная версия Tandau Messenger
+# web_messenger.py - Tandau Messenger с личными чатами
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -23,7 +23,8 @@ def init_db():
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_online BOOLEAN DEFAULT FALSE
+                is_online BOOLEAN DEFAULT FALSE,
+                avatar_color TEXT DEFAULT '#6366F1'
             )
         ''')
         
@@ -34,7 +35,8 @@ def init_db():
                 username TEXT NOT NULL,
                 message TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                room TEXT DEFAULT 'public'
+                room TEXT DEFAULT 'public',
+                recipient TEXT
             )
         ''')
         
@@ -47,14 +49,21 @@ def get_user_by_username(username):
         cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
         return cursor.fetchone()
 
+def get_all_users():
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT username, is_online, avatar_color FROM users WHERE username != ? ORDER BY username', (session.get('username', ''),))
+        return [{'username': user[0], 'is_online': user[1], 'avatar_color': user[2]} for user in cursor.fetchall()]
+
 def create_user(username, password):
     with sqlite3.connect('messenger.db') as conn:
         cursor = conn.cursor()
         password_hash = generate_password_hash(password)
+        avatar_color = generate_avatar_color()
         try:
             cursor.execute(
-                'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-                (username, password_hash)
+                'INSERT INTO users (username, password_hash, avatar_color) VALUES (?, ?, ?)',
+                (username, password_hash, avatar_color)
             )
             conn.commit()
             return True
@@ -76,12 +85,16 @@ def update_user_online_status(username, is_online):
         )
         conn.commit()
 
-def save_message(username, message, room='public'):
+def generate_avatar_color():
+    colors = ['#6366F1', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#3B82F6']
+    return random.choice(colors)
+
+def save_message(username, message, room='public', recipient=None):
     with sqlite3.connect('messenger.db') as conn:
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO messages (username, message, room) VALUES (?, ?, ?)',
-            (username, message, room)
+            'INSERT INTO messages (username, message, room, recipient) VALUES (?, ?, ?, ?)',
+            (username, message, room, recipient)
         )
         conn.commit()
         return cursor.lastrowid
@@ -103,11 +116,62 @@ def get_recent_messages(room='public', limit=50):
             'timestamp': msg[2]
         } for msg in reversed(messages)]
 
+def get_private_messages(user1, user2, limit=50):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        room = f'private_{min(user1, user2)}_{max(user1, user2)}'
+        
+        cursor.execute('''
+            SELECT username, message, timestamp
+            FROM messages 
+            WHERE room = ? 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        ''', (room, limit))
+        
+        messages = cursor.fetchall()
+        return [{
+            'user': msg[0],
+            'message': msg[1],
+            'timestamp': msg[2]
+        } for msg in reversed(messages)]
+
+def get_private_chats(username):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT 
+                CASE 
+                    WHEN username = ? THEN recipient
+                    ELSE username
+                END as partner,
+                MAX(timestamp) as last_message_time
+            FROM messages 
+            WHERE (username = ? OR recipient = ?) AND room LIKE 'private_%'
+            GROUP BY partner
+            ORDER BY last_message_time DESC
+        ''', (username, username, username))
+        
+        chats = cursor.fetchall()
+        result = []
+        for chat in chats:
+            partner = chat[0]
+            if partner:  # Проверяем, что partner не None
+                partner_info = get_user_by_username(partner)
+                if partner_info:
+                    result.append({
+                        'partner': partner,
+                        'avatar_color': partner_info[5],
+                        'is_online': partner_info[4],
+                        'last_message_time': chat[1]
+                    })
+        return result
+
 def get_online_users():
     with sqlite3.connect('messenger.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT username FROM users WHERE is_online = TRUE')
-        return [user[0] for user in cursor.fetchall()]
+        cursor.execute('SELECT username, avatar_color FROM users WHERE is_online = TRUE AND username != ?', (session.get('username', ''),))
+        return [{'username': user[0], 'avatar_color': user[1]} for user in cursor.fetchall()]
 
 # Маршруты Flask
 @app.route('/')
@@ -365,6 +429,8 @@ def chat():
     
     messages = get_recent_messages()
     online_users = get_online_users()
+    all_users = get_all_users()
+    private_chats = get_private_chats(session['username'])
     
     return f'''
 <!DOCTYPE html>
@@ -377,6 +443,8 @@ def chat():
             padding: 0;
             font-family: Arial, sans-serif;
             background: #f0f2f5;
+            height: 100vh;
+            overflow: hidden;
         }}
         .container {{
             display: flex;
@@ -399,16 +467,128 @@ def chat():
             padding: 15px;
             background: #f8f9fa;
             border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }}
-        .online-users {{
-            padding: 15px;
+        .user-avatar {{
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }}
+        .nav {{
             flex: 1;
             overflow-y: auto;
+        }}
+        .nav-section {{
+            margin-bottom: 20px;
+        }}
+        .nav-title {{
+            padding: 10px 15px;
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: bold;
+            border-bottom: 1px solid #eee;
+        }}
+        .nav-item {{
+            padding: 12px 15px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+        }}
+        .nav-item:hover {{
+            background: #f8f9fa;
+        }}
+        .nav-item.active {{
+            background: #f8f9fa;
+            border-left-color: #667eea;
+        }}
+        .private-chat-item {{
+            padding: 10px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }}
+        .private-chat-item:hover {{
+            background: #f8f9fa;
+        }}
+        .private-chat-item.active {{
+            background: #f8f9fa;
+        }}
+        .private-chat-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }}
+        .user-item {{
+            padding: 8px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }}
+        .user-item:hover {{
+            background: #f8f9fa;
+        }}
+        .user-avatar-small {{
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+        }}
+        .online-indicator {{
+            width: 8px;
+            height: 8px;
+            background: #10B981;
+            border-radius: 50%;
+            margin-left: auto;
+        }}
+        .offline-indicator {{
+            width: 8px;
+            height: 8px;
+            background: #6B7280;
+            border-radius: 50%;
+            margin-left: auto;
         }}
         .chat-area {{
             flex: 1;
             display: flex;
             flex-direction: column;
+        }}
+        .chat-header {{
+            background: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }}
+        .chat-title {{
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
         }}
         .messages {{
             flex: 1;
@@ -470,11 +650,9 @@ def chat():
             border-radius: 5px;
             cursor: pointer;
         }}
-        .user-item {{
-            padding: 8px 12px;
-            margin: 2px 0;
-            background: #f8f9fa;
-            border-radius: 5px;
+        .user-list {{
+            max-height: 200px;
+            overflow-y: auto;
         }}
     </style>
 </head>
@@ -485,20 +663,64 @@ def chat():
                 <h2>Tandau Messenger</h2>
             </div>
             <div class="user-info">
-                <strong>Вы:</strong> {session['username']}
-            </div>
-            <div class="online-users">
-                <h4>Онлайн пользователи:</h4>
-                <div id="online-users-list">
-                    {''.join(f'<div class="user-item">{user}</div>' for user in online_users)}
+                <div class="user-avatar">{session['username'][:2].upper()}</div>
+                <div>
+                    <strong>{session['username']}</strong>
+                    <div style="font-size: 12px; color: #666;">🟢 В сети</div>
                 </div>
             </div>
+            
+            <div class="nav">
+                <div class="nav-section">
+                    <div class="nav-title">Чаты</div>
+                    <div class="nav-item active" onclick="switchRoom('public')">
+                        🌐 Общий чат
+                    </div>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-title">Личные чаты</div>
+                    <div id="private-chats-list">
+                        {"".join(f'''
+                        <div class="private-chat-item" onclick="openPrivateChat('{chat['partner']}')">
+                            <div class="private-chat-avatar" style="background: {chat['avatar_color']};">
+                                {chat['partner'][:2].upper()}
+                            </div>
+                            <div>
+                                <div style="font-size: 14px; font-weight: bold;">{chat['partner']}</div>
+                            </div>
+                            <div class="{'online-indicator' if chat['is_online'] else 'offline-indicator'}"></div>
+                        </div>
+                        ''' for chat in private_chats)}
+                    </div>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-title">Все пользователи</div>
+                    <div class="user-list" id="all-users-list">
+                        {"".join(f'''
+                        <div class="user-item" onclick="startPrivateChat('{user['username']}', '{user['avatar_color']}')">
+                            <div class="user-avatar-small" style="background: {user['avatar_color']};">
+                                {user['username'][:2].upper()}
+                            </div>
+                            <span>{user['username']}</span>
+                            <div class="{'online-indicator' if user['is_online'] else 'offline-indicator'}"></div>
+                        </div>
+                        ''' for user in all_users)}
+                    </div>
+                </div>
+            </div>
+            
             <button class="logout-btn" onclick="logout()">Выйти</button>
         </div>
         
         <div class="chat-area">
+            <div class="chat-header">
+                <div class="chat-title" id="chat-title">🌐 Общий чат</div>
+            </div>
+            
             <div class="messages" id="messages">
-                {''.join(f'''
+                {"".join(f'''
                 <div class="message {'own' if msg['user'] == session['username'] else 'other'}">
                     <div class="message-user">{msg['user']}</div>
                     <div>{msg['message']}</div>
@@ -519,13 +741,28 @@ def chat():
     <script>
         const socket = io();
         const username = "{session['username']}";
+        let currentRoom = 'public';
+        let currentChatType = 'public';
+        let currentPartner = null;
         
         socket.on('connect', function() {{
             console.log('Connected to server');
+            joinRoom('public');
         }});
         
         socket.on('new_message', function(data) {{
-            addMessage(data);
+            if (data.room === currentRoom) {{
+                addMessage(data);
+            }}
+        }});
+        
+        socket.on('private_message', function(data) {{
+            if (data.room === currentRoom) {{
+                addMessage(data);
+            }} else {{
+                // Показать уведомление о новом сообщении
+                showNotification(`Новое сообщение от ${{data.user}}`);
+            }}
         }});
         
         socket.on('user_joined', function(data) {{
@@ -536,6 +773,63 @@ def chat():
             updateOnlineUsers(data.online_users);
         }});
         
+        function switchRoom(room, chatTitle = '🌐 Общий чат', chatType = 'public', partner = null) {{
+            // Покидаем предыдущую комнату
+            if (currentRoom !== 'public') {{
+                socket.emit('leave_room', {{ room: currentRoom }});
+            }}
+            
+            // Присоединяемся к новой комнате
+            currentRoom = room;
+            currentChatType = chatType;
+            currentPartner = partner;
+            document.getElementById('chat-title').textContent = chatTitle;
+            
+            socket.emit('join_room', {{ room: room }});
+            
+            // Загружаем сообщения
+            loadMessages();
+            
+            // Обновляем активный элемент в навигации
+            updateActiveNavItem(room);
+        }}
+        
+        function openPrivateChat(partner) {{
+            const room = `private_${{Math.min(username, partner)}}_${{Math.max(username, partner)}}`;
+            const chatTitle = `👤 ${{partner}}`;
+            switchRoom(room, chatTitle, 'private', partner);
+        }}
+        
+        function startPrivateChat(partner, avatarColor) {{
+            openPrivateChat(partner);
+        }}
+        
+        function loadMessages() {{
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Загрузка сообщений...</div>';
+            
+            fetch(`/api/messages?room=${{currentRoom}}`)
+                .then(response => response.json())
+                .then(messages => {{
+                    messagesContainer.innerHTML = '';
+                    if (messages.length === 0) {{
+                        messagesContainer.innerHTML = `
+                            <div style="text-align: center; padding: 40px; color: #666;">
+                                <div style="font-size: 18px; margin-bottom: 10px;">Начните общение!</div>
+                                <div>Это начало ${{currentChatType === 'public' ? 'общего' : 'личного'}} чата</div>
+                            </div>
+                        `;
+                    }} else {{
+                        messages.forEach(addMessage);
+                    }}
+                    scrollToBottom();
+                }})
+                .catch(error => {{
+                    console.error('Error loading messages:', error);
+                    messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Ошибка загрузки сообщений</div>';
+                }});
+        }}
+        
         function addMessage(data) {{
             const messages = document.getElementById('messages');
             const messageDiv = document.createElement('div');
@@ -545,7 +839,7 @@ def chat():
                 <div>${{data.message}}</div>
             `;
             messages.appendChild(messageDiv);
-            messages.scrollTop = messages.scrollHeight;
+            scrollToBottom();
         }}
         
         function sendMessage() {{
@@ -553,19 +847,56 @@ def chat():
             const message = input.value.trim();
             
             if (message) {{
-                socket.emit('send_message', {{
+                const messageData = {{
                     message: message,
-                    room: 'public'
-                }});
+                    room: currentRoom,
+                    chat_type: currentChatType
+                }};
+                
+                if (currentChatType === 'private' && currentPartner) {{
+                    messageData.recipient = currentPartner;
+                }}
+                
+                socket.emit('send_message', messageData);
                 input.value = '';
             }}
         }}
         
         function updateOnlineUsers(users) {{
-            const list = document.getElementById('online-users-list');
-            list.innerHTML = users.map(user => 
-                `<div class="user-item">${{user}}</div>`
-            ).join('');
+            // Обновляем список онлайн пользователей
+            const onlineList = document.getElementById('all-users-list');
+            // Здесь можно добавить логику обновления статусов пользователей
+        }}
+        
+        function updateActiveNavItem(room) {{
+            // Сбрасываем все активные элементы
+            document.querySelectorAll('.nav-item.active, .private-chat-item.active').forEach(item => {{
+                item.classList.remove('active');
+            }});
+            
+            if (room === 'public') {{
+                document.querySelector('.nav-item').classList.add('active');
+            }} else {{
+                // Находим соответствующий приватный чат и делаем его активным
+                const partner = room.split('_')[1] === username ? room.split('_')[2] : room.split('_')[1];
+                document.querySelectorAll('.private-chat-item').forEach(item => {{
+                    if (item.textContent.includes(partner)) {{
+                        item.classList.add('active');
+                    }}
+                }});
+            }}
+        }}
+        
+        function showNotification(message) {{
+            // Простое уведомление
+            if ('Notification' in window && Notification.permission === 'granted') {{
+                new Notification('Tandau Messenger', {{
+                    body: message
+                }});
+            }} else {{
+                // Fallback уведомление
+                console.log('New message:', message);
+            }}
         }}
         
         function logout() {{
@@ -581,11 +912,21 @@ def chat():
             }}
         }});
         
+        // Запрос разрешения на уведомления
+        if ('Notification' in window) {{
+            Notification.requestPermission();
+        }}
+        
         // Автопрокрутка при загрузке
         window.addEventListener('load', function() {{
             const messages = document.getElementById('messages');
             messages.scrollTop = messages.scrollHeight;
         }});
+        
+        function scrollToBottom() {{
+            const messages = document.getElementById('messages');
+            messages.scrollTop = messages.scrollHeight;
+        }}
     </script>
 </body>
 </html>
@@ -597,6 +938,26 @@ def logout():
         update_user_online_status(session['username'], False)
         session.pop('username', None)
     return redirect(url_for('index'))
+
+@app.route('/api/messages')
+def get_messages():
+    if 'username' not in session:
+        return jsonify({'error': 'Не авторизован'}), 401
+    
+    room = request.args.get('room', 'public')
+    
+    if room.startswith('private_'):
+        # Извлекаем участников приватного чата из названия комнаты
+        parts = room.split('_')
+        if len(parts) == 3:
+            user1, user2 = parts[1], parts[2]
+            messages = get_private_messages(user1, user2)
+        else:
+            messages = []
+    else:
+        messages = get_recent_messages(room)
+    
+    return jsonify(messages)
 
 # WebSocket события
 @socketio.on('connect')
@@ -618,6 +979,26 @@ def handle_disconnect():
             'online_users': get_online_users()
         }, room='public')
 
+@socketio.on('join_room')
+def handle_join_room(data):
+    if 'username' not in session:
+        return
+    
+    room = data.get('room')
+    if room:
+        join_room(room)
+        print(f"User {session['username']} joined room {room}")
+
+@socketio.on('leave_room')
+def handle_leave_room(data):
+    if 'username' not in session:
+        return
+    
+    room = data.get('room')
+    if room:
+        leave_room(room)
+        print(f"User {session['username']} left room {room}")
+
 @socketio.on('send_message')
 def handle_send_message(data):
     if 'username' not in session:
@@ -625,26 +1006,47 @@ def handle_send_message(data):
     
     message = data.get('message', '').strip()
     room = data.get('room', 'public')
+    chat_type = data.get('chat_type', 'public')
+    recipient = data.get('recipient')
     
     if not message:
         return
     
     # Сохраняем сообщение в БД
-    message_id = save_message(session['username'], message, room)
+    message_id = save_message(session['username'], message, room, recipient)
     
     # Отправляем сообщение в комнату
-    emit('new_message', {
-        'id': message_id,
-        'user': session['username'],
-        'message': message,
-        'timestamp': datetime.now().isoformat(),
-        'room': room
-    }, room=room)
+    if chat_type == 'private':
+        emit('private_message', {
+            'id': message_id,
+            'user': session['username'],
+            'message': message,
+            'timestamp': datetime.now().isoformat(),
+            'room': room
+        }, room=room)
+        
+        # Отправляем уведомление получателю
+        if recipient:
+            emit('private_message', {
+                'id': message_id,
+                'user': session['username'],
+                'message': message,
+                'timestamp': datetime.now().isoformat(),
+                'room': room
+            }, room=f'user_{recipient}')
+    else:
+        emit('new_message', {
+            'id': message_id,
+            'user': session['username'],
+            'message': message,
+            'timestamp': datetime.now().isoformat(),
+            'room': room
+        }, room=room)
 
 if __name__ == '__main__':
     init_db()
     print("🚀 Tandau Web Messenger запущен!")
     print("📍 Доступен по адресу: http://localhost:5000")
+    print("💬 Поддерживает общие и личные чаты")
     
-    # Для продакшена используем allow_unsafe_werkzeug=True
     socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
