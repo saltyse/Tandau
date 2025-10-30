@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (ПОЛНАЯ ВЕРСИЯ ДЛЯ RENDER)
+# web_messenger.py - Tandau Messenger (ПОЛНАЯ ВЕРСИЯ ДЛЯ RENDER + GUNICORN)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -74,7 +74,7 @@ def create_app():
                       ('general', 'Общий канал', 'system'))
             conn.commit()
 
-    init_db()  # ← База создаётся при запуске gunicorn
+    init_db()
 
     # === Утилиты ===
     def allowed_file(filename):
@@ -86,7 +86,7 @@ def create_app():
         filename = secure_filename(f"{int(datetime.now().timestamp())}_{file.filename}")
         path = os.path.join(folder, filename)
         file.save(path)
-        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', 'webp')):
             try:
                 img = Image.open(path)
                 img.thumbnail((800, 800))
@@ -409,5 +409,4 @@ def create_app():
 
     return app
 
-# === ЭКСПОРТ ПРИЛОЖЕНИЯ ДЛЯ GUNICORN ===
-app = create_app()
+# === НЕТ app = create_app() — только gunicorn ===
