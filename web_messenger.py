@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger с исправленной авторизацией
+# web_messenger.py - Tandau Messenger с мобильной адаптацией
 from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -300,7 +300,13 @@ def index():
 <html>
 <head>
     <title>Tandau Messenger - Вход</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
             font-family: Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -313,7 +319,7 @@ def index():
         }
         .container {
             background: white;
-            padding: 40px;
+            padding: 30px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             width: 100%;
@@ -322,10 +328,11 @@ def index():
         h1 {
             text-align: center;
             color: #333;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
+            font-size: 24px;
         }
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         input {
             width: 100%;
@@ -344,6 +351,7 @@ def index():
             border-radius: 5px;
             font-size: 16px;
             cursor: pointer;
+            transition: background 0.3s;
         }
         button:hover {
             background: #5a6fd8;
@@ -352,17 +360,42 @@ def index():
             text-align: center;
             margin-top: 20px;
         }
+        .switch-form a {
+            color: #667eea;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .switch-form a:hover {
+            text-decoration: underline;
+        }
         .alert {
             padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: none;
+            text-align: center;
+        }
+        .alert.error {
             background: #f8d7da;
             color: #721c24;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            display: none;
         }
-        .success {
+        .alert.success {
             background: #d4edda;
             color: #155724;
+        }
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            h1 {
+                font-size: 20px;
+                margin-bottom: 20px;
+            }
+            input, button {
+                padding: 10px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
@@ -570,12 +603,19 @@ def chat():
         user_channels = get_user_channels(session['username'])
         all_channels = get_all_channels()
         
-        return f'''
+        # Генерируем HTML для чата
+        chat_html = f'''
 <!DOCTYPE html>
 <html>
 <head>
     <title>Tandau Messenger - Чат</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
         body {{
             margin: 0;
             padding: 0;
@@ -594,6 +634,7 @@ def chat():
             border-right: 1px solid #ddd;
             display: flex;
             flex-direction: column;
+            transition: transform 0.3s ease;
         }}
         .header {{
             background: #667eea;
@@ -620,6 +661,16 @@ def chat():
             color: white;
             font-weight: bold;
             font-size: 16px;
+            flex-shrink: 0;
+        }}
+        .mobile-menu-btn {{
+            display: none;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: white;
+            margin-right: 10px;
         }}
         .nav {{
             flex: 1;
@@ -775,6 +826,7 @@ def chat():
         .channel-icon {{
             color: #667eea;
             font-size: 16px;
+            flex-shrink: 0;
         }}
         .channel-info {{
             flex: 1;
@@ -797,6 +849,7 @@ def chat():
             padding: 4px 8px;
             font-size: 11px;
             cursor: pointer;
+            flex-shrink: 0;
         }}
         .chat-area {{
             flex: 1;
@@ -807,11 +860,15 @@ def chat():
             background: white;
             padding: 15px 20px;
             border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }}
         .chat-title {{
             font-size: 18px;
             font-weight: bold;
             color: #333;
+            flex: 1;
         }}
         .messages {{
             flex: 1;
@@ -823,7 +880,7 @@ def chat():
             margin-bottom: 15px;
             padding: 10px 15px;
             border-radius: 10px;
-            max-width: 70%;
+            max-width: 85%;
             word-wrap: break-word;
         }}
         .message.own {{
@@ -841,13 +898,14 @@ def chat():
             font-size: 14px;
         }}
         .input-area {{
-            padding: 20px;
+            padding: 15px;
             background: white;
             border-top: 1px solid #ddd;
         }}
         .input-container {{
             display: flex;
             gap: 10px;
+            align-items: flex-end;
         }}
         .message-input {{
             flex: 1;
@@ -855,6 +913,9 @@ def chat():
             border: 1px solid #ddd;
             border-radius: 25px;
             font-size: 16px;
+            resize: none;
+            min-height: 50px;
+            max-height: 120px;
         }}
         .send-btn {{
             background: #667eea;
@@ -865,6 +926,7 @@ def chat():
             height: 50px;
             cursor: pointer;
             font-size: 18px;
+            flex-shrink: 0;
         }}
         .logout-btn {{
             background: #dc3545;
@@ -941,11 +1003,86 @@ def chat():
             cursor: pointer;
             width: 100%;
         }}
+        
+        /* Мобильная адаптация */
+        @media (max-width: 768px) {{
+            .container {{
+                flex-direction: column;
+            }}
+            .sidebar {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                z-index: 1000;
+                transform: translateX(-100%);
+                width: 280px;
+            }}
+            .sidebar.active {{
+                transform: translateX(0);
+            }}
+            .chat-area {{
+                width: 100%;
+            }}
+            .mobile-menu-btn {{
+                display: block;
+            }}
+            .message {{
+                max-width: 90%;
+            }}
+            .user-info {{
+                padding: 12px;
+            }}
+            .nav {{
+                padding: 8px 0;
+            }}
+            .input-area {{
+                padding: 10px;
+            }}
+            .message-input {{
+                font-size: 14px;
+                padding: 10px;
+            }}
+        }}
+        
+        @media (max-width: 480px) {{
+            .sidebar {{
+                width: 100%;
+            }}
+            .header {{
+                padding: 15px;
+            }}
+            .chat-header {{
+                padding: 10px 15px;
+            }}
+            .messages {{
+                padding: 15px;
+            }}
+            .message {{
+                padding: 8px 12px;
+                max-width: 95%;
+            }}
+        }}
+        
+        /* Скроллбар */
+        ::-webkit-scrollbar {{
+            width: 6px;
+        }}
+        ::-webkit-scrollbar-track {{
+            background: #f1f1f1;
+        }}
+        ::-webkit-scrollbar-thumb {{
+            background: #c1c1c1;
+            border-radius: 3px;
+        }}
+        ::-webkit-scrollbar-thumb:hover {{
+            background: #a8a8a8;
+        }}
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
             <div class="header">
                 <h2>Tandau Messenger</h2>
             </div>
@@ -964,7 +1101,11 @@ def chat():
                         <button class="add-btn" onclick="showCreateChannelModal()">+</button>
                     </div>
                     <div class="channel-list">
-                        {"".join(f'''
+        '''
+        
+        # Добавляем каналы пользователя
+        for channel in user_channels:
+            chat_html += f'''
                         <div class="channel-item" onclick="switchRoom('channel_{channel["name"]}', '# {channel["name"]}')">
                             <div class="channel-icon">#</div>
                             <div class="channel-info">
@@ -972,15 +1113,22 @@ def chat():
                                 <div class="channel-desc">{channel["description"] or "Без описания"}</div>
                             </div>
                         </div>
-                        ''' for channel in user_channels)}
+            '''
+        
+        chat_html += '''
                     </div>
                 </div>
                 
                 <div class="nav-section">
                     <div class="nav-title">Личные чаты</div>
                     <div id="private-chats-list">
-                        {"".join(f'''
-                        <div class="private-chat-item" onclick="openPrivateChat("{chat["partner"]}")">
+        '''
+        
+        # Добавляем личные чаты
+        if private_chats:
+            for chat in private_chats:
+                chat_html += f'''
+                        <div class="private-chat-item" onclick="openPrivateChat('{chat["partner"]}')">
                             <div class="private-chat-avatar" style="background: {chat["avatar_color"]};">
                                 {chat["partner"][:2].upper()}
                             </div>
@@ -990,15 +1138,22 @@ def chat():
                             </div>
                             <div class="{"online-indicator" if chat["is_online"] else "offline-indicator"}"></div>
                         </div>
-                        ''' for chat in private_chats)}
-                        {"<div style='padding: 10px 15px; color: #666; font-size: 14px;'>Нет личных чатов</div>" if not private_chats else ""}
+                '''
+        else:
+            chat_html += '<div style="padding: 10px 15px; color: #666; font-size: 14px;">Нет личных чатов</div>'
+        
+        chat_html += '''
                     </div>
                 </div>
                 
                 <div class="nav-section">
                     <div class="nav-title">Все пользователи</div>
                     <div class="user-list" id="all-users-list">
-                        {"".join(f'''
+        '''
+        
+        # Добавляем всех пользователей
+        for user in all_users:
+            chat_html += f'''
                         <div class="user-item">
                             <div class="user-avatar-small" style="background: {user["avatar_color"]};">
                                 {user["username"][:2].upper()}
@@ -1007,14 +1162,22 @@ def chat():
                             <div class="{"online-indicator" if user["is_online"] else "offline-indicator"}"></div>
                             <button class="start-chat-btn" onclick="startPrivateChat('{user["username"]}', '{user["avatar_color"]}')">Чат</button>
                         </div>
-                        ''' for user in all_users)}
+            '''
+        
+        chat_html += '''
                     </div>
                 </div>
 
                 <div class="nav-section">
                     <div class="nav-title">Доступные каналы</div>
                     <div class="channel-list">
-                        {"".join(f'''
+        '''
+        
+        # Добавляем доступные каналы
+        user_channel_names = [ch["name"] for ch in user_channels]
+        for channel in all_channels:
+            if channel["name"] not in user_channel_names:
+                chat_html += f'''
                         <div class="channel-item">
                             <div class="channel-icon">#</div>
                             <div class="channel-info">
@@ -1023,7 +1186,9 @@ def chat():
                             </div>
                             <button class="join-channel-btn" onclick="joinChannel({channel["id"]})">Войти</button>
                         </div>
-                        ''' for channel in all_channels if channel["name"] not in [ch["name"] for ch in user_channels])}
+                '''
+        
+        chat_html += '''
                     </div>
                 </div>
             </div>
@@ -1033,22 +1198,37 @@ def chat():
         
         <div class="chat-area">
             <div class="chat-header">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
                 <div class="chat-title" id="chat-title"># general</div>
             </div>
             
             <div class="messages" id="messages">
-                {"".join(f'''
-                <div class="message {"own" if msg["user"] == session["username"] else "other"}">
+        '''
+        
+        # Добавляем сообщения
+        if messages:
+            for msg in messages:
+                is_own = msg["user"] == session['username']
+                chat_html += f'''
+                <div class="message {"own" if is_own else "other"}">
                     <div class="message-user">{msg["user"]}</div>
                     <div>{msg["message"]}</div>
                 </div>
-                ''' for msg in messages)}
-                {"<div class='welcome-message'><div style='font-size: 18px; margin-bottom: 10px;'>Добро пожаловать в Tandau Messenger!</div><div>Начните общение, отправив первое сообщение</div></div>" if not messages else ""}
+                '''
+        else:
+            chat_html += '''
+                <div class="welcome-message">
+                    <div style="font-size: 18px; margin-bottom: 10px;">Добро пожаловать в Tandau Messenger!</div>
+                    <div>Начните общение, отправив первое сообщение</div>
+                </div>
+            '''
+        
+        chat_html += '''
             </div>
             
             <div class="input-area">
                 <div class="input-container">
-                    <input type="text" class="message-input" id="message-input" placeholder="Введите сообщение..." autocomplete="off">
+                    <textarea class="message-input" id="message-input" placeholder="Введите сообщение..." autocomplete="off" rows="1"></textarea>
                     <button class="send-btn" onclick="sendMessage()">➤</button>
                 </div>
             </div>
@@ -1121,6 +1301,11 @@ def chat():
             joinRoom(room);
             loadMessages();
             updateActiveNavItem(room, chatType);
+            
+            // На мобильных устройствах закрываем сайдбар после выбора чата
+            if (window.innerWidth <= 768) {{
+                toggleSidebar();
+            }}
         }}
         
         function openPrivateChat(partner) {{
@@ -1145,7 +1330,7 @@ def chat():
                         messagesContainer.innerHTML = `
                             <div class="welcome-message">
                                 <div style="font-size: 18px; margin-bottom: 10px;">Начните общение!</div>
-                                <div>Это начало ${{currentChatType === 'channel' ? 'канала' : 'личного'} чата</div>
+                                <div>Это начало ${{currentChatType === 'channel' ? 'канала' : 'личного'}} чата</div>
                             </div>
                         `;
                     }} else {{
@@ -1189,7 +1374,14 @@ def chat():
                 console.log('Sending message:', messageData);
                 socket.emit('send_message', messageData);
                 input.value = '';
+                adjustTextareaHeight();
             }}
+        }}
+        
+        function adjustTextareaHeight() {{
+            const textarea = document.getElementById('message-input');
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
         }}
         
         function updatePrivateChats() {{
@@ -1216,6 +1408,11 @@ def chat():
                     }}
                 }});
             }}
+        }}
+        
+        function toggleSidebar() {{
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('active');
         }}
         
         function showCreateChannelModal() {{
@@ -1280,7 +1477,8 @@ def chat():
                     icon: '/favicon.ico'
                 }});
             }} else {{
-                alert(message);
+                // Fallback для мобильных устройств
+                console.log('New message:', message);
             }}
         }}
         
@@ -1290,8 +1488,13 @@ def chat():
             }}
         }}
         
+        document.getElementById('message-input').addEventListener('input', function() {{
+            adjustTextareaHeight();
+        }});
+        
         document.getElementById('message-input').addEventListener('keypress', function(e) {{
-            if (e.key === 'Enter') {{
+            if (e.key === 'Enter' && !e.shiftKey) {{
+                e.preventDefault();
                 sendMessage();
             }}
         }});
@@ -1302,6 +1505,7 @@ def chat():
         
         window.addEventListener('load', function() {{
             scrollToBottom();
+            adjustTextareaHeight();
         }});
         
         function scrollToBottom() {{
@@ -1316,10 +1520,25 @@ def chat():
                 closeCreateChannelModal();
             }}
         }}
+        
+        // Адаптация к мобильным устройствам
+        function checkMobile() {{
+            if (window.innerWidth <= 768) {{
+                document.getElementById('sidebar').classList.remove('active');
+            }} else {{
+                document.getElementById('sidebar').classList.add('active');
+            }}
+        }}
+        
+        window.addEventListener('resize', checkMobile);
+        window.addEventListener('load', checkMobile);
     </script>
 </body>
 </html>
         '''
+        
+        return chat_html
+        
     except Exception as e:
         return f"Ошибка загрузки чата: {str(e)}"
 
@@ -1468,7 +1687,7 @@ if __name__ == '__main__':
     print("📍 Доступен по адресу: http://localhost:5000")
     print("💬 Поддерживает общие и личные чаты")
     print("📢 Добавлены каналы!")
-    print("👥 Кнопка для личных чатов!")
+    print("📱 Адаптирован для мобильных устройств!")
     
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
