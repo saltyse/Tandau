@@ -1,6 +1,6 @@
-# web_messenger.py - Tandau Messenger с полным функционалом
-from flask import Flask, request, jsonify, session, redirect, url_for
-from flask_socketio import SocketIO, emit, join_room, leave_room
+# app.py - Простой рабочий мессенджер
+from flask import Flask, request, jsonify, session, redirect
+from flask_socketio import SocketIO, emit, join_room
 import sqlite3
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,1820 +8,352 @@ import random
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tandau-secret-key-2024')
-socketio = SocketIO(app, cors_allowed_origins="*")
+app.config['SECRET_KEY'] = 'simple-secret-key-2024'
+socketio = SocketIO(app)
 
 # Инициализация базы данных
 def init_db():
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        
-        # Таблица пользователей
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_online BOOLEAN DEFAULT FALSE,
-                avatar_color TEXT DEFAULT '#6366F1'
-            )
-        ''')
-        
-        # Таблица сообщений
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                message TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                room TEXT DEFAULT 'public',
-                recipient TEXT,
-                message_type TEXT DEFAULT 'text'
-            )
-        ''')
-        
-        # Таблица каналов
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS channels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                description TEXT,
-                created_by TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_private BOOLEAN DEFAULT FALSE
-            )
-        ''')
-        
-        # Таблица участников каналов
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS channel_members (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                channel_id INTEGER,
-                username TEXT NOT NULL,
-                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (channel_id) REFERENCES channels (id)
-            )
-        ''')
-        
-        # Создаем основной канал по умолчанию
-        cursor.execute('''
-            INSERT OR IGNORE INTO channels (name, description, created_by) 
-            VALUES ('general', 'Основной канал', 'system')
-        ''')
-        
-        conn.commit()
+    conn = sqlite3.connect('messenger.db')
+    cursor = conn.cursor()
+    
+    # Таблица пользователей
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_online BOOLEAN DEFAULT FALSE
+        )
+    ''')
+    
+    # Таблица сообщений
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            message TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            room TEXT DEFAULT 'general'
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
 
-# Утилиты для работы с пользователями
-def get_user_by_username(username):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
-        return cursor.fetchone()
-
-def get_all_users():
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT username, is_online, avatar_color FROM users ORDER BY username')
-        return [{'username': user[0], 'is_online': user[1], 'avatar_color': user[2]} for user in cursor.fetchall()]
+# Простые функции для работы с БД
+def get_user(username):
+    conn = sqlite3.connect('messenger.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+    user = cursor.fetchone()
+    conn.close()
+    return user
 
 def create_user(username, password):
-    with sqlite3.connect('messenger.db') as conn:
+    try:
+        conn = sqlite3.connect('messenger.db')
         cursor = conn.cursor()
         password_hash = generate_password_hash(password)
-        avatar_color = generate_avatar_color()
-        try:
-            cursor.execute(
-                'INSERT INTO users (username, password_hash, avatar_color) VALUES (?, ?, ?)',
-                (username, password_hash, avatar_color)
-            )
-            # Добавляем пользователя в основной канал
-            cursor.execute('SELECT id FROM channels WHERE name = "general"')
-            general_channel = cursor.fetchone()
-            if general_channel:
-                cursor.execute(
-                    'INSERT OR IGNORE INTO channel_members (channel_id, username) VALUES (?, ?)',
-                    (general_channel[0], username)
-                )
-            conn.commit()
-            return True
-        except sqlite3.IntegrityError:
-            return False
-
-def verify_user(username, password):
-    user = get_user_by_username(username)
-    if user and check_password_hash(user[2], password):
-        return user
-    return None
-
-def update_user_online_status(username, is_online):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
         cursor.execute(
-            'UPDATE users SET is_online = ? WHERE username = ?',
-            (is_online, username)
+            'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+            (username, password_hash)
         )
         conn.commit()
+        conn.close()
+        return True
+    except:
+        return False
 
-def generate_avatar_color():
-    colors = ['#6366F1', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#3B82F6']
-    return random.choice(colors)
+def save_message(username, message, room='general'):
+    conn = sqlite3.connect('messenger.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO messages (username, message, room) VALUES (?, ?, ?)',
+        (username, message, room)
+    )
+    conn.commit()
+    conn.close()
 
-def save_message(username, message, room='public', recipient=None, message_type='text'):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            'INSERT INTO messages (username, message, room, recipient, message_type) VALUES (?, ?, ?, ?, ?)',
-            (username, message, room, recipient, message_type)
-        )
-        conn.commit()
-        return cursor.lastrowid
-
-def get_recent_messages(room='public', limit=50):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT username, message, timestamp, message_type
-            FROM messages 
-            WHERE room = ? 
-            ORDER BY timestamp ASC 
-            LIMIT ?
-        ''', (room, limit))
-        messages = cursor.fetchall()
-        return [{
-            'user': msg[0],
-            'message': msg[1],
-            'timestamp': msg[2],
-            'type': msg[3]
-        } for msg in messages]
-
-def get_private_messages(user1, user2, limit=50):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        room = f'private_{min(user1, user2)}_{max(user1, user2)}'
-        
-        cursor.execute('''
-            SELECT username, message, timestamp, message_type
-            FROM messages 
-            WHERE room = ? 
-            ORDER BY timestamp ASC 
-            LIMIT ?
-        ''', (room, limit))
-        
-        messages = cursor.fetchall()
-        return [{
-            'user': msg[0],
-            'message': msg[1],
-            'timestamp': msg[2],
-            'type': msg[3]
-        } for msg in messages]
-
-def get_private_chats(username):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT DISTINCT 
-                CASE 
-                    WHEN username = ? THEN recipient
-                    ELSE username
-                END as partner
-            FROM messages 
-            WHERE (username = ? OR recipient = ?) AND room LIKE 'private_%'
-        ''', (username, username, username))
-        
-        chats = cursor.fetchall()
-        result = []
-        for chat in chats:
-            partner = chat[0]
-            if partner:
-                partner_info = get_user_by_username(partner)
-                if partner_info:
-                    cursor.execute('''
-                        SELECT message FROM messages 
-                        WHERE room = ? 
-                        ORDER BY timestamp DESC LIMIT 1
-                    ''', (f'private_{min(username, partner)}_{max(username, partner)}',))
-                    last_message = cursor.fetchone()
-                    
-                    result.append({
-                        'partner': partner,
-                        'avatar_color': partner_info[5],
-                        'is_online': partner_info[4],
-                        'last_message': last_message[0] if last_message else 'Нет сообщений'
-                    })
-        return result
+def get_messages(room='general', limit=50):
+    conn = sqlite3.connect('messenger.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT username, message, timestamp 
+        FROM messages 
+        WHERE room = ? 
+        ORDER BY timestamp ASC 
+        LIMIT ?
+    ''', (room, limit))
+    messages = cursor.fetchall()
+    conn.close()
+    return [{'user': msg[0], 'message': msg[1], 'timestamp': msg[2]} for msg in messages]
 
 def get_online_users():
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT username, avatar_color FROM users WHERE is_online = TRUE')
-        return [{'username': user[0], 'avatar_color': user[1]} for user in cursor.fetchall()]
+    conn = sqlite3.connect('messenger.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT username FROM users WHERE is_online = TRUE')
+    users = [user[0] for user in cursor.fetchall()]
+    conn.close()
+    return users
 
-# Утилиты для работы с каналами
-def get_all_channels():
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT c.id, c.name, c.description, c.created_by, c.created_at, 
-                   COUNT(cm.username) as member_count
-            FROM channels c
-            LEFT JOIN channel_members cm ON c.id = cm.channel_id
-            WHERE c.is_private = FALSE
-            GROUP BY c.id
-            ORDER BY c.created_at DESC
-        ''')
-        channels = cursor.fetchall()
-        return [{
-            'id': channel[0],
-            'name': channel[1],
-            'description': channel[2],
-            'created_by': channel[3],
-            'created_at': channel[4],
-            'member_count': channel[5]
-        } for channel in channels]
+def update_online_status(username, online):
+    conn = sqlite3.connect('messenger.db')
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET is_online = ? WHERE username = ?', (online, username))
+    conn.commit()
+    conn.close()
 
-def get_user_channels(username):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT c.id, c.name, c.description, c.created_by
-            FROM channels c
-            JOIN channel_members cm ON c.id = cm.channel_id
-            WHERE cm.username = ?
-            ORDER BY c.name
-        ''', (username,))
-        channels = cursor.fetchall()
-        return [{
-            'id': channel[0],
-            'name': channel[1],
-            'description': channel[2],
-            'created_by': channel[3]
-        } for channel in channels]
-
-def create_channel(name, description, created_by):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                'INSERT INTO channels (name, description, created_by) VALUES (?, ?, ?)',
-                (name, description, created_by)
-            )
-            channel_id = cursor.lastrowid
-            # Добавляем создателя в канал
-            cursor.execute(
-                'INSERT INTO channel_members (channel_id, username) VALUES (?, ?)',
-                (channel_id, created_by)
-            )
-            conn.commit()
-            return True
-        except sqlite3.IntegrityError:
-            return False
-
-def join_channel(channel_id, username):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                'INSERT OR IGNORE INTO channel_members (channel_id, username) VALUES (?, ?)',
-                (channel_id, username)
-            )
-            conn.commit()
-            return True
-        except:
-            return False
-
-def leave_channel(channel_id, username):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                'DELETE FROM channel_members WHERE channel_id = ? AND username = ?',
-                (channel_id, username)
-            )
-            conn.commit()
-            return True
-        except:
-            return False
-
-def is_channel_member(channel_id, username):
-    with sqlite3.connect('messenger.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            'SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?',
-            (channel_id, username)
-        )
-        return cursor.fetchone() is not None
-
-# Маршруты Flask
+# Маршруты
 @app.route('/')
 def index():
     if 'username' in session:
-        return redirect(url_for('chat'))
+        return redirect('/chat')
+    
     return '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Tandau Messenger - Вход</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            width: 100%;
-            max-width: 400px;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 25px;
-            font-size: 24px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-            box-sizing: border-box;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        button:hover {
-            background: #5a6fd8;
-        }
-        .switch-form {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .switch-form a {
-            color: #667eea;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .switch-form a:hover {
-            text-decoration: underline;
-        }
-        .alert {
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            display: none;
-            text-align: center;
-        }
-        .alert.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .alert.success {
-            background: #d4edda;
-            color: #155724;
-        }
-        @media (max-width: 480px) {
-            .container {
-                padding: 20px;
-                margin: 10px;
-            }
-            h1 {
-                font-size: 20px;
-                margin-bottom: 20px;
-            }
-            input, button {
-                padding: 10px;
-                font-size: 14px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Tandau Messenger</h1>
-        <div id="alert" class="alert"></div>
-        
-        <div id="login-form">
-            <div class="form-group">
-                <input type="text" id="login-username" placeholder="Имя пользователя" required>
-            </div>
-            <div class="form-group">
-                <input type="password" id="login-password" placeholder="Пароль" required>
-            </div>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Messenger - Вход</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body { font-family: Arial; background: #667eea; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+            .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 100%; max-width: 400px; }
+            h1 { text-align: center; color: #333; margin-bottom: 25px; }
+            .form-group { margin-bottom: 15px; }
+            input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box; }
+            button { width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+            .alert { padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px; margin-bottom: 15px; display: none; text-align: center; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Messenger</h1>
+            <div id="alert" class="alert"></div>
+            <div class="form-group"><input type="text" id="username" placeholder="Имя пользователя"></div>
+            <div class="form-group"><input type="password" id="password" placeholder="Пароль"></div>
             <button onclick="login()">Войти</button>
-            <div class="switch-form">
+            <div style="text-align: center; margin-top: 15px;">
                 <a href="#" onclick="showRegister()">Нет аккаунта? Зарегистрироваться</a>
             </div>
         </div>
-        
-        <div id="register-form" style="display: none;">
-            <div class="form-group">
-                <input type="text" id="reg-username" placeholder="Имя пользователя" required>
-            </div>
-            <div class="form-group">
-                <input type="password" id="reg-password" placeholder="Пароль" required>
-            </div>
-            <div class="form-group">
-                <input type="password" id="reg-confirm" placeholder="Повторите пароль" required>
-            </div>
-            <button onclick="register()">Зарегистрироваться</button>
-            <div class="switch-form">
-                <a href="#" onclick="showLogin()">Уже есть аккаунт? Войти</a>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function showAlert(message, type = 'error') {
-            const alert = document.getElementById('alert');
-            alert.textContent = message;
-            alert.className = `alert ${type}`;
-            alert.style.display = 'block';
-        }
-        
-        function showRegister() {
-            document.getElementById('login-form').style.display = 'none';
-            document.getElementById('register-form').style.display = 'block';
-            document.getElementById('alert').style.display = 'none';
-        }
-        
-        function showLogin() {
-            document.getElementById('register-form').style.display = 'none';
-            document.getElementById('login-form').style.display = 'block';
-            document.getElementById('alert').style.display = 'none';
-        }
-        
-        async function login() {
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
-            
-            if (!username || !password) {
-                showAlert('Заполните все поля');
-                return;
+        <script>
+            function showAlert(msg) { const a = document.getElementById('alert'); a.textContent = msg; a.style.display = 'block'; }
+            async function login() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                if (!username || !password) { showAlert('Заполните все поля'); return; }
+                try {
+                    const r = await fetch('/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username, password}) });
+                    const data = await r.json();
+                    if (data.success) window.location.href = '/chat';
+                    else showAlert(data.error);
+                } catch(e) { showAlert('Ошибка подключения'); }
             }
-            
-            const formData = new FormData();
-            formData.append('username', username);
-            formData.append('password', password);
-            
-            try {
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    window.location.href = '/chat';
-                } else {
-                    showAlert(data.error);
-                }
-            } catch (error) {
-                showAlert('Ошибка подключения к серверу');
+            function showRegister() {
+                document.querySelector('button').textContent = 'Зарегистрироваться';
+                document.querySelector('button').onclick = register;
+                document.querySelector('a').textContent = 'Уже есть аккаунт? Войти';
+                document.querySelector('a').onclick = showLogin;
             }
-        }
-        
-        async function register() {
-            const username = document.getElementById('reg-username').value;
-            const password = document.getElementById('reg-password').value;
-            const confirm = document.getElementById('reg-confirm').value;
-            
-            if (!username || !password || !confirm) {
-                showAlert('Заполните все поля');
-                return;
+            function showLogin() {
+                document.querySelector('button').textContent = 'Войти';
+                document.querySelector('button').onclick = login;
+                document.querySelector('a').textContent = 'Нет аккаунта? Зарегистрироваться';
+                document.querySelector('a').onclick = showRegister;
             }
-            
-            if (password !== confirm) {
-                showAlert('Пароли не совпадают');
-                return;
+            async function register() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                if (!username || !password) { showAlert('Заполните все поля'); return; }
+                try {
+                    const r = await fetch('/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username, password}) });
+                    const data = await r.json();
+                    if (data.success) { showAlert('Регистрация успешна!'); setTimeout(showLogin, 2000); }
+                    else showAlert(data.error);
+                } catch(e) { showAlert('Ошибка подключения'); }
             }
-            
-            if (username.length < 3) {
-                showAlert('Имя пользователя должно быть не менее 3 символов');
-                return;
-            }
-            
-            const formData = new FormData();
-            formData.append('username', username);
-            formData.append('password', password);
-            formData.append('confirm_password', confirm);
-            
-            try {
-                const response = await fetch('/register', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert('Регистрация успешна! Теперь вы можете войти.', 'success');
-                    setTimeout(() => {
-                        showLogin();
-                    }, 2000);
-                } else {
-                    showAlert(data.error);
-                }
-            } catch (error) {
-                showAlert('Ошибка подключения к серверу');
-            }
-        }
-        
-        document.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                if (document.getElementById('login-form').style.display !== 'none') {
-                    login();
-                } else {
-                    register();
-                }
-            }
-        });
-    </script>
-</body>
-</html>
+            document.addEventListener('keypress', e => { if(e.key === 'Enter') document.querySelector('button').onclick(); });
+        </script>
+    </body>
+    </html>
     '''
 
 @app.route('/login', methods=['POST'])
 def login():
-    try:
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Заполните все поля'})
-        
-        user = verify_user(username, password)
-        if user:
-            session['username'] = username
-            update_user_online_status(username, True)
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': 'Неверное имя пользователя или пароль'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'Ошибка сервера: {str(e)}'})
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    user = get_user(username)
+    if user and check_password_hash(user[2], password):
+        session['username'] = username
+        update_online_status(username, True)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Неверные данные'})
 
 @app.route('/register', methods=['POST'])
 def register():
-    try:
-        username = request.form.get('username')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Заполните все поля'})
-        
-        if password != confirm_password:
-            return jsonify({'success': False, 'error': 'Пароли не совпадают'})
-        
-        if len(username) < 3:
-            return jsonify({'success': False, 'error': 'Имя пользователя должно быть не менее 3 символов'})
-        
-        if len(password) < 4:
-            return jsonify({'success': False, 'error': 'Пароль должен быть не менее 4 символов'})
-        
-        if create_user(username, password):
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': 'Пользователь с таким именем уже существует'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'Ошибка сервера: {str(e)}'})
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Заполните все поля'})
+    
+    if len(username) < 3:
+        return jsonify({'success': False, 'error': 'Имя слишком короткое'})
+    
+    if create_user(username, password):
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Пользователь существует'})
 
 @app.route('/chat')
 def chat():
     if 'username' not in session:
-        return redirect(url_for('index'))
+        return redirect('/')
     
-    try:
-        messages = get_recent_messages('channel_general')
-        online_users = get_online_users()
-        all_users = get_all_users()
-        private_chats = get_private_chats(session['username'])
-        user_channels = get_user_channels(session['username'])
-        all_channels = get_all_channels()
-        
-        # Генерируем HTML для чата
-        chat_html = f'''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Tandau Messenger - Чат</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-        body {{
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background: #f0f2f5;
-            height: 100vh;
-            overflow: hidden;
-        }}
-        .container {{
-            display: flex;
-            height: 100vh;
-        }}
-        .sidebar {{
-            width: 300px;
-            background: white;
-            border-right: 1px solid #ddd;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.3s ease;
-        }}
-        .header {{
-            background: #667eea;
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }}
-        .user-info {{
-            padding: 15px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #ddd;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-        .user-avatar {{
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #667eea;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 16px;
-            flex-shrink: 0;
-        }}
-        .mobile-menu-btn {{
-            display: none;
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            color: white;
-            margin-right: 10px;
-        }}
-        .nav {{
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px 0;
-        }}
-        .nav-section {{
-            margin-bottom: 20px;
-        }}
-        .nav-title {{
-            padding: 10px 15px;
-            font-size: 14px;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: bold;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
-        .add-btn {{
-            background: #10B981;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }}
-        .nav-item {{
-            padding: 12px 15px;
-            cursor: pointer;
-            border-left: 3px solid transparent;
-            transition: all 0.3s ease;
-        }}
-        .nav-item:hover {{
-            background: #f8f9fa;
-        }}
-        .nav-item.active {{
-            background: #f8f9fa;
-            border-left-color: #667eea;
-        }}
-        .private-chat-item {{
-            padding: 10px 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #f0f0f0;
-            transition: background 0.3s ease;
-        }}
-        .private-chat-item:hover {{
-            background: #f8f9fa;
-        }}
-        .private-chat-item.active {{
-            background: #f8f9fa;
-        }}
-        .private-chat-avatar {{
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 12px;
-            flex-shrink: 0;
-        }}
-        .private-chat-info {{
-            flex: 1;
-            min-width: 0;
-        }}
-        .private-chat-name {{
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }}
-        .private-chat-last {{
-            font-size: 12px;
-            color: #666;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-        .user-item {{
-            padding: 8px 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #f0f0f0;
-            transition: background 0.3s ease;
-        }}
-        .user-item:hover {{
-            background: #f8f9fa;
-        }}
-        .user-menu {{
-            position: relative;
-        }}
-        .user-menu-btn {{
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 4px 8px;
-            font-size: 11px;
-            cursor: pointer;
-            margin-left: auto;
-        }}
-        .user-menu-content {{
-            display: none;
-            position: absolute;
-            right: 0;
-            top: 100%;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-            min-width: 120px;
-        }}
-        .user-menu-content button {{
-            width: 100%;
-            padding: 8px 12px;
-            border: none;
-            background: none;
-            text-align: left;
-            cursor: pointer;
-            font-size: 12px;
-        }}
-        .user-menu-content button:hover {{
-            background: #f8f9fa;
-        }}
-        .user-avatar-small {{
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 11px;
-            flex-shrink: 0;
-        }}
-        .online-indicator {{
-            width: 8px;
-            height: 8px;
-            background: #10B981;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }}
-        .offline-indicator {{
-            width: 8px;
-            height: 8px;
-            background: #6B7280;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }}
-        .channel-item {{
-            padding: 10px 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #f0f0f0;
-            transition: background 0.3s ease;
-        }}
-        .channel-item:hover {{
-            background: #f8f9fa;
-        }}
-        .channel-item.active {{
-            background: #f8f9fa;
-        }}
-        .channel-icon {{
-            color: #667eea;
-            font-size: 16px;
-            flex-shrink: 0;
-        }}
-        .channel-info {{
-            flex: 1;
-            min-width: 0;
-        }}
-        .channel-name {{
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }}
-        .channel-desc {{
-            font-size: 12px;
-            color: #666;
-        }}
-        .channel-actions {{
-            display: flex;
-            gap: 5px;
-        }}
-        .join-channel-btn {{
-            background: #10B981;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 4px 8px;
-            font-size: 11px;
-            cursor: pointer;
-        }}
-        .leave-channel-btn {{
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 4px 8px;
-            font-size: 11px;
-            cursor: pointer;
-        }}
-        .chat-area {{
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }}
-        .chat-header {{
-            background: white;
-            padding: 15px 20px;
-            border-bottom: 1px solid #ddd;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-        .chat-title {{
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-            flex: 1;
-        }}
-        .messages {{
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background: white;
-        }}
-        .message {{
-            margin-bottom: 15px;
-            padding: 10px 15px;
-            border-radius: 10px;
-            max-width: 85%;
-            word-wrap: break-word;
-        }}
-        .message.own {{
-            background: #667eea;
-            color: white;
-            margin-left: auto;
-        }}
-        .message.other {{
-            background: #f1f3f4;
-            color: #333;
-        }}
-        .message-user {{
-            font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 14px;
-        }}
-        .input-area {{
-            padding: 15px;
-            background: white;
-            border-top: 1px solid #ddd;
-        }}
-        .input-container {{
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }}
-        .message-input {{
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 25px;
-            font-size: 16px;
-            resize: none;
-            min-height: 50px;
-            max-height: 120px;
-            font-family: inherit;
-        }}
-        .send-btn {{
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            cursor: pointer;
-            font-size: 18px;
-            flex-shrink: 0;
-        }}
-        .logout-btn {{
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 10px;
-            margin: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-        }}
-        .user-list, .channel-list {{
-            max-height: 200px;
-            overflow-y: auto;
-        }}
-        .welcome-message {{
-            text-align: center;
-            padding: 40px 20px;
-            color: #666;
-        }}
-        .modal {{
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }}
-        .modal-content {{
-            background-color: white;
-            margin: 15% auto;
-            padding: 20px;
-            border-radius: 10px;
-            width: 90%;
-            max-width: 400px;
-        }}
-        .modal-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }}
-        .close {{
-            color: #aaa;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }}
-        .close:hover {{
-            color: black;
-        }}
-        .form-group {{
-            margin-bottom: 15px;
-        }}
-        .form-group label {{
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }}
-        .form-group input, .form-group textarea {{
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            box-sizing: border-box;
-            font-family: inherit;
-        }}
-        .modal-btn {{
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            width: 100%;
-        }}
-        
-        /* Мобильная адаптация */
-        @media (max-width: 768px) {{
-            .container {{
-                flex-direction: column;
+    messages = get_messages()
+    online_users = get_online_users()
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Messenger - Чат</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ font-family: Arial; background: #f0f2f5; height: 100vh; overflow: hidden; }}
+            .container {{ display: flex; height: 100vh; }}
+            .sidebar {{ width: 250px; background: white; border-right: 1px solid #ddd; display: flex; flex-direction: column; }}
+            .header {{ background: #667eea; color: white; padding: 20px; text-align: center; }}
+            .user-info {{ padding: 15px; background: #f8f9fa; border-bottom: 1px solid #ddd; }}
+            .online-users {{ padding: 15px; flex: 1; }}
+            .chat-area {{ flex: 1; display: flex; flex-direction: column; }}
+            .chat-header {{ background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; }}
+            .messages {{ flex: 1; padding: 20px; overflow-y: auto; background: white; }}
+            .message {{ margin-bottom: 10px; padding: 10px 15px; border-radius: 10px; max-width: 80%; }}
+            .own {{ background: #667eea; color: white; margin-left: auto; }}
+            .other {{ background: #e9ecef; }}
+            .input-area {{ padding: 15px; background: white; border-top: 1px solid #ddd; }}
+            .input-container {{ display: flex; gap: 10px; }}
+            .message-input {{ flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; }}
+            .send-btn {{ background: #667eea; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; }}
+            .logout-btn {{ background: #dc3545; color: white; border: none; padding: 10px; margin: 10px; border-radius: 5px; cursor: pointer; }}
+            @media (max-width: 768px) {{
+                .sidebar {{ position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); z-index: 1000; }}
+                .sidebar.active {{ transform: translateX(0); }}
+                .mobile-menu {{ display: block; background: none; border: none; font-size: 20px; cursor: pointer; }}
             }}
-            .sidebar {{
-                position: fixed;
-                top: 0;
-                left: 0;
-                height: 100vh;
-                z-index: 1000;
-                transform: translateX(-100%);
-                width: 280px;
-            }}
-            .sidebar.active {{
-                transform: translateX(0);
-            }}
-            .chat-area {{
-                width: 100%;
-            }}
-            .mobile-menu-btn {{
-                display: block;
-            }}
-            .message {{
-                max-width: 90%;
-            }}
-            .user-info {{
-                padding: 12px;
-            }}
-            .nav {{
-                padding: 8px 0;
-            }}
-            .input-area {{
-                padding: 10px;
-            }}
-            .message-input {{
-                font-size: 14px;
-                padding: 10px;
-            }}
-        }}
-        
-        @media (max-width: 480px) {{
-            .sidebar {{
-                width: 100%;
-            }}
-            .header {{
-                padding: 15px;
-            }}
-            .chat-header {{
-                padding: 10px 15px;
-            }}
-            .messages {{
-                padding: 15px;
-            }}
-            .message {{
-                padding: 8px 12px;
-                max-width: 95%;
-            }}
-        }}
-        
-        /* Скроллбар */
-        ::-webkit-scrollbar {{
-            width: 6px;
-        }}
-        ::-webkit-scrollbar-track {{
-            background: #f1f1f1;
-        }}
-        ::-webkit-scrollbar-thumb {{
-            background: #c1c1c1;
-            border-radius: 3px;
-        }}
-        ::-webkit-scrollbar-thumb:hover {{
-            background: #a8a8a8;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="sidebar" id="sidebar">
-            <div class="header">
-                <h2>Tandau Messenger</h2>
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="sidebar" id="sidebar">
+                <div class="header"><h2>Messenger</h2></div>
+                <div class="user-info"><strong>{session['username']}</strong><div>🟢 В сети</div></div>
+                <div class="online-users">
+                    <h4>Онлайн ({len(online_users)}):</h4>
+                    {'<br>'.join(online_users)}
+                </div>
+                <button class="logout-btn" onclick="logout()">Выйти</button>
             </div>
-            <div class="user-info">
-                <div class="user-avatar">{session['username'][:2].upper()}</div>
-                <div>
-                    <strong>{session['username']}</strong>
-                    <div style="font-size: 12px; color: #666;">🟢 В сети</div>
+            <div class="chat-area">
+                <div class="chat-header">
+                    <button class="mobile-menu" onclick="toggleSidebar()" style="display:none">☰</button>
+                    <h3>Общий чат</h3>
                 </div>
-            </div>
-            
-            <div class="nav">
-                <div class="nav-section">
-                    <div class="nav-title">
-                        <span>Мои каналы</span>
-                        <button class="add-btn" onclick="showCreateChannelModal()">+</button>
+                <div class="messages" id="messages">
+                    {''.join(f'<div class="message {"own" if msg["user"] == session["username"] else "other"}"><strong>{msg["user"]}</strong><br>{msg["message"]}</div>' for msg in messages)}
+                </div>
+                <div class="input-area">
+                    <div class="input-container">
+                        <input type="text" class="message-input" id="messageInput" placeholder="Сообщение...">
+                        <button class="send-btn" onclick="sendMessage()">➤</button>
                     </div>
-                    <div class="channel-list">
-        '''
-        
-        # Добавляем каналы пользователя
-        for channel in user_channels:
-            chat_html += f'''
-                        <div class="channel-item" onclick="switchRoom('channel_{channel["name"]}', '# {channel["name"]}')">
-                            <div class="channel-icon">#</div>
-                            <div class="channel-info">
-                                <div class="channel-name">{channel["name"]}</div>
-                                <div class="channel-desc">{channel["description"] or "Без описания"}</div>
-                            </div>
-                            <div class="channel-actions">
-                                <button class="leave-channel-btn" onclick="event.stopPropagation(); leaveChannel({channel["id"]})">Выйти</button>
-                            </div>
-                        </div>
-            '''
-        
-        chat_html += '''
-                    </div>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-title">Личные чаты</div>
-                    <div id="private-chats-list">
-        '''
-        
-        # Добавляем личные чаты
-        if private_chats:
-            for chat in private_chats:
-                chat_html += f'''
-                        <div class="private-chat-item" onclick="openPrivateChat('{chat["partner"]}')">
-                            <div class="private-chat-avatar" style="background: {chat["avatar_color"]};">
-                                {chat["partner"][:2].upper()}
-                            </div>
-                            <div class="private-chat-info">
-                                <div class="private-chat-name">{chat["partner"]}</div>
-                                <div class="private-chat-last">{chat["last_message"][:30]}{"..." if len(chat["last_message"]) > 30 else ""}</div>
-                            </div>
-                            <div class="{"online-indicator" if chat["is_online"] else "offline-indicator"}"></div>
-                        </div>
-                '''
-        else:
-            chat_html += '<div style="padding: 10px 15px; color: #666; font-size: 14px;">Нет личных чатов</div>'
-        
-        chat_html += '''
-                    </div>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-title">Все пользователи ({len(all_users)})</div>
-                    <div class="user-list" id="all-users-list">
-        '''
-        
-        # Добавляем всех пользователей
-        for user in all_users:
-            if user["username"] != session['username']:
-                chat_html += f'''
-                        <div class="user-item">
-                            <div class="user-avatar-small" style="background: {user["avatar_color"]};">
-                                {user["username"][:2].upper()}
-                            </div>
-                            <span style="flex: 1;">{user["username"]}</span>
-                            <div class="{"online-indicator" if user["is_online"] else "offline-indicator"}"></div>
-                            <div class="user-menu">
-                                <button class="user-menu-btn" onclick="toggleUserMenu(this)">⋮</button>
-                                <div class="user-menu-content">
-                                    <button onclick="startPrivateChat('{user["username"]}')">💬 Личный чат</button>
-                                </div>
-                            </div>
-                        </div>
-                '''
-        
-        chat_html += '''
-                    </div>
-                </div>
-
-                <div class="nav-section">
-                    <div class="nav-title">Доступные каналы</div>
-                    <div class="channel-list">
-        '''
-        
-        # Добавляем доступные каналы
-        user_channel_names = [ch["name"] for ch in user_channels]
-        for channel in all_channels:
-            if channel["name"] not in user_channel_names:
-                chat_html += f'''
-                        <div class="channel-item">
-                            <div class="channel-icon">#</div>
-                            <div class="channel-info">
-                                <div class="channel-name">{channel["name"]}</div>
-                                <div class="channel-desc">{channel["description"] or "Без описания"} ({channel["member_count"]} участников)</div>
-                            </div>
-                            <button class="join-channel-btn" onclick="joinChannel({channel["id"]})">Войти</button>
-                        </div>
-                '''
-        
-        chat_html += '''
-                    </div>
-                </div>
-            </div>
-            
-            <button class="logout-btn" onclick="logout()">Выйти из аккаунта</button>
-        </div>
-        
-        <div class="chat-area">
-            <div class="chat-header">
-                <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
-                <div class="chat-title" id="chat-title"># general</div>
-            </div>
-            
-            <div class="messages" id="messages">
-        '''
-        
-        # Добавляем сообщения
-        if messages:
-            for msg in messages:
-                is_own = msg["user"] == session['username']
-                chat_html += f'''
-                <div class="message {"own" if is_own else "other"}">
-                    <div class="message-user">{msg["user"]}</div>
-                    <div>{msg["message"]}</div>
-                </div>
-                '''
-        else:
-            chat_html += '''
-                <div class="welcome-message">
-                    <div style="font-size: 18px; margin-bottom: 10px;">Добро пожаловать в Tandau Messenger!</div>
-                    <div>Начните общение, отправив первое сообщение</div>
-                </div>
-            '''
-        
-        chat_html += '''
-            </div>
-            
-            <div class="input-area">
-                <div class="input-container">
-                    <textarea class="message-input" id="message-input" placeholder="Введите сообщение..." autocomplete="off" rows="1"></textarea>
-                    <button class="send-btn" onclick="sendMessage()">➤</button>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Модальное окно создания канала -->
-    <div id="createChannelModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Создать канал</h3>
-                <span class="close" onclick="closeCreateChannelModal()">&times;</span>
-            </div>
-            <div class="form-group">
-                <label for="channelName">Название канала:</label>
-                <input type="text" id="channelName" placeholder="Введите название канала">
-            </div>
-            <div class="form-group">
-                <label for="channelDescription">Описание (необязательно):</label>
-                <textarea id="channelDescription" placeholder="Введите описание канала" rows="3"></textarea>
-            </div>
-            <button class="modal-btn" onclick="createChannel()">Создать канал</button>
-        </div>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script>
-        const socket = io();
-        const username = "{session['username']}";
-        let currentRoom = 'channel_general';
-        let currentChatType = 'channel';
-        let currentPartner = null;
-        
-        socket.on('connect', function() {{
-            console.log('Connected to server');
-            joinRoom('channel_general');
-        }});
-        
-        socket.on('new_message', function(data) {{
-            console.log('New message received:', data);
-            if (data.room === currentRoom) {{
-                addMessage(data);
-            }}
-        }});
-        
-        socket.on('private_message', function(data) {{
-            console.log('Private message received:', data);
-            if (data.room === currentRoom) {{
-                addMessage(data);
-            }} else {{
-                showNotification(`Новое сообщение от ${{data.user}}`);
-                updatePrivateChats();
-            }}
-        }});
-        
-        socket.on('user_joined', function(data) {{
-            updateOnlineUsers(data.online_users);
-        }});
-        
-        socket.on('user_left', function(data) {{
-            updateOnlineUsers(data.online_users);
-        }});
-        
-        function joinRoom(room) {{
-            socket.emit('join_room', {{ room: room }});
-        }}
-        
-        function switchRoom(room, chatTitle = '# general', chatType = 'channel', partner = null) {{
-            if (currentRoom && currentRoom !== room) {{
-                socket.emit('leave_room', {{ room: currentRoom }});
-            }}
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+        <script>
+            const socket = io();
+            const username = "{session['username']}";
             
-            currentRoom = room;
-            currentChatType = chatType;
-            currentPartner = partner;
-            document.getElementById('chat-title').textContent = chatTitle;
-            
-            joinRoom(room);
-            loadMessages();
-            updateActiveNavItem(room, chatType);
-            
-            // На мобильных устройствах закрываем сайдбар после выбора чата
-            if (window.innerWidth <= 768) {{
-                toggleSidebar();
-            }}
-        }}
-        
-        function openPrivateChat(partner) {{
-            const room = `private_${{Math.min(username, partner)}}_${{Math.max(username, partner)}}`;
-            const chatTitle = `👤 ${{partner}}`;
-            switchRoom(room, chatTitle, 'private', partner);
-        }}
-        
-        function startPrivateChat(partner) {{
-            openPrivateChat(partner);
-        }}
-        
-        function loadMessages() {{
-            const messagesContainer = document.getElementById('messages');
-            messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Загрузка сообщений...</div>';
-            
-            fetch(`/api/messages?room=${{currentRoom}}`)
-                .then(response => response.json())
-                .then(messages => {{
-                    messagesContainer.innerHTML = '';
-                    if (messages.length === 0) {{
-                        messagesContainer.innerHTML = `
-                            <div class="welcome-message">
-                                <div style="font-size: 18px; margin-bottom: 10px;">Начните общение!</div>
-                                <div>Это начало ${{currentChatType === 'channel' ? 'канала' : 'личного'}} чата</div>
-                            </div>
-                        `;
-                    }} else {{
-                        messages.forEach(addMessage);
-                    }}
-                    scrollToBottom();
-                }})
-                .catch(error => {{
-                    console.error('Error loading messages:', error);
-                    messagesContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Ошибка загрузки сообщений</div>';
-                }});
-        }}
-        
-        function addMessage(data) {{
-            const messages = document.getElementById('messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${{data.user === username ? 'own' : 'other'}}`;
-            messageDiv.innerHTML = `
-                <div class="message-user">${{data.user}}</div>
-                <div>${{data.message}}</div>
-            `;
-            messages.appendChild(messageDiv);
-            scrollToBottom();
-        }}
-        
-        function sendMessage() {{
-            const input = document.getElementById('message-input');
-            const message = input.value.trim();
-            
-            if (message) {{
-                const messageData = {{
-                    message: message,
-                    room: currentRoom,
-                    chat_type: currentChatType
-                }};
-                
-                if (currentChatType === 'private' && currentPartner) {{
-                    messageData.recipient = currentPartner;
-                }}
-                
-                console.log('Sending message:', messageData);
-                socket.emit('send_message', messageData);
-                input.value = '';
-                adjustTextareaHeight();
-            }}
-        }}
-        
-        function adjustTextareaHeight() {{
-            const textarea = document.getElementById('message-input');
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        }}
-        
-        function updatePrivateChats() {{
-            window.location.reload();
-        }}
-        
-        function updateActiveNavItem(room, chatType) {{
-            document.querySelectorAll('.nav-item.active, .private-chat-item.active, .channel-item.active').forEach(item => {{
-                item.classList.remove('active');
+            socket.on('connect', () => {{ console.log('Connected'); }});
+            socket.on('new_message', (data) => {{
+                const messages = document.getElementById('messages');
+                const div = document.createElement('div');
+                div.className = `message ${{data.user === username ? 'own' : 'other'}}`;
+                div.innerHTML = `<strong>${{data.user}}</strong><br>${{data.message}}`;
+                messages.appendChild(div);
+                messages.scrollTop = messages.scrollHeight;
             }});
             
-            if (chatType === 'channel') {{
-                const channelName = room.replace('channel_', '');
-                document.querySelectorAll('.channel-item').forEach(item => {{
-                    if (item.querySelector('.channel-name').textContent === channelName) {{
-                        item.classList.add('active');
-                    }}
-                }});
-            }} else if (chatType === 'private') {{
-                const partner = room.split('_')[1] === username ? room.split('_')[2] : room.split('_')[1];
-                document.querySelectorAll('.private-chat-item').forEach(item => {{
-                    if (item.querySelector('.private-chat-name').textContent === partner) {{
-                        item.classList.add('active');
-                    }}
-                }});
+            function sendMessage() {{
+                const input = document.getElementById('messageInput');
+                const message = input.value.trim();
+                if (message) {{
+                    socket.emit('send_message', {{message: message}});
+                    input.value = '';
+                }}
             }}
-        }}
-        
-        function toggleSidebar() {{
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
-        }}
-        
-        function toggleUserMenu(button) {{
-            const menu = button.nextElementSibling;
-            const isVisible = menu.style.display === 'block';
             
-            // Закрываем все открытые меню
-            document.querySelectorAll('.user-menu-content').forEach(m => {{
-                m.style.display = 'none';
+            function logout() {{
+                if (confirm('Выйти?')) window.location.href = '/logout';
+            }}
+            
+            function toggleSidebar() {{
+                document.getElementById('sidebar').classList.toggle('active');
+            }}
+            
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {{
+                if (e.key === 'Enter') sendMessage();
             }});
             
-            if (!isVisible) {{
-                menu.style.display = 'block';
-            }}
-            
-            // Закрываем меню при клике вне его
-            setTimeout(() => {{
-                document.addEventListener('click', function closeMenu(e) {{
-                    if (!menu.contains(e.target) && e.target !== button) {{
-                        menu.style.display = 'none';
-                        document.removeEventListener('click', closeMenu);
-                    }}
-                }});
-            }}, 0);
-        }}
-        
-        function showCreateChannelModal() {{
-            document.getElementById('createChannelModal').style.display = 'block';
-        }}
-        
-        function closeCreateChannelModal() {{
-            document.getElementById('createChannelModal').style.display = 'none';
-        }}
-        
-        async function createChannel() {{
-            const name = document.getElementById('channelName').value.trim();
-            const description = document.getElementById('channelDescription').value.trim();
-            
-            if (!name) {{
-                alert('Введите название канала');
-                return;
-            }}
-            
-            const formData = new FormData();
-            formData.append('name', name);
-            formData.append('description', description);
-            
-            try {{
-                const response = await fetch('/create_channel', {{
-                    method: 'POST',
-                    body: formData
-                }});
-                
-                const data = await response.json();
-                
-                if (data.success) {{
-                    closeCreateChannelModal();
-                    window.location.reload();
-                }} else {{
-                    alert(data.error);
-                }}
-            }} catch (error) {{
-                alert('Ошибка создания канала');
-            }}
-        }}
-        
-        async function joinChannel(channelId) {{
-            try {{
-                const response = await fetch(`/join_channel/${{channelId}}`);
-                const data = await response.json();
-                
-                if (data.success) {{
-                    window.location.reload();
-                }} else {{
-                    alert(data.error);
-                }}
-            }} catch (error) {{
-                alert('Ошибка присоединения к каналу');
-            }}
-        }}
-        
-        async function leaveChannel(channelId) {{
-            if (!confirm('Вы уверены, что хотите покинуть канал?')) {{
-                return;
-            }}
-            
-            try {{
-                const response = await fetch(`/leave_channel/${{channelId}}`);
-                const data = await response.json();
-                
-                if (data.success) {{
-                    window.location.reload();
-                }} else {{
-                    alert(data.error);
-                }}
-            }} catch (error) {{
-                alert('Ошибка выхода из канала');
-            }}
-        }}
-        
-        function showNotification(message) {{
-            if ('Notification' in window && Notification.permission === 'granted') {{
-                new Notification('Tandau Messenger', {{
-                    body: message,
-                    icon: '/favicon.ico'
-                }});
-            }} else {{
-                // Fallback для мобильных устройств
-                console.log('New message:', message);
-            }}
-        }}
-        
-        function logout() {{
-            if (confirm('Вы уверены, что хотите выйти из аккаунта?')) {{
-                window.location.href = '/logout';
-            }}
-        }}
-        
-        document.getElementById('message-input').addEventListener('input', function() {{
-            adjustTextareaHeight();
-        }});
-        
-        document.getElementById('message-input').addEventListener('keypress', function(e) {{
-            if (e.key === 'Enter' && !e.shiftKey) {{
-                e.preventDefault();
-                sendMessage();
-            }}
-        }});
-        
-        if ('Notification' in window) {{
-            Notification.requestPermission();
-        }}
-        
-        window.addEventListener('load', function() {{
-            scrollToBottom();
-            adjustTextareaHeight();
-        }});
-        
-        function scrollToBottom() {{
-            const messages = document.getElementById('messages');
-            messages.scrollTop = messages.scrollHeight;
-        }}
-        
-        // Закрытие модального окна при клике вне его
-        window.onclick = function(event) {{
-            const modal = document.getElementById('createChannelModal');
-            if (event.target === modal) {{
-                closeCreateChannelModal();
-            }}
-        }}
-        
-        // Адаптация к мобильным устройствам
-        function checkMobile() {{
+            // Мобильная адаптация
             if (window.innerWidth <= 768) {{
-                document.getElementById('sidebar').classList.remove('active');
-            }} else {{
-                document.getElementById('sidebar').classList.add('active');
+                document.querySelector('.mobile-menu').style.display = 'block';
             }}
-        }}
-        
-        window.addEventListener('resize', checkMobile);
-        window.addEventListener('load', checkMobile);
-    </script>
-</body>
-</html>
-        '''
-        
-        return chat_html
-        
-    except Exception as e:
-        return f"Ошибка загрузки чата: {str(e)}"
-
-@app.route('/create_channel', methods=['POST'])
-def create_channel_route():
-    if 'username' not in session:
-        return jsonify({'success': False, 'error': 'Не авторизован'})
-    
-    name = request.form.get('name')
-    description = request.form.get('description', '')
-    
-    if not name:
-        return jsonify({'success': False, 'error': 'Название канала обязательно'})
-    
-    if create_channel(name, description, session['username']):
-        return jsonify({'success': True})
-    else:
-        return jsonify({'success': False, 'error': 'Канал с таким именем уже существует'})
-
-@app.route('/join_channel/<int:channel_id>')
-def join_channel_route(channel_id):
-    if 'username' not in session:
-        return jsonify({'success': False, 'error': 'Не авторизован'})
-    
-    if join_channel(channel_id, session['username']):
-        return jsonify({'success': True})
-    else:
-        return jsonify({'success': False, 'error': 'Ошибка присоединения к каналу'})
-
-@app.route('/leave_channel/<int:channel_id>')
-def leave_channel_route(channel_id):
-    if 'username' not in session:
-        return jsonify({'success': False, 'error': 'Не авторизован'})
-    
-    if leave_channel(channel_id, session['username']):
-        return jsonify({'success': True})
-    else:
-        return jsonify({'success': False, 'error': 'Ошибка выхода из канала'})
+        </script>
+    </body>
+    </html>
+    '''
 
 @app.route('/logout')
 def logout():
     if 'username' in session:
-        update_user_online_status(session['username'], False)
+        update_online_status(session['username'], False)
         session.pop('username', None)
-    return redirect(url_for('index'))
+    return redirect('/')
 
-@app.route('/api/messages')
-def get_messages():
-    if 'username' not in session:
-        return jsonify({'error': 'Не авторизован'}), 401
-    
-    room = request.args.get('room', 'public')
-    
-    if room.startswith('private_'):
-        parts = room.split('_')
-        if len(parts) == 3:
-            user1, user2 = parts[1], parts[2]
-            messages = get_private_messages(user1, user2)
-        else:
-            messages = []
-    elif room.startswith('channel_'):
-        messages = get_recent_messages(room)
-    else:
-        messages = get_recent_messages(room)
-    
-    return jsonify(messages)
-
-# WebSocket события
+# WebSocket
 @socketio.on('connect')
 def handle_connect():
     if 'username' in session:
-        join_room('channel_general')
-        join_room(f"user_{session['username']}")
-        update_user_online_status(session['username'], True)
-        
-        online_users = get_online_users()
-        emit('user_joined', {
-            'username': session['username'],
-            'online_users': online_users
-        }, room='channel_general', include_self=False)
+        join_room('general')
+        update_online_status(session['username'], True)
 
 @socketio.on('disconnect')
 def handle_disconnect():
     if 'username' in session:
-        update_user_online_status(session['username'], False)
-        online_users = get_online_users()
-        emit('user_left', {
-            'username': session['username'],
-            'online_users': online_users
-        }, room='channel_general')
-
-@socketio.on('join_room')
-def handle_join_room(data):
-    if 'username' not in session:
-        return
-    
-    room = data.get('room')
-    if room:
-        join_room(room)
-
-@socketio.on('leave_room')
-def handle_leave_room(data):
-    if 'username' not in session:
-        return
-    
-    room = data.get('room')
-    if room:
-        leave_room(room)
+        update_online_status(session['username'], False)
 
 @socketio.on('send_message')
-def handle_send_message(data):
+def handle_message(data):
     if 'username' not in session:
         return
     
     message = data.get('message', '').strip()
-    room = data.get('room', 'public')
-    chat_type = data.get('chat_type', 'public')
-    recipient = data.get('recipient')
-    
-    if not message:
-        return
-    
-    print(f"Message from {session['username']} to room {room}: {message}")
-    
-    message_id = save_message(session['username'], message, room, recipient)
-    
-    if chat_type == 'private':
-        emit('private_message', {
-            'id': message_id,
-            'user': session['username'],
-            'message': message,
-            'timestamp': datetime.now().isoformat(),
-            'room': room
-        }, room=room)
-        
-        if recipient:
-            emit('private_message', {
-                'id': message_id,
-                'user': session['username'],
-                'message': message,
-                'timestamp': datetime.now().isoformat(),
-                'room': room
-            }, room=f'user_{recipient}')
-    else:
+    if message:
+        save_message(session['username'], message)
         emit('new_message', {
-            'id': message_id,
             'user': session['username'],
             'message': message,
-            'timestamp': datetime.now().isoformat(),
-            'room': room
-        }, room=room)
+            'timestamp': datetime.now().isoformat()
+        }, room='general')
 
 if __name__ == '__main__':
     init_db()
-    print("🚀 Tandau Web Messenger запущен!")
-    print("📍 Доступен по адресу: http://localhost:5000")
-    print("💬 Поддерживает общие и личные чаты")
-    print("📢 Добавлены каналы!")
-    print("👥 Управление пользователями!")
-    print("📱 Адаптирован для мобильных устройств!")
-    
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    print("🚀 Messenger запущен: http://localhost:5000")
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
