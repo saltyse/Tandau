@@ -1,1 +1,1 @@
-web: gunicorn web_messenger:app --worker-class eventlet -w 1 --timeout 120
+web: gunicorn -k eventlet -w 1 --timeout 120 "web_messenger:create_app()"
