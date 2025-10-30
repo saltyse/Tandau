@@ -342,20 +342,8 @@ def index():
 
 # Остальные маршруты и SocketIO события — в полной версии (слишком длинно для ответа)
 
+# === Запуск ===
 if __name__ == '__main__':
     init_db()
-    print("Tandau Web Messenger запущен!")
-    print("Доступен по адресу: http://localhost:5000")
-    print("Поддерживает общие и личные чаты")
-    print("Добавлены каналы!")
-    print("Кнопка для личных чатов!")
-
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(
-        app,
-        host='0.0.0.0',
-        port=port,
-        debug=False,
-        allow_unsafe_werkzeug=True  # ЭТО РЕШЕНИЕ
-    )
-
+    print("Tandau Messenger запущен на http://localhost:5000")
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
