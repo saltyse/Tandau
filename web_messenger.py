@@ -1,5 +1,5 @@
 # web_messenger.py - Tandau Messenger (ПОЛНАЯ ВЕРСИЯ ДЛЯ RENDER)
-from flask import Flask, request, jsonify, session, redirect, url_for
+from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
 from datetime import datetime
@@ -131,27 +131,6 @@ def create_app():
                       (user, msg, room, recipient, type, file))
             conn.commit(); return c.lastrowid
 
-    def get_messages(room, limit=50):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('SELECT username, message, timestamp, message_type, file_path FROM messages WHERE room = ? ORDER BY timestamp DESC LIMIT ?', (room, limit))
-            return [dict(zip(['user','message','time','type','file'], row)) for row in reversed(c.fetchall())]
-
-    # === Каналы ===
-    def get_user_channels(username):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('SELECT c.id, c.name, c.description FROM channels c JOIN channel_members m ON c.id = m.channel_id WHERE m.username = ?', (username,))
-            return [dict(zip(['id','name','desc'], row)) for row in c.fetchall()]
-
-    def create_channel(name, desc, user):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                c.execute('INSERT INTO channels (name, description, created_by) VALUES (?, ?, ?)', (name, desc, user))
-                cid = c.lastrowid; c.execute('INSERT INTO channel_members (channel_id, username) VALUES (?, ?)', (cid, user)); conn.commit(); return True
-            except: return False
-
     # === Аватарки ===
     @app.route('/upload_avatar', methods=['POST'])
     def upload_avatar():
@@ -238,6 +217,7 @@ def create_app():
         if 'username' not in session: return redirect('/')
         user = get_user(session['username'])
         theme = user[7] if user else 'light'
+        username = session['username']
         return f'''<!DOCTYPE html>
 <html data-theme="{theme}">
 <head>
@@ -274,8 +254,8 @@ def create_app():
 <div class="sidebar">
     <div class="header">Tandau</div>
     <div class="user-info">
-        <div class="avatar" id="user-avatar">{session['username'][:2].upper()}</div>
-        <div><strong>{session['username']}</strong><div style="font-size:12px">Online</div></div>
+        <div class="avatar" id="user-avatar">{username[:2].upper()}</div>
+        <div><strong>{username}</strong><div style="font-size:12px">Online</div></div>
         <i class="fas fa-moon theme-toggle" onclick="toggleTheme()" title="Сменить тему"></i>
     </div>
     <div class="nav">
@@ -305,94 +285,93 @@ def create_app():
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script>
     const socket = io();
-    const user = "{session['username']}";
+    const user = "{username}";
     let room = "channel_general", type = "channel";
 
-    socket.emit('join', { room: 'channel_general' });
+    socket.emit('join', {{ room: 'channel_general' }});
 
-    function toggleTheme() {
+    function toggleTheme() {{
         const t = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-        fetch('/set_theme', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:t})});
+        fetch('/set_theme', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{theme:t}})}});
         document.documentElement.setAttribute('data-theme', t);
-    }
+    }}
 
-    function send() {
+    function send() {{
         const input = document.getElementById('msg-input');
         const msg = input.value.trim();
         const file = document.getElementById('file').files[0];
         if (!msg && !file) return;
-        const data = { message: msg, room: room, type: type };
-        if (file) {
+        const data = {{ message: msg, room: room, type: type }};
+        if (file) {{
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = (e) => {{
                 data.file = e.target.result;
                 data.type = file.type.startsWith('image/') ? 'image' : 'video';
                 socket.emit('message', data);
-            };
+            }};
             reader.readAsDataURL(file);
-        } else {
+        }} else {{
             socket.emit('message', data);
-        }
+        }}
         input.value = ''; document.getElementById('file').value = ''; document.getElementById('file-preview').innerHTML = '';
-    }
+    }}
 
-    function previewFile(input) {
+    function previewFile(input) {{
         const file = input.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = (e) => {{
             const prev = document.getElementById('file-preview');
             prev.innerHTML = '';
-            if (file.type.startsWith('image/')) {
+            if (file.type.startsWith('image/')) {{
                 const img = document.createElement('img');
                 img.src = e.target.result; img.className = 'file-preview';
                 prev.appendChild(img);
-            } else {
+            }} else {{
                 const vid = document.createElement('video');
                 vid.src = e.target.result; vid.controls = true; vid.className = 'file-preview';
                 prev.appendChild(vid);
-            }
-        };
+            }}
+        }};
         reader.readAsDataURL(file);
-    }
+    }}
 
-    socket.on('message', (data) => {
+    socket.on('message', (data) => {{
         const msg = document.createElement('div');
-        msg.className = `msg ${data.user === user ? 'own' : 'other'}`;
-        let content = `<strong>${data.user}</strong><br>`;
-        if (data.file) {
-            if (data.type === 'image') content += `<img src="${data.file}" class="file-preview">`;
-            else content += `<video src="${data.file}" controls class="file-preview"></video>`;
-        }
+        msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
+        let content = `<strong>${{data.user}}</strong><br>`;
+        if (data.file) {{
+            if (data.type === 'image') content += `<img src="${{data.file}}" class="file-preview">`;
+            else content += `<video src="${{data.file}}" controls class="file-preview"></video>`;
+        }}
         if (data.message) content += data.message.replace(/\\n/g, '<br>');
         msg.innerHTML = content;
         document.getElementById('messages').appendChild(msg);
         document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-    });
+    }});
 
-    function openRoom(r, t, title) {
+    function openRoom(r, t, title) {{
         room = r; type = t;
         document.getElementById('chat-title').textContent = title;
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         event.target.classList.add('active');
         document.getElementById('messages').innerHTML = '';
-        socket.emit('join', { room: r });
-    }
+        socket.emit('join', {{ room: r }});
+    }}
 
-    // Обновление пользователей
-    setInterval(() => {
-        fetch('/users').then(r => r.json()).then(users => {
+    setInterval(() => {{
+        fetch('/users').then(r => r.json()).then(users => {{
             const u = document.getElementById('users');
             u.innerHTML = '';
-            users.forEach(us => {
+            users.forEach(us => {{
                 const el = document.createElement('div');
                 el.className = 'nav-item';
                 el.textContent = us.username + (us.online ? ' (онлайн)' : '');
-                el.onclick = () => openRoom(`private_${Math.min(user, us.username)}_${Math.max(user, us.username)}`, 'private', `@${us.username}`);
+                el.onclick = () => openRoom(`private_${{Math.min(user, us.username)}}_${{Math.max(user, us.username)}}`, 'private', `@${{us.username}}`);
                 u.appendChild(el);
-            });
-        });
-    }, 3000);
+            }});
+        }});
+    }}, 3000);
 </script>
 </body></html>'''
 
