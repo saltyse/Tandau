@@ -153,10 +153,9 @@ def get_private_chats(username):
         result = []
         for chat in chats:
             partner = chat[0]
-            if partner:  # Проверяем, что partner не None
+            if partner:
                 partner_info = get_user_by_username(partner)
                 if partner_info:
-                    # Получаем последнее сообщение
                     cursor.execute('''
                         SELECT message FROM messages 
                         WHERE room = ? 
@@ -379,7 +378,6 @@ def index():
             }
         }
         
-        // Enter для отправки форм
         document.addEventListener('keypress', function(event) {
             if (event.key === 'Enter') {
                 if (document.getElementById('login-form').style.display !== 'none') {
@@ -797,9 +795,7 @@ def chat():
             if (data.room === currentRoom) {{
                 addMessage(data);
             }} else {{
-                // Показать уведомление о новом сообщении
                 showNotification(`Новое сообщение от ${{data.user}}`);
-                // Обновить список чатов
                 updatePrivateChats();
             }}
         }});
@@ -817,23 +813,17 @@ def chat():
         }}
         
         function switchRoom(room, chatTitle = '🌐 Общий чат', chatType = 'public', partner = null) {{
-            // Покидаем предыдущую комнату
             if (currentRoom && currentRoom !== room) {{
                 socket.emit('leave_room', {{ room: currentRoom }});
             }}
             
-            // Присоединяемся к новой комнате
             currentRoom = room;
             currentChatType = chatType;
             currentPartner = partner;
             document.getElementById('chat-title').textContent = chatTitle;
             
             joinRoom(room);
-            
-            // Загружаем сообщения
             loadMessages();
-            
-            // Обновляем активный элемент в навигации
             updateActiveNavItem(room, chatType);
         }}
         
@@ -907,18 +897,15 @@ def chat():
         }}
         
         function updateOnlineUsers(users) {{
-            // Можно добавить логику обновления статусов пользователей
             console.log('Online users updated:', users);
         }}
         
         function updatePrivateChats() {{
-            // Перезагружаем страницу для обновления списка чатов
             // В реальном приложении лучше сделать AJAX запрос
             window.location.reload();
         }}
         
         function updateActiveNavItem(room, chatType) {{
-            // Сбрасываем все активные элементы
             document.querySelectorAll('.nav-item.active, .private-chat-item.active').forEach(item => {{
                 item.classList.remove('active');
             }});
@@ -926,7 +913,6 @@ def chat():
             if (chatType === 'public') {{
                 document.querySelector('.nav-item').classList.add('active');
             }} else {{
-                // Находим соответствующий приватный чат и делаем его активным
                 const partner = room.split('_')[1] === username ? room.split('_')[2] : room.split('_')[1];
                 document.querySelectorAll('.private-chat-item').forEach(item => {{
                     if (item.querySelector('.private-chat-name').textContent === partner) {{
@@ -937,14 +923,12 @@ def chat():
         }}
         
         function showNotification(message) {{
-            // Простое уведомление
             if ('Notification' in window && Notification.permission === 'granted') {{
                 new Notification('Tandau Messenger', {{
                     body: message,
                     icon: '/favicon.ico'
                 }});
             }} else {{
-                // Fallback уведомление
                 alert(message);
             }}
         }}
@@ -955,19 +939,16 @@ def chat():
             }}
         }}
         
-        // Enter для отправки сообщения
         document.getElementById('message-input').addEventListener('keypress', function(e) {{
             if (e.key === 'Enter') {{
                 sendMessage();
             }}
         }});
         
-        // Запрос разрешения на уведомления
         if ('Notification' in window) {{
             Notification.requestPermission();
         }}
         
-        // Автопрокрутка при загрузке
         window.addEventListener('load', function() {{
             scrollToBottom();
         }});
@@ -996,7 +977,6 @@ def get_messages():
     room = request.args.get('room', 'public')
     
     if room.startswith('private_'):
-        # Извлекаем участников приватного чата из названия комнаты
         parts = room.split('_')
         if len(parts) == 3:
             user1, user2 = parts[1], parts[2]
@@ -1013,10 +993,9 @@ def get_messages():
 def handle_connect():
     if 'username' in session:
         join_room('public')
-        join_room(f"user_{session['username']}")  # Комната для уведомлений
+        join_room(f"user_{session['username']}")
         update_user_online_status(session['username'], True)
         
-        # Уведомляем всех о новом пользователе
         online_users = get_online_users()
         emit('user_joined', {
             'username': session['username'],
@@ -1041,7 +1020,6 @@ def handle_join_room(data):
     room = data.get('room')
     if room:
         join_room(room)
-        print(f"User {session['username']} joined room {room}")
 
 @socketio.on('leave_room')
 def handle_leave_room(data):
@@ -1051,7 +1029,6 @@ def handle_leave_room(data):
     room = data.get('room')
     if room:
         leave_room(room)
-        print(f"User {session['username']} left room {room}")
 
 @socketio.on('send_message')
 def handle_send_message(data):
@@ -1068,10 +1045,8 @@ def handle_send_message(data):
     
     print(f"Message from {session['username']} to room {room}: {message}")
     
-    # Сохраняем сообщение в БД
     message_id = save_message(session['username'], message, room, recipient)
     
-    # Отправляем сообщение в комнату
     if chat_type == 'private':
         emit('private_message', {
             'id': message_id,
@@ -1081,7 +1056,6 @@ def handle_send_message(data):
             'room': room
         }, room=room)
         
-        # Отправляем уведомление получателю
         if recipient:
             emit('private_message', {
                 'id': message_id,
@@ -1106,4 +1080,5 @@ if __name__ == '__main__':
     print("💬 Поддерживает общие и личные чаты")
     print("👥 Личные чаты теперь работают!")
     
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
