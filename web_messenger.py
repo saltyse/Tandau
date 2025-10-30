@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger с мобильной адаптацией
+# web_messenger.py - Tandau Messenger с полным функционалом
 from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -82,7 +82,7 @@ def get_user_by_username(username):
 def get_all_users():
     with sqlite3.connect('messenger.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT username, is_online, avatar_color FROM users WHERE username != ? ORDER BY username', (session.get('username', ''),))
+        cursor.execute('SELECT username, is_online, avatar_color FROM users ORDER BY username')
         return [{'username': user[0], 'is_online': user[1], 'avatar_color': user[2]} for user in cursor.fetchall()]
 
 def create_user(username, password):
@@ -214,7 +214,7 @@ def get_private_chats(username):
 def get_online_users():
     with sqlite3.connect('messenger.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT username, avatar_color FROM users WHERE is_online = TRUE AND username != ?', (session.get('username', ''),))
+        cursor.execute('SELECT username, avatar_color FROM users WHERE is_online = TRUE')
         return [{'username': user[0], 'avatar_color': user[1]} for user in cursor.fetchall()]
 
 # Утилиты для работы с каналами
@@ -289,6 +289,28 @@ def join_channel(channel_id, username):
             return True
         except:
             return False
+
+def leave_channel(channel_id, username):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                'DELETE FROM channel_members WHERE channel_id = ? AND username = ?',
+                (channel_id, username)
+            )
+            conn.commit()
+            return True
+        except:
+            return False
+
+def is_channel_member(channel_id, username):
+    with sqlite3.connect('messenger.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?',
+            (channel_id, username)
+        )
+        return cursor.fetchone() is not None
 
 # Маршруты Flask
 @app.route('/')
@@ -772,7 +794,10 @@ def chat():
         .user-item:hover {{
             background: #f8f9fa;
         }}
-        .start-chat-btn {{
+        .user-menu {{
+            position: relative;
+        }}
+        .user-menu-btn {{
             background: #667eea;
             color: white;
             border: none;
@@ -781,6 +806,30 @@ def chat():
             font-size: 11px;
             cursor: pointer;
             margin-left: auto;
+        }}
+        .user-menu-content {{
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            min-width: 120px;
+        }}
+        .user-menu-content button {{
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            background: none;
+            text-align: left;
+            cursor: pointer;
+            font-size: 12px;
+        }}
+        .user-menu-content button:hover {{
+            background: #f8f9fa;
         }}
         .user-avatar-small {{
             width: 28px;
@@ -841,6 +890,10 @@ def chat():
             font-size: 12px;
             color: #666;
         }}
+        .channel-actions {{
+            display: flex;
+            gap: 5px;
+        }}
         .join-channel-btn {{
             background: #10B981;
             color: white;
@@ -849,7 +902,15 @@ def chat():
             padding: 4px 8px;
             font-size: 11px;
             cursor: pointer;
-            flex-shrink: 0;
+        }}
+        .leave-channel-btn {{
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
         }}
         .chat-area {{
             flex: 1;
@@ -916,6 +977,7 @@ def chat():
             resize: none;
             min-height: 50px;
             max-height: 120px;
+            font-family: inherit;
         }}
         .send-btn {{
             background: #667eea;
@@ -993,6 +1055,7 @@ def chat():
             border: 1px solid #ddd;
             border-radius: 5px;
             box-sizing: border-box;
+            font-family: inherit;
         }}
         .modal-btn {{
             background: #667eea;
@@ -1097,7 +1160,7 @@ def chat():
             <div class="nav">
                 <div class="nav-section">
                     <div class="nav-title">
-                        <span>Каналы</span>
+                        <span>Мои каналы</span>
                         <button class="add-btn" onclick="showCreateChannelModal()">+</button>
                     </div>
                     <div class="channel-list">
@@ -1111,6 +1174,9 @@ def chat():
                             <div class="channel-info">
                                 <div class="channel-name">{channel["name"]}</div>
                                 <div class="channel-desc">{channel["description"] or "Без описания"}</div>
+                            </div>
+                            <div class="channel-actions">
+                                <button class="leave-channel-btn" onclick="event.stopPropagation(); leaveChannel({channel["id"]})">Выйти</button>
                             </div>
                         </div>
             '''
@@ -1147,22 +1213,28 @@ def chat():
                 </div>
                 
                 <div class="nav-section">
-                    <div class="nav-title">Все пользователи</div>
+                    <div class="nav-title">Все пользователи ({len(all_users)})</div>
                     <div class="user-list" id="all-users-list">
         '''
         
         # Добавляем всех пользователей
         for user in all_users:
-            chat_html += f'''
+            if user["username"] != session['username']:
+                chat_html += f'''
                         <div class="user-item">
                             <div class="user-avatar-small" style="background: {user["avatar_color"]};">
                                 {user["username"][:2].upper()}
                             </div>
                             <span style="flex: 1;">{user["username"]}</span>
                             <div class="{"online-indicator" if user["is_online"] else "offline-indicator"}"></div>
-                            <button class="start-chat-btn" onclick="startPrivateChat('{user["username"]}', '{user["avatar_color"]}')">Чат</button>
+                            <div class="user-menu">
+                                <button class="user-menu-btn" onclick="toggleUserMenu(this)">⋮</button>
+                                <div class="user-menu-content">
+                                    <button onclick="startPrivateChat('{user["username"]}')">💬 Личный чат</button>
+                                </div>
+                            </div>
                         </div>
-            '''
+                '''
         
         chat_html += '''
                     </div>
@@ -1193,7 +1265,7 @@ def chat():
                 </div>
             </div>
             
-            <button class="logout-btn" onclick="logout()">Выйти</button>
+            <button class="logout-btn" onclick="logout()">Выйти из аккаунта</button>
         </div>
         
         <div class="chat-area">
@@ -1284,6 +1356,14 @@ def chat():
             }}
         }});
         
+        socket.on('user_joined', function(data) {{
+            updateOnlineUsers(data.online_users);
+        }});
+        
+        socket.on('user_left', function(data) {{
+            updateOnlineUsers(data.online_users);
+        }});
+        
         function joinRoom(room) {{
             socket.emit('join_room', {{ room: room }});
         }}
@@ -1314,7 +1394,7 @@ def chat():
             switchRoom(room, chatTitle, 'private', partner);
         }}
         
-        function startPrivateChat(partner, avatarColor) {{
+        function startPrivateChat(partner) {{
             openPrivateChat(partner);
         }}
         
@@ -1415,6 +1495,30 @@ def chat():
             sidebar.classList.toggle('active');
         }}
         
+        function toggleUserMenu(button) {{
+            const menu = button.nextElementSibling;
+            const isVisible = menu.style.display === 'block';
+            
+            // Закрываем все открытые меню
+            document.querySelectorAll('.user-menu-content').forEach(m => {{
+                m.style.display = 'none';
+            }});
+            
+            if (!isVisible) {{
+                menu.style.display = 'block';
+            }}
+            
+            // Закрываем меню при клике вне его
+            setTimeout(() => {{
+                document.addEventListener('click', function closeMenu(e) {{
+                    if (!menu.contains(e.target) && e.target !== button) {{
+                        menu.style.display = 'none';
+                        document.removeEventListener('click', closeMenu);
+                    }}
+                }});
+            }}, 0);
+        }}
+        
         function showCreateChannelModal() {{
             document.getElementById('createChannelModal').style.display = 'block';
         }}
@@ -1470,6 +1574,25 @@ def chat():
             }}
         }}
         
+        async function leaveChannel(channelId) {{
+            if (!confirm('Вы уверены, что хотите покинуть канал?')) {{
+                return;
+            }}
+            
+            try {{
+                const response = await fetch(`/leave_channel/${{channelId}}`);
+                const data = await response.json();
+                
+                if (data.success) {{
+                    window.location.reload();
+                }} else {{
+                    alert(data.error);
+                }}
+            }} catch (error) {{
+                alert('Ошибка выхода из канала');
+            }}
+        }}
+        
         function showNotification(message) {{
             if ('Notification' in window && Notification.permission === 'granted') {{
                 new Notification('Tandau Messenger', {{
@@ -1483,7 +1606,7 @@ def chat():
         }}
         
         function logout() {{
-            if (confirm('Вы уверены, что хотите выйти?')) {{
+            if (confirm('Вы уверены, что хотите выйти из аккаунта?')) {{
                 window.location.href = '/logout';
             }}
         }}
@@ -1567,6 +1690,16 @@ def join_channel_route(channel_id):
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'error': 'Ошибка присоединения к каналу'})
+
+@app.route('/leave_channel/<int:channel_id>')
+def leave_channel_route(channel_id):
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    
+    if leave_channel(channel_id, session['username']):
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Ошибка выхода из канала'})
 
 @app.route('/logout')
 def logout():
@@ -1687,6 +1820,7 @@ if __name__ == '__main__':
     print("📍 Доступен по адресу: http://localhost:5000")
     print("💬 Поддерживает общие и личные чаты")
     print("📢 Добавлены каналы!")
+    print("👥 Управление пользователями!")
     print("📱 Адаптирован для мобильных устройств!")
     
     port = int(os.environ.get('PORT', 5000))
