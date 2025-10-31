@@ -131,6 +131,23 @@ def create_app():
                       (user, msg, room, recipient, type, file))
             conn.commit(); return c.lastrowid
 
+    def get_messages_for_room(room):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT username, message, message_type, file_path, timestamp 
+                FROM messages 
+                WHERE room = ? 
+                ORDER BY timestamp ASC
+            ''', (room,))
+            return [{
+                'user': row[0],
+                'message': row[1],
+                'type': row[2],
+                'file': row[3],
+                'timestamp': row[4][11:16] if row[4] else ''
+            } for row in c.fetchall()]
+
     # === Аватарки ===
     @app.route('/upload_avatar', methods=['POST'])
     def upload_avatar():
@@ -306,7 +323,7 @@ def create_app():
             const reader = new FileReader();
             reader.onload = (e) => {{
                 data.file = e.target.result;
-                data.type = file.type.startsWith('image/') ? 'image' : 'video';
+                data.fileType = file.type.startsWith('image/') ? 'image' : 'video';
                 socket.emit('message', data);
             }};
             reader.readAsDataURL(file);
@@ -339,9 +356,9 @@ def create_app():
     socket.on('message', (data) => {{
         const msg = document.createElement('div');
         msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
-        let content = `<strong>${{data.user}}</strong><br>`;
+        let content = `<strong>${{data.user}}</strong> <small>${{data.timestamp || ''}}</small><br>`;
         if (data.file) {{
-            if (data.type === 'image') content += `<img src="${{data.file}}" class="file-preview">`;
+            if (data.fileType === 'image') content += `<img src="${{data.file}}" class="file-preview">`;
             else content += `<video src="${{data.file}}" controls class="file-preview"></video>`;
         }}
         if (data.message) content += data.message.replace(/\\n/g, '<br>');
@@ -356,6 +373,26 @@ def create_app():
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         event.target.classList.add('active');
         document.getElementById('messages').innerHTML = '';
+        
+        // Загружаем историю сообщений
+        fetch(`/get_messages/${{r}}`)
+            .then(r => r.json())
+            .then(messages => {{
+                messages.forEach(msg => {{
+                    const msgEl = document.createElement('div');
+                    msgEl.className = `msg ${{msg.user === user ? 'own' : 'other'}}`;
+                    let content = `<strong>${{msg.user}}</strong> <small>${{msg.timestamp}}</small><br>`;
+                    if (msg.file) {{
+                        if (msg.type === 'image') content += `<img src="${{msg.file}}" class="file-preview">`;
+                        else content += `<video src="${{msg.file}}" controls class="file-preview"></video>`;
+                    }}
+                    if (msg.message) content += msg.message.replace(/\\n/g, '<br>');
+                    msgEl.innerHTML = content;
+                    document.getElementById('messages').appendChild(msgEl);
+                }});
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            }});
+        
         socket.emit('join', {{ room: r }});
     }}
 
@@ -379,6 +416,12 @@ def create_app():
     def users_route():
         return jsonify(get_all_users())
 
+    @app.route('/get_messages/<room>')
+    def get_messages(room):
+        if 'username' not in session:
+            return jsonify({'error': 'auth'})
+        return jsonify(get_messages_for_room(room))
+
     # === SocketIO ===
     @socketio.on('connect')
     def on_connect():
@@ -392,21 +435,51 @@ def create_app():
             update_online(session['username'], False)
 
     @socketio.on('join')
-    def on_join(data): join_room(data['room'])
+    def on_join(data): 
+        join_room(data['room'])
 
     @socketio.on('leave')
-    def on_leave(data): leave_room(data['room'])
+    def on_leave(data): 
+        leave_room(data['room'])
 
     @socketio.on('message')
     def on_message(data):
+        if 'username' not in session:
+            return
+        
         msg = data.get('message', '').strip()
         room = data.get('room')
         file = data.get('file')
-        type_ = data.get('type', 'text')
-        if not msg and not file: return
-        msg_id = save_message(session['username'], msg, room, None, type_, file)
-        emit('message', {'user': session['username'], 'message': msg, 'file': file, 'type': type_}, room=room)
+        file_type = data.get('fileType', 'text')
+        
+        if not msg and not file:
+            return
+        
+        # Сохраняем в БД
+        msg_id = save_message(
+            session['username'], 
+            msg, 
+            room, 
+            None, 
+            file_type, 
+            file
+        )
+        
+        # Отправляем всем в комнате
+        emit('message', {
+            'user': session['username'], 
+            'message': msg, 
+            'file': file, 
+            'fileType': file_type,
+            'timestamp': datetime.now().strftime('%H:%M')
+        }, room=room)
 
     return app
 
-# === НЕТ app = create_app() — только gunicorn через render.yaml ===
+# === СОЗДАНИЕ ПРИЛОЖЕНИЯ ДЛЯ RENDER ===
+app = create_app()
+socketio = app.extensions['socketio']
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
