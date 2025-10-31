@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (исправленная версия для Render)
+# web_messenger.py - Tandau Messenger (исправленные личные чаты)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -20,7 +20,6 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
 
-    # Убираем async_mode или используем 'threading'
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
     # === Инициализация БД ===
@@ -134,6 +133,25 @@ def create_app():
                 WHERE room = ? 
                 ORDER BY timestamp ASC
             ''', (room,))
+            return [{
+                'user': row[0],
+                'message': row[1],
+                'type': row[2],
+                'file': row[3],
+                'timestamp': row[4][11:16] if row[4] else ''
+            } for row in c.fetchall()]
+
+    def get_private_chat_messages(user1, user2):
+        """Получает сообщения для приватного чата между двумя пользователями"""
+        room_name = f"private_{min(user1, user2)}_{max(user1, user2)}"
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT username, message, message_type, file_path, timestamp 
+                FROM messages 
+                WHERE room = ? 
+                ORDER BY timestamp ASC
+            ''', (room_name,))
             return [{
                 'user': row[0],
                 'message': row[1],
@@ -348,17 +366,20 @@ def create_app():
     }}
 
     socket.on('message', (data) => {{
-        const msg = document.createElement('div');
-        msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
-        let content = `<strong>${{data.user}}</strong> <small>${{data.timestamp || ''}}</small><br>`;
-        if (data.file) {{
-            if (data.fileType === 'image') content += `<img src="${{data.file}}" class="file-preview">`;
-            else content += `<video src="${{data.file}}" controls class="file-preview"></video>`;
+        // Проверяем, относится ли сообщение к текущей комнате
+        if (data.room === room) {{
+            const msg = document.createElement('div');
+            msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
+            let content = `<strong>${{data.user}}</strong> <small>${{data.timestamp || ''}}</small><br>`;
+            if (data.file) {{
+                if (data.fileType === 'image') content += `<img src="${{data.file}}" class="file-preview">`;
+                else content += `<video src="${{data.file}}" controls class="file-preview"></video>`;
+            }}
+            if (data.message) content += data.message.replace(/\\n/g, '<br>');
+            msg.innerHTML = content;
+            document.getElementById('messages').appendChild(msg);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
         }}
-        if (data.message) content += data.message.replace(/\\n/g, '<br>');
-        msg.innerHTML = content;
-        document.getElementById('messages').appendChild(msg);
-        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
     }});
 
     function openRoom(r, t, title) {{
@@ -390,6 +411,22 @@ def create_app():
         socket.emit('join', {{ room: r }});
     }}
 
+    function loadPrivateChats() {{
+        fetch('/users').then(r => r.json()).then(users => {{
+            const pc = document.getElementById('private-chats');
+            pc.innerHTML = '';
+            users.forEach(us => {{
+                if (us.online) {{
+                    const el = document.createElement('div');
+                    el.className = 'nav-item';
+                    el.textContent = `@${{us.username}}`;
+                    el.onclick = () => openRoom(`private_${{Math.min(user, us.username)}}_${{Math.max(user, us.username)}}`, 'private', `@${{us.username}}`);
+                    pc.appendChild(el);
+                }}
+            }});
+        }});
+    }}
+
     setInterval(() => {{
         fetch('/users').then(r => r.json()).then(users => {{
             const u = document.getElementById('users');
@@ -401,8 +438,12 @@ def create_app():
                 el.onclick = () => openRoom(`private_${{Math.min(user, us.username)}}_${{Math.max(user, us.username)}}`, 'private', `@${{us.username}}`);
                 u.appendChild(el);
             }});
+            loadPrivateChats();
         }});
     }}, 3000);
+
+    // Загружаем приватные чаты при старте
+    loadPrivateChats();
 </script>
 </body></html>'''
 
@@ -449,23 +490,33 @@ def create_app():
         if not msg and not file:
             return
         
+        # Для приватных чатов добавляем получателя
+        recipient = None
+        if room.startswith('private_'):
+            # Извлекаем второго участника из названия комнаты
+            parts = room.split('_')
+            if len(parts) == 3:
+                user1, user2 = parts[1], parts[2]
+                recipient = user1 if user2 == session['username'] else user2
+        
         # Сохраняем в БД
         msg_id = save_message(
             session['username'], 
             msg, 
             room, 
-            None, 
+            recipient, 
             file_type, 
             file
         )
         
-        # Отправляем всем в комнате
+        # Отправляем только в указанную комнату
         emit('message', {
             'user': session['username'], 
             'message': msg, 
             'file': file, 
             'fileType': file_type,
-            'timestamp': datetime.now().strftime('%H:%M')
+            'timestamp': datetime.now().strftime('%H:%M'),
+            'room': room  # Добавляем room в данные сообщения
         }, room=room)
 
     return app
@@ -476,5 +527,4 @@ socketio = app.extensions['socketio']
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    # Добавляем allow_unsafe_werkzeug=True для продакшн
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
