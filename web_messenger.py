@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (полная версия)
+# web_messenger.py - Tandau Messenger (исправленные личные чаты + каналы)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -111,7 +111,7 @@ def create_app():
     def get_all_users():
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
-            c.execute('SELECT username, is_online, avatar_color, avatar_path, theme FROM users ORDER BY username')
+            c.execute('SELECT username, is_online, avatar_color, avatar_path, theme FROM users WHERE username != ? ORDER BY username', (session.get('username', ''),))
             return [dict(zip(['username','online','color','avatar','theme'], row)) for row in c.fetchall()]
 
     def get_online_users():
@@ -162,50 +162,24 @@ def create_app():
                 'timestamp': row[4][11:16] if row[4] else ''
             } for row in c.fetchall()]
 
-    def get_user_chats(username):
-        """Получает все чаты пользователя (личные и каналы)"""
+    def get_user_personal_chats(username):
+        """Получает личные чаты пользователя с историей сообщений"""
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
-            
-            # Личные чаты
             c.execute('''
                 SELECT DISTINCT 
                     CASE 
                         WHEN username = ? THEN recipient
                         ELSE username
-                    END as chat_user,
-                    MAX(timestamp) as last_activity
+                    END as chat_user
                 FROM messages 
-                WHERE (username = ? OR recipient = ?) AND room LIKE 'private_%'
-                GROUP BY chat_user
-                HAVING chat_user IS NOT NULL
-                ORDER BY last_activity DESC
+                WHERE (username = ? OR recipient = ?) 
+                AND room LIKE 'private_%'
+                AND chat_user IS NOT NULL
             ''', (username, username, username))
             
-            personal_chats = [{
-                'type': 'personal',
-                'name': row[0],
-                'last_activity': row[1]
-            } for row in c.fetchall()]
-            
-            # Каналы пользователя
-            c.execute('''
-                SELECT c.name, c.description, c.is_private, cm.joined_at
-                FROM channels c
-                JOIN channel_members cm ON c.id = cm.channel_id
-                WHERE cm.username = ?
-                ORDER BY cm.joined_at DESC
-            ''', (username,))
-            
-            channel_chats = [{
-                'type': 'channel',
-                'name': row[0],
-                'description': row[1],
-                'is_private': row[2],
-                'joined_at': row[3]
-            } for row in c.fetchall()]
-            
-            return personal_chats + channel_chats
+            personal_chats = [row[0] for row in c.fetchall()]
+            return personal_chats
 
     def create_channel(name, description, created_by, is_private=False):
         with sqlite3.connect('messenger.db') as conn:
@@ -317,27 +291,36 @@ def create_app():
             except:
                 return None
 
-    def update_channel_settings(channel_name, allow_messages=None, is_private=None):
+    def update_channel_settings(channel_name, allow_messages=None):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             try:
-                updates = []
-                params = []
                 if allow_messages is not None:
-                    updates.append("allow_messages = ?")
-                    params.append(allow_messages)
-                if is_private is not None:
-                    updates.append("is_private = ?")
-                    params.append(is_private)
-                
-                if updates:
-                    params.append(channel_name)
-                    c.execute(f"UPDATE channels SET {', '.join(updates)} WHERE name = ?", params)
+                    c.execute("UPDATE channels SET allow_messages = ? WHERE name = ?", (allow_messages, channel_name))
                     conn.commit()
                     return True
             except:
                 pass
             return False
+
+    def get_user_channels(username):
+        """Получает каналы пользователя"""
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT c.name, c.description, c.is_private, c.allow_messages, c.created_by
+                FROM channels c
+                JOIN channel_members cm ON c.id = cm.channel_id
+                WHERE cm.username = ?
+                ORDER BY c.name
+            ''', (username,))
+            return [{
+                'name': row[0],
+                'description': row[1],
+                'is_private': row[2],
+                'allow_messages': row[3],
+                'created_by': row[4]
+            } for row in c.fetchall()]
 
     # === API Routes ===
     @app.route('/upload_avatar', methods=['POST'])
@@ -432,16 +415,25 @@ def create_app():
         if 'username' not in session: return jsonify({'error': 'auth'})
         channel_name = request.json.get('channel_name')
         allow_messages = request.json.get('allow_messages')
-        is_private = request.json.get('is_private')
         
         # Проверяем права
         channel_info = get_channel_info(channel_name)
         if not channel_info or channel_info['created_by'] != session['username']:
             return jsonify({'error': 'Нет прав для изменения настроек'})
         
-        if update_channel_settings(channel_name, allow_messages, is_private):
+        if update_channel_settings(channel_name, allow_messages):
             return jsonify({'success': True})
         return jsonify({'error': 'Ошибка обновления настроек'})
+
+    @app.route('/user_channels')
+    def user_channels_route():
+        if 'username' not in session: return jsonify({'error': 'auth'})
+        return jsonify(get_user_channels(session['username']))
+
+    @app.route('/personal_chats')
+    def personal_chats_route():
+        if 'username' not in session: return jsonify({'error': 'auth'})
+        return jsonify(get_user_personal_chats(session['username']))
 
     # === Основные маршруты ===
     @app.route('/')
@@ -511,7 +503,7 @@ def create_app():
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.3s ease;
-                    font-size: 16px; /* Предотвращает zoom в iOS */
+                    font-size: 16px;
                 }
                 .auth-tab.active {
                     background: white;
@@ -587,7 +579,6 @@ def create_app():
                         font-size: 2rem;
                     }
                 }
-                /* iOS specific fixes */
                 @supports (-webkit-touch-callout: none) {
                     body {
                         min-height: -webkit-fill-available;
@@ -762,10 +753,9 @@ def create_app():
         theme = user[7] if user else 'light'
         username = session['username']
         
-        # Здесь будет очень длинный HTML с JavaScript
-        # Для экономии места покажу только основные изменения
-        
-        return f'''<!DOCTYPE html>
+        # Полный HTML интерфейс чата
+        return f'''
+<!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
 <head>
     <meta charset="UTF-8">
@@ -775,16 +765,1238 @@ def create_app():
     <title>Tandau Chat</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        /* Полный CSS стиль будет здесь */
-        /* Включая все предыдущие стили плюс новые для каналов */
+        :root {{
+            --bg: #f8f9fa;
+            --text: #333;
+            --input: #fff;
+            --border: #ddd;
+            --accent: #667eea;
+            --sidebar-width: 300px;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }}
+        
+        [data-theme="dark"] {{
+            --bg: #1a1a1a;
+            --text: #eee;
+            --input: #2d2d2d;
+            --border: #444;
+            --accent: #8b5cf6;
+        }}
+        
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }}
+        
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+        }}
+        
+        .app-container {{
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }}
+        
+        /* Сайдбар */
+        .sidebar {{
+            width: var(--sidebar-width);
+            background: var(--input);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }}
+        
+        .sidebar-header {{
+            padding: 20px;
+            background: var(--accent);
+            color: white;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }}
+        
+        .user-info {{
+            padding: 15px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }}
+        
+        .avatar {{
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }}
+        
+        .user-details {{
+            flex: 1;
+            min-width: 0;
+        }}
+        
+        .user-details strong {{
+            display: block;
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }}
+        
+        .user-status {{
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }}
+        
+        .nav {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }}
+        
+        .nav-title {{
+            padding: 12px 15px;
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        
+        [data-theme="dark"] .nav-title {{
+            color: #999;
+        }}
+        
+        .nav-item {{
+            padding: 12px 15px;
+            cursor: pointer;
+            border-radius: 10px;
+            margin: 4px 0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+        }}
+        
+        .nav-item:hover {{
+            background: #f0f0f0;
+        }}
+        
+        [data-theme="dark"] .nav-item:hover {{
+            background: #333;
+        }}
+        
+        .nav-item.active {{
+            background: var(--accent);
+            color: white;
+        }}
+        
+        .nav-item i {{
+            width: 20px;
+            text-align: center;
+        }}
+        
+        .add-btn {{
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }}
+        
+        .add-btn:hover {{
+            background: rgba(255,255,255,0.1);
+        }}
+        
+        /* Область чата */
+        .chat-area {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }}
+        
+        .chat-header {{
+            padding: 15px 20px;
+            background: var(--input);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .back-button {{
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: var(--text);
+            cursor: pointer;
+        }}
+        
+        .channel-actions {{
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }}
+        
+        .channel-btn {{
+            background: none;
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+        }}
+        
+        .channel-btn:hover {{
+            background: rgba(0,0,0,0.1);
+        }}
+        
+        [data-theme="dark"] .channel-btn:hover {{
+            background: rgba(255,255,255,0.1);
+        }}
+        
+        .messages {{
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .msg {{
+            margin: 8px 0;
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            position: relative;
+            animation: messageAppear 0.3s ease;
+        }}
+        
+        @keyframes messageAppear {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        .msg.own {{
+            background: var(--accent);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 6px;
+        }}
+        
+        .msg.other {{
+            background: #e9ecef;
+            color: #333;
+            border-bottom-left-radius: 6px;
+        }}
+        
+        [data-theme="dark"] .msg.other {{
+            background: #333;
+            color: #eee;
+        }}
+        
+        .msg-sender {{
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }}
+        
+        .msg-time {{
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 4px;
+        }}
+        
+        .input-area {{
+            padding: 15px;
+            background: var(--input);
+            border-top: 1px solid var(--border);
+        }}
+        
+        .subscribe-notice {{
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-style: italic;
+        }}
+        
+        [data-theme="dark"] .subscribe-notice {{
+            color: #999;
+        }}
+        
+        .input-row {{
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }}
+        
+        .msg-input {{
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 25px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+            resize: none;
+            max-height: 120px;
+            min-height: 44px;
+        }}
+        
+        .msg-input:focus {{
+            outline: none;
+            border-color: var(--accent);
+        }}
+        
+        .send-btn {{
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }}
+        
+        .send-btn:hover {{
+            transform: scale(1.05);
+        }}
+        
+        .send-btn:active {{
+            transform: scale(0.95);
+        }}
+        
+        .send-btn:disabled {{
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }}
+        
+        .file-preview {{
+            margin: 8px 0;
+            max-width: 200px;
+            border-radius: 12px;
+            overflow: hidden;
+        }}
+        
+        .file-preview img, .file-preview video {{
+            width: 100%;
+            height: auto;
+            display: block;
+        }}
+        
+        .theme-toggle {{
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: white;
+            cursor: pointer;
+            padding: 5px;
+        }}
+        
+        .mobile-menu-btn {{
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--text);
+            cursor: pointer;
+            padding: 10px;
+        }}
+        
+        .logout-btn {{
+            margin: 10px;
+            padding: 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }}
+        
+        .logout-btn:hover {{
+            background: #c82333;
+        }}
+        
+        /* Модальные окна */
+        .modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }}
+        
+        .modal-content {{
+            background: var(--input);
+            padding: 25px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }}
+        
+        .modal-header {{
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }}
+        
+        .modal-title {{
+            font-size: 1.3rem;
+            font-weight: 600;
+        }}
+        
+        .close-modal {{
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text);
+        }}
+        
+        .form-group {{
+            margin-bottom: 15px;
+        }}
+        
+        .form-label {{
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }}
+        
+        .form-control {{
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+        }}
+        
+        .checkbox-group {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .btn {{
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }}
+        
+        .btn-primary {{
+            background: var(--accent);
+            color: white;
+        }}
+        
+        .btn-secondary {{
+            background: #6c757d;
+            color: white;
+        }}
+        
+        .user-list {{
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 10px;
+        }}
+        
+        .user-item {{
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .user-item:last-child {{
+            border-bottom: none;
+        }}
+        
+        .user-item:hover {{
+            background: var(--bg);
+        }}
+        
+        .invite-item {{
+            padding: 15px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }}
+        
+        /* Мобильные стили */
+        @media (max-width: 768px) {{
+            .sidebar {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                z-index: 1000;
+                transform: translateX(-100%);
+            }}
+            
+            .sidebar.active {{
+                transform: translateX(0);
+            }}
+            
+            .mobile-menu-btn {{
+                display: block;
+            }}
+            
+            .back-button {{
+                display: block;
+            }}
+            
+            .chat-header {{
+                padding-left: 15px;
+            }}
+            
+            .msg {{
+                max-width: 90%;
+            }}
+            
+            .user-details strong {{
+                font-size: 0.9rem;
+            }}
+        }}
+        
+        @media (max-width: 480px) {{
+            .messages {{
+                padding: 10px;
+            }}
+            
+            .input-area {{
+                padding: 12px;
+            }}
+            
+            .msg-input {{
+                font-size: 16px;
+            }}
+            
+            .nav-item {{
+                padding: 10px 12px;
+                font-size: 0.9rem;
+            }}
+        }}
+        
+        .messages::-webkit-scrollbar {{
+            width: 6px;
+        }}
+        
+        .messages::-webkit-scrollbar-track {{
+            background: transparent;
+        }}
+        
+        .messages::-webkit-scrollbar-thumb {{
+            background: #ccc;
+            border-radius: 3px;
+        }}
+        
+        [data-theme="dark"] .messages::-webkit-scrollbar-thumb {{
+            background: #555;
+        }}
+        
+        @supports (-webkit-touch-callout: none) {{
+            body {{
+                min-height: -webkit-fill-available;
+            }}
+        }}
     </style>
 </head>
 <body>
-    <!-- Полный HTML интерфейс -->
+    <div class="app-container">
+        <!-- Сайдбар -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                💬 Tandau
+            </div>
+            <div class="user-info">
+                <div class="avatar" id="user-avatar">{username[:2].upper()}</div>
+                <div class="user-details">
+                    <strong>{username}</strong>
+                    <div class="user-status">Online</div>
+                </div>
+                <button class="theme-toggle" onclick="openThemeModal()" title="Сменить тему">
+                    <i class="fas fa-palette"></i>
+                </button>
+            </div>
+            <div class="nav">
+                <div class="nav-title">
+                    <span>Каналы</span>
+                    <button class="add-btn" onclick="openCreateChannelModal()" title="Создать канал">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div id="channels">
+                    <div class="nav-item active" onclick="openRoom('channel_general', 'channel', '# general')">
+                        <i class="fas fa-hashtag"></i>
+                        <span>general</span>
+                    </div>
+                </div>
+                
+                <div class="nav-title">
+                    <span>Личные чаты</span>
+                </div>
+                <div id="personal-chats">
+                    <!-- Динамически заполняется -->
+                </div>
+                
+                <div class="nav-title">
+                    <span>Пользователи</span>
+                </div>
+                <div id="users">
+                    <!-- Динамически заполняется -->
+                </div>
+                
+                <div class="nav-title">
+                    <span>Приглашения</span>
+                </div>
+                <div id="invites">
+                    <!-- Динамически заполняется -->
+                </div>
+            </div>
+            <button class="logout-btn" onclick="location.href='/logout'">
+                <i class="fas fa-sign-out-alt"></i> Выйти
+            </button>
+        </div>
+        
+        <!-- Область чата -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <button class="back-button" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <span id="chat-title"># general</span>
+                <div class="channel-actions" id="channel-actions" style="display: none;">
+                    <button class="channel-btn" onclick="openChannelSettings()" title="Настройки канала">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="channel-btn" onclick="openInviteModal()" title="Пригласить пользователя">
+                        <i class="fas fa-user-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="messages" id="messages">
+                <!-- Сообщения загружаются здесь -->
+            </div>
+            <div class="input-area" id="input-area">
+                <div class="input-row">
+                    <button onclick="document.getElementById('file').click()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text);padding:5px;">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <input type="file" id="file" accept="image/*,video/*" style="display:none" onchange="previewFile(this)">
+                    <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1" onkeydown="handleKeydown(event)"></textarea>
+                    <button class="send-btn" onclick="sendMessage()" id="send-btn">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div id="file-preview"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальные окна -->
+    <div class="modal" id="theme-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Выбор темы</h3>
+                <button class="close-modal" onclick="closeThemeModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <div class="user-item" onclick="setTheme('light')">
+                    <i class="fas fa-sun"></i>
+                    <span>Светлая</span>
+                </div>
+                <div class="user-item" onclick="setTheme('dark')">
+                    <i class="fas fa-moon"></i>
+                    <span>Темная</span>
+                </div>
+                <div class="user-item" onclick="setTheme('auto')">
+                    <i class="fas fa-desktop"></i>
+                    <span>Авто</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="create-channel-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Создать канал</h3>
+                <button class="close-modal" onclick="closeCreateChannelModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Название канала</label>
+                <input type="text" class="form-control" id="channel-name" placeholder="название-канала">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <input type="text" class="form-control" id="channel-description" placeholder="Описание канала">
+            </div>
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="channel-private">
+                    <label class="form-label" for="channel-private">Приватный канал</label>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="createChannel()">Создать канал</button>
+        </div>
+    </div>
+
+    <div class="modal" id="invite-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Пригласить в канал</h3>
+                <button class="close-modal" onclick="closeInviteModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Выберите пользователя</label>
+                <div class="user-list" id="invite-user-list">
+                    <!-- Список пользователей -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="channel-settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Настройки канала</h3>
+                <button class="close-modal" onclick="closeChannelSettingsModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="allow-messages">
+                    <label class="form-label" for="allow-messages">Разрешить сообщения</label>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="updateChannelSettings()">Сохранить</button>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
-        // Полный JavaScript код
-        // Включая управление каналами, приглашениями, настройками
+        const socket = io();
+        const user = "{username}";
+        let room = "channel_general";
+        let roomType = "channel";
+        let currentChannel = "general";
+        let isMobile = window.innerWidth <= 768;
+        let channelSettings = {{}};
+
+        socket.emit('join', {{ room: 'channel_general' }});
+
+        // Адаптивный textarea
+        const msgInput = document.getElementById('msg-input');
+        msgInput.addEventListener('input', function() {{
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        }});
+
+        function handleKeydown(e) {{
+            if (e.key === 'Enter' && !e.shiftKey) {{
+                e.preventDefault();
+                sendMessage();
+            }}
+        }}
+
+        function toggleSidebar() {{
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('active');
+        }}
+
+        // Функции модальных окон
+        function openThemeModal() {{
+            document.getElementById('theme-modal').style.display = 'flex';
+        }}
+
+        function closeThemeModal() {{
+            document.getElementById('theme-modal').style.display = 'none';
+        }}
+
+        function openCreateChannelModal() {{
+            document.getElementById('create-channel-modal').style.display = 'flex';
+        }}
+
+        function closeCreateChannelModal() {{
+            document.getElementById('create-channel-modal').style.display = 'none';
+        }}
+
+        function openInviteModal() {{
+            loadUsersForInvite();
+            document.getElementById('invite-modal').style.display = 'flex';
+        }}
+
+        function closeInviteModal() {{
+            document.getElementById('invite-modal').style.display = 'none';
+        }}
+
+        function openChannelSettings() {{
+            document.getElementById('channel-settings-modal').style.display = 'flex';
+            // Загружаем текущие настройки
+            document.getElementById('allow-messages').checked = channelSettings.allow_messages !== false;
+        }}
+
+        function closeChannelSettingsModal() {{
+            document.getElementById('channel-settings-modal').style.display = 'none';
+        }}
+
+        function setTheme(theme) {{
+            fetch('/set_theme', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ theme: theme }})
+            }});
+            document.documentElement.setAttribute('data-theme', theme);
+            closeThemeModal();
+        }}
+
+        function createChannel() {{
+            const name = document.getElementById('channel-name').value;
+            const description = document.getElementById('channel-description').value;
+            const isPrivate = document.getElementById('channel-private').checked;
+
+            if (!name) {{
+                alert('Введите название канала');
+                return;
+            }}
+
+            fetch('/create_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ 
+                    name: name,
+                    description: description,
+                    is_private: isPrivate
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeCreateChannelModal();
+                    loadUserChannels();
+                    openRoom('channel_' + data.channel_name, 'channel', '# ' + data.channel_name);
+                }} else {{
+                    alert(data.error);
+                }}
+            }});
+        }}
+
+        function loadUsersForInvite() {{
+            fetch('/users')
+                .then(r => r.json())
+                .then(users => {{
+                    const userList = document.getElementById('invite-user-list');
+                    userList.innerHTML = '';
+                    
+                    users.forEach(u => {{
+                        if (u.username !== user) {{
+                            const item = document.createElement('div');
+                            item.className = 'user-item';
+                            item.innerHTML = `
+                                <i class="fas fa-user"></i>
+                                <span>${{u.username}}</span>
+                            `;
+                            item.onclick = () => inviteUser(u.username);
+                            userList.appendChild(item);
+                        }}
+                    }});
+                }});
+        }}
+
+        function inviteUser(username) {{
+            fetch('/invite_to_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ 
+                    channel_name: currentChannel,
+                    username: username
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    alert('Приглашение отправлено!');
+                    closeInviteModal();
+                }} else {{
+                    alert(data.error);
+                }}
+            }});
+        }}
+
+        function updateChannelSettings() {{
+            const allowMessages = document.getElementById('allow-messages').checked;
+            
+            fetch('/update_channel_settings', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ 
+                    channel_name: currentChannel,
+                    allow_messages: allowMessages
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    channelSettings.allow_messages = allowMessages;
+                    updateInputArea();
+                    closeChannelSettingsModal();
+                }} else {{
+                    alert(data.error);
+                }}
+            }});
+        }}
+
+        function sendMessage() {{
+            if (!canSendMessages()) return;
+            
+            const input = document.getElementById('msg-input');
+            const msg = input.value.trim();
+            const file = document.getElementById('file').files[0];
+            
+            if (!msg && !file) return;
+            
+            const data = {{ message: msg, room: room, type: roomType }};
+            
+            if (file) {{
+                const reader = new FileReader();
+                reader.onload = (e) => {{
+                    data.file = e.target.result;
+                    data.fileType = file.type.startsWith('image/') ? 'image' : 'video';
+                    socket.emit('message', data);
+                    resetInput();
+                }};
+                reader.readAsDataURL(file);
+            }} else {{
+                socket.emit('message', data);
+                resetInput();
+            }}
+        }}
+
+        function canSendMessages() {{
+            if (roomType === 'channel' && channelSettings.allow_messages === false) {{
+                return false;
+            }}
+            return true;
+        }}
+
+        function updateInputArea() {{
+            const inputArea = document.getElementById('input-area');
+            const sendBtn = document.getElementById('send-btn');
+            
+            if (roomType === 'channel' && channelSettings.allow_messages === false) {{
+                inputArea.innerHTML = '<div class="subscribe-notice">В этом канале можно только читать сообщения</div>';
+            }} else {{
+                inputArea.innerHTML = `
+                    <div class="input-row">
+                        <button onclick="document.getElementById('file').click()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text);padding:5px;">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <input type="file" id="file" accept="image/*,video/*" style="display:none" onchange="previewFile(this)">
+                        <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1" onkeydown="handleKeydown(event)"></textarea>
+                        <button class="send-btn" onclick="sendMessage()" id="send-btn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div id="file-preview"></div>
+                `;
+                
+                // Re-initialize the textarea
+                const newMsgInput = document.getElementById('msg-input');
+                newMsgInput.addEventListener('input', function() {{
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                }});
+            }}
+        }}
+
+        function resetInput() {{
+            const input = document.getElementById('msg-input');
+            const fileInput = document.getElementById('file');
+            const preview = document.getElementById('file-preview');
+            
+            if (input) input.value = '';
+            if (input) input.style.height = 'auto';
+            if (fileInput) fileInput.value = '';
+            if (preview) preview.innerHTML = '';
+        }}
+
+        function previewFile(input) {{
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {{
+                const prev = document.getElementById('file-preview');
+                prev.innerHTML = '';
+                
+                if (file.type.startsWith('image/')) {{
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'file-preview';
+                    prev.appendChild(img);
+                }} else {{
+                    const vid = document.createElement('video');
+                    vid.src = e.target.result;
+                    vid.controls = true;
+                    vid.className = 'file-preview';
+                    prev.appendChild(vid);
+                }}
+            }};
+            reader.readAsDataURL(file);
+        }}
+
+        socket.on('message', (data) => {{
+            if (data.room === room) {{
+                addMessageToChat(data);
+            }}
+        }});
+
+        function addMessageToChat(data) {{
+            const messagesContainer = document.getElementById('messages');
+            const msg = document.createElement('div');
+            msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
+            
+            let content = `
+                <div class="msg-sender">${{data.user}}</div>
+                ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
+            `;
+            
+            if (data.file) {{
+                if (data.fileType === 'image') {{
+                    content += `<img src="${{data.file}}" class="file-preview">`;
+                }} else {{
+                    content += `<video src="${{data.file}}" controls class="file-preview"></video>`;
+                }}
+            }}
+            
+            content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
+            msg.innerHTML = content;
+            messagesContainer.appendChild(msg);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }}
+
+        function openRoom(r, t, title) {{
+            room = r;
+            roomType = t;
+            currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
+            
+            document.getElementById('chat-title').textContent = title;
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            document.getElementById('messages').innerHTML = '';
+            
+            // Показываем/скрываем кнопки управления каналом
+            const channelActions = document.getElementById('channel-actions');
+            if (t === 'channel') {{
+                channelActions.style.display = 'flex';
+                // Загружаем настройки канала
+                fetch(`/channel_info/${{currentChannel}}`)
+                    .then(r => r.json())
+                    .then(info => {{
+                        if (!info.error) {{
+                            channelSettings = info;
+                            updateInputArea();
+                        }}
+                    }});
+            }} else {{
+                channelActions.style.display = 'none';
+                updateInputArea();
+            }}
+            
+            // Загружаем историю
+            fetch(`/get_messages/${{r}}`)
+                .then(r => r.json())
+                .then(messages => {{
+                    messages.forEach(msg => {{
+                        addMessageToChat(msg);
+                    }});
+                }});
+            
+            socket.emit('join', {{ room: r }});
+            
+            // На мобильных закрываем сайдбар после выбора чата
+            if (isMobile) {{
+                toggleSidebar();
+            }}
+        }}
+
+        function loadUserChannels() {{
+            fetch('/user_channels')
+                .then(r => r.json())
+                .then(channels => {{
+                    const channelsContainer = document.getElementById('channels');
+                    // Сохраняем general канал
+                    const generalChannel = channelsContainer.querySelector('.nav-item');
+                    channelsContainer.innerHTML = '';
+                    channelsContainer.appendChild(generalChannel);
+                    
+                    channels.forEach(channel => {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item';
+                        el.innerHTML = `
+                            <i class="fas fa-hashtag"></i>
+                            <span>${{channel.name}}</span>
+                            ${{channel.is_private ? ' <i class="fas fa-lock" style="font-size: 0.8em;"></i>' : ''}}
+                        `;
+                        el.onclick = () => openRoom('channel_' + channel.name, 'channel', '# ' + channel.name);
+                        channelsContainer.appendChild(el);
+                    }});
+                }});
+        }}
+
+        function loadPersonalChats() {{
+            fetch('/personal_chats')
+                .then(r => r.json())
+                .then(chats => {{
+                    const pc = document.getElementById('personal-chats');
+                    pc.innerHTML = '';
+                    
+                    chats.forEach(chatUser => {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item';
+                        el.innerHTML = `
+                            <i class="fas fa-user"></i>
+                            <span>@${{chatUser}}</span>
+                        `;
+                        el.onclick = () => openRoom(
+                            `private_${{Math.min(user, chatUser)}}_${{Math.max(user, chatUser)}}`,
+                            'private',
+                            `@${{chatUser}}`
+                        );
+                        pc.appendChild(el);
+                    }});
+                }});
+        }}
+
+        function loadInvites() {{
+            fetch('/channel_invites')
+                .then(r => r.json())
+                .then(invites => {{
+                    const invitesContainer = document.getElementById('invites');
+                    invitesContainer.innerHTML = '';
+                    
+                    invites.forEach(invite => {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item';
+                        el.innerHTML = `
+                            <i class="fas fa-envelope"></i>
+                            <span># ${{invite.channel_name}}</span>
+                        `;
+                        el.onclick = () => acceptInvite(invite.id);
+                        invitesContainer.appendChild(el);
+                    }});
+                }});
+        }}
+
+        function acceptInvite(inviteId) {{
+            fetch('/accept_invite', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ invite_id: inviteId }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    loadUserChannels();
+                    loadInvites();
+                    openRoom('channel_' + data.channel_name, 'channel', '# ' + data.channel_name);
+                }} else {{
+                    alert(data.error);
+                }}
+            }});
+        }}
+
+        // Обновление списка пользователей
+        function loadUsers() {{
+            fetch('/users')
+                .then(r => r.json())
+                .then(users => {{
+                    const usersContainer = document.getElementById('users');
+                    usersContainer.innerHTML = '';
+                    
+                    users.forEach(u => {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item';
+                        el.innerHTML = `
+                            <i class="fas fa-user${{u.online ? '-check' : ''}}"></i>
+                            <span>${{u.username}}${{u.online ? ' (онлайн)' : ''}}</span>
+                        `;
+                        el.onclick = () => openRoom(
+                            `private_${{Math.min(user, u.username)}}_${{Math.max(user, u.username)}}`,
+                            'private',
+                            `@${{u.username}}`
+                        );
+                        usersContainer.appendChild(el);
+                    }});
+                }});
+        }}
+
+        // Инициализация
+        loadUserChannels();
+        loadPersonalChats();
+        loadUsers();
+        loadInvites();
+        
+        // Периодическое обновление
+        setInterval(() => {{
+            loadUsers();
+            loadInvites();
+        }}, 10000);
+        
+        // Адаптация к изменению размера окна
+        window.addEventListener('resize', () => {{
+            isMobile = window.innerWidth <= 768;
+            if (!isMobile) {{
+                document.getElementById('sidebar').classList.remove('active');
+            }}
+        }});
     </script>
 </body>
 </html>'''
@@ -797,10 +2009,15 @@ def create_app():
     def online_users_route():
         return jsonify(get_online_users())
 
-    @app.route('/user_chats')
-    def user_chats_route():
+    @app.route('/user_channels')
+    def user_channels_route():
         if 'username' not in session: return jsonify({'error': 'auth'})
-        return jsonify(get_user_chats(session['username']))
+        return jsonify(get_user_channels(session['username']))
+
+    @app.route('/personal_chats')
+    def personal_chats_route():
+        if 'username' not in session: return jsonify({'error': 'auth'})
+        return jsonify(get_user_personal_chats(session['username']))
 
     @app.route('/get_messages/<room>')
     def get_messages(room):
@@ -850,7 +2067,7 @@ def create_app():
                 members = get_channel_members(channel_name)
                 is_admin = any(m['username'] == session['username'] and m['is_admin'] for m in members)
                 if not is_admin:
-                    emit('error', {'message': 'В этом канале запрещено отправлять сообщения'})
+                    emit('error', {'message': 'В этом канале запрещено отправлять сообщения'}, room=request.sid)
                     return
         
         # Для приватных чатов добавляем получателя
