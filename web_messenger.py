@@ -1,11 +1,10 @@
-# web_messenger.py - Tandau Messenger (ПОЛНАЯ ВЕРСИЯ ДЛЯ RENDER)
+# web_messenger.py - Tandau Messenger (исправленная версия для Render)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from PIL import Image
 import random
 import os
 
@@ -86,12 +85,6 @@ def create_app():
         filename = secure_filename(f"{int(datetime.now().timestamp())}_{file.filename}")
         path = os.path.join(folder, filename)
         file.save(path)
-        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-            try:
-                img = Image.open(path)
-                img.thumbnail((800, 800))
-                img.save(path)
-            except: pass
         return f'/static/{os.path.basename(folder)}/{filename}'
 
     def get_user(username):
@@ -124,11 +117,11 @@ def create_app():
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor(); c.execute('UPDATE users SET is_online = ? WHERE username = ?', (status, username)); conn.commit()
 
-    def save_message(user, msg, room, recipient=None, type='text', file=None):
+    def save_message(user, msg, room, recipient=None, msg_type='text', file=None):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             c.execute('INSERT INTO messages (username, message, room, recipient, message_type, file_path) VALUES (?, ?, ?, ?, ?, ?)',
-                      (user, msg, room, recipient, type, file))
+                      (user, msg, room, recipient, msg_type, file))
             conn.commit(); return c.lastrowid
 
     def get_messages_for_room(room):
