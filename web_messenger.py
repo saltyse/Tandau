@@ -20,7 +20,8 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
 
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+    # Убираем async_mode или используем 'threading'
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
     # === Инициализация БД ===
     def init_db():
