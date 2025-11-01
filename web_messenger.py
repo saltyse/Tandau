@@ -1,4 +1,7 @@
-# web_messenger.py - Tandau Messenger (полная версия с рабочими стилями)
+# web_messenger.py - Tandau Messenger (полная версия для Render)
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -21,7 +24,7 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
 
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
     # === Инициализация БД ===
     def init_db():
@@ -2088,6 +2091,16 @@ def create_app():
             'room': room
         }, room=room)
 
+    # Health check для Render
+    @app.route('/health')
+    def health_check():
+        return jsonify({'status': 'healthy', 'service': 'Tandau Messenger'})
+
+    # Обработка 404
+    @app.errorhandler(404)
+    def not_found(e):
+        return redirect('/')
+
     return app
 
 # === СОЗДАНИЕ ПРИЛОЖЕНИЯ ДЛЯ RENDER ===
@@ -2096,4 +2109,4 @@ socketio = app.extensions['socketio']
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
