@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (исправленная версия для Render)
+# web_messenger.py - Tandau Messenger (упрощенная версия для Render)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -25,8 +25,8 @@ def create_app():
     except:
         pass
 
-    # Используем gevent вместо eventlet
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+    # Используем threading вместо eventlet/gevent
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
     # === Инициализация БД ===
     def init_db():
