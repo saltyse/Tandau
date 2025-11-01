@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (полная версия)
+# web_messenger.py - Tandau Messenger (полная версия с рабочими стилями)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -753,7 +753,7 @@ def create_app():
         theme = user[7] if user else 'light'
         username = session['username']
         
-        # Полный HTML интерфейс чата (сокращен для читаемости)
+        # Полный HTML интерфейс чата с полными стилями
         return f'''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
@@ -765,7 +765,6 @@ def create_app():
     <title>Tandau Chat</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        /* Стили остаются такими же как в предыдущей версии */
         :root {{
             --bg: #f8f9fa;
             --text: #333;
@@ -807,7 +806,7 @@ def create_app():
             position: relative;
         }}
         
-        /* Все остальные стили как в предыдущей версии */
+        /* Сайдбар */
         .sidebar {{
             width: var(--sidebar-width);
             background: var(--input);
@@ -817,8 +816,536 @@ def create_app():
             transition: transform 0.3s ease;
         }}
         
-        /* ... остальные стили ... */
+        .sidebar-header {{
+            padding: 20px;
+            background: var(--accent);
+            color: white;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }}
         
+        .user-info {{
+            padding: 15px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }}
+        
+        .avatar {{
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }}
+        
+        .user-details {{
+            flex: 1;
+            min-width: 0;
+        }}
+        
+        .user-details strong {{
+            display: block;
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }}
+        
+        .user-status {{
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }}
+        
+        .nav {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }}
+        
+        .nav-title {{
+            padding: 12px 15px;
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        
+        [data-theme="dark"] .nav-title {{
+            color: #999;
+        }}
+        
+        .nav-item {{
+            padding: 12px 15px;
+            cursor: pointer;
+            border-radius: 10px;
+            margin: 4px 0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+        }}
+        
+        .nav-item:hover {{
+            background: #f0f0f0;
+        }}
+        
+        [data-theme="dark"] .nav-item:hover {{
+            background: #333;
+        }}
+        
+        .nav-item.active {{
+            background: var(--accent);
+            color: white;
+        }}
+        
+        .nav-item i {{
+            width: 20px;
+            text-align: center;
+        }}
+        
+        .add-btn {{
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }}
+        
+        .add-btn:hover {{
+            background: rgba(255,255,255,0.1);
+        }}
+        
+        /* Область чата */
+        .chat-area {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }}
+        
+        .chat-header {{
+            padding: 15px 20px;
+            background: var(--input);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .back-button {{
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: var(--text);
+            cursor: pointer;
+        }}
+        
+        .channel-actions {{
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }}
+        
+        .channel-btn {{
+            background: none;
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+        }}
+        
+        .channel-btn:hover {{
+            background: rgba(0,0,0,0.1);
+        }}
+        
+        [data-theme="dark"] .channel-btn:hover {{
+            background: rgba(255,255,255,0.1);
+        }}
+        
+        .messages {{
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .msg {{
+            margin: 8px 0;
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            position: relative;
+            animation: messageAppear 0.3s ease;
+        }}
+        
+        @keyframes messageAppear {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        .msg.own {{
+            background: var(--accent);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 6px;
+        }}
+        
+        .msg.other {{
+            background: #e9ecef;
+            color: #333;
+            border-bottom-left-radius: 6px;
+        }}
+        
+        [data-theme="dark"] .msg.other {{
+            background: #333;
+            color: #eee;
+        }}
+        
+        .msg-sender {{
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }}
+        
+        .msg-time {{
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 4px;
+        }}
+        
+        .input-area {{
+            padding: 15px;
+            background: var(--input);
+            border-top: 1px solid var(--border);
+        }}
+        
+        .subscribe-notice {{
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-style: italic;
+        }}
+        
+        [data-theme="dark"] .subscribe-notice {{
+            color: #999;
+        }}
+        
+        .input-row {{
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }}
+        
+        .msg-input {{
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 25px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+            resize: none;
+            max-height: 120px;
+            min-height: 44px;
+        }}
+        
+        .msg-input:focus {{
+            outline: none;
+            border-color: var(--accent);
+        }}
+        
+        .send-btn {{
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }}
+        
+        .send-btn:hover {{
+            transform: scale(1.05);
+        }}
+        
+        .send-btn:active {{
+            transform: scale(0.95);
+        }}
+        
+        .send-btn:disabled {{
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }}
+        
+        .file-preview {{
+            margin: 8px 0;
+            max-width: 200px;
+            border-radius: 12px;
+            overflow: hidden;
+        }}
+        
+        .file-preview img, .file-preview video {{
+            width: 100%;
+            height: auto;
+            display: block;
+        }}
+        
+        .theme-toggle {{
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: white;
+            cursor: pointer;
+            padding: 5px;
+        }}
+        
+        .mobile-menu-btn {{
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--text);
+            cursor: pointer;
+            padding: 10px;
+        }}
+        
+        .logout-btn {{
+            margin: 10px;
+            padding: 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }}
+        
+        .logout-btn:hover {{
+            background: #c82333;
+        }}
+        
+        /* Модальные окна */
+        .modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }}
+        
+        .modal-content {{
+            background: var(--input);
+            padding: 25px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }}
+        
+        .modal-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }}
+        
+        .modal-title {{
+            font-size: 1.3rem;
+            font-weight: 600;
+        }}
+        
+        .close-modal {{
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text);
+        }}
+        
+        .form-group {{
+            margin-bottom: 15px;
+        }}
+        
+        .form-label {{
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }}
+        
+        .form-control {{
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+        }}
+        
+        .checkbox-group {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .btn {{
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }}
+        
+        .btn-primary {{
+            background: var(--accent);
+            color: white;
+        }}
+        
+        .btn-secondary {{
+            background: #6c757d;
+            color: white;
+        }}
+        
+        .user-list {{
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 10px;
+        }}
+        
+        .user-item {{
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .user-item:last-child {{
+            border-bottom: none;
+        }}
+        
+        .user-item:hover {{
+            background: var(--bg);
+        }}
+        
+        .invite-item {{
+            padding: 15px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }}
+        
+        /* Мобильные стили */
+        @media (max-width: 768px) {{
+            .sidebar {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                z-index: 1000;
+                transform: translateX(-100%);
+            }}
+            
+            .sidebar.active {{
+                transform: translateX(0);
+            }}
+            
+            .mobile-menu-btn {{
+                display: block;
+            }}
+            
+            .back-button {{
+                display: block;
+            }}
+            
+            .chat-header {{
+                padding-left: 15px;
+            }}
+            
+            .msg {{
+                max-width: 90%;
+            }}
+            
+            .user-details strong {{
+                font-size: 0.9rem;
+            }}
+        }}
+        
+        @media (max-width: 480px) {{
+            .messages {{
+                padding: 10px;
+            }}
+            
+            .input-area {{
+                padding: 12px;
+            }}
+            
+            .msg-input {{
+                font-size: 16px;
+            }}
+            
+            .nav-item {{
+                padding: 10px 12px;
+                font-size: 0.9rem;
+            }}
+        }}
+        
+        .messages::-webkit-scrollbar {{
+            width: 6px;
+        }}
+        
+        .messages::-webkit-scrollbar-track {{
+            background: transparent;
+        }}
+        
+        .messages::-webkit-scrollbar-thumb {{
+            background: #ccc;
+            border-radius: 3px;
+        }}
+        
+        [data-theme="dark"] .messages::-webkit-scrollbar-thumb {{
+            background: #555;
+        }}
+        
+        @supports (-webkit-touch-callout: none) {{
+            body {{
+                min-height: -webkit-fill-available;
+            }}
+        }}
     </style>
 </head>
 <body>
