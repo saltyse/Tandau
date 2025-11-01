@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (упрощенная версия для Render)
+# web_messenger.py - Tandau Messenger (исправленная версия для Render)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -512,7 +512,7 @@ def create_app():
                 }
                 .auth-tab.active {
                     background: white;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    box-shadow: 0 2px8px rgba(0,0,0,0.1);
                 }
                 .auth-form {
                     display: none;
@@ -2111,4 +2111,4 @@ socketio = app.extensions['socketio']
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
