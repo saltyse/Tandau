@@ -1,5 +1,7 @@
+# requirements.txt
 flask==2.3.3
 flask-socketio==5.3.6
 python-socketio==5.10.0
 werkzeug==2.3.7
-eventlet==0.33.3
+gevent==23.9.1
+greenlet==3.0.3
