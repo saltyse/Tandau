@@ -1,7 +1,4 @@
-# web_messenger.py - Tandau Messenger (полная версия для Render)
-import eventlet
-eventlet.monkey_patch()
-
+# web_messenger.py - Tandau Messenger (исправленная версия для Render)
 from flask import Flask, request, jsonify, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -21,10 +18,15 @@ def create_app():
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
     ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'mov'}
 
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
+    # Создаем папки для загрузок
+    try:
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
+    except:
+        pass
 
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+    # Используем gevent вместо eventlet
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
     # === Инициализация БД ===
     def init_db():
