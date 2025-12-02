@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (исправленная версия с работающей регистрацией/авторизацией)
+# web_messenger.py - Tandau Messenger с Избранным
 from flask import Flask, request, jsonify, session, redirect, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -9,6 +9,7 @@ import random
 import os
 import re
 import base64
+import json
 
 # === Фабрика приложения ===
 def create_app():
@@ -16,13 +17,15 @@ def create_app():
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tandau-secret-key-2024')
     app.config['UPLOAD_FOLDER'] = 'static/uploads'
     app.config['AVATAR_FOLDER'] = 'static/avatars'
+    app.config['FAVORITE_FOLDER'] = 'static/favorites'
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
-    ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'mov'}
+    ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'mov', 'txt', 'pdf', 'doc', 'docx'}
 
     # Создаем папки для загрузок
     try:
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
+        os.makedirs(app.config['FAVORITE_FOLDER'], exist_ok=True)
     except:
         pass
 
@@ -54,7 +57,8 @@ def create_app():
                     recipient TEXT,
                     message_type TEXT DEFAULT 'text',
                     file_path TEXT,
-                    file_name TEXT
+                    file_name TEXT,
+                    is_favorite BOOLEAN DEFAULT FALSE
                 )
             ''')
             c.execute('''
@@ -81,13 +85,16 @@ def create_app():
                 )
             ''')
             c.execute('''
-                CREATE TABLE IF NOT EXISTS channel_invites (
+                CREATE TABLE IF NOT EXISTS favorites (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    channel_id INTEGER,
                     username TEXT NOT NULL,
-                    invited_by TEXT NOT NULL,
+                    content TEXT,
+                    file_path TEXT,
+                    file_name TEXT,
+                    file_type TEXT DEFAULT 'text',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (channel_id) REFERENCES channels (id)
+                    is_pinned BOOLEAN DEFAULT FALSE,
+                    category TEXT DEFAULT 'general'
                 )
             ''')
             # Создаем общий канал по умолчанию
@@ -185,13 +192,84 @@ def create_app():
             c.execute('UPDATE users SET is_online = ? WHERE username = ?', (status, username))
             conn.commit()
 
-    def save_message(user, msg, room, recipient=None, msg_type='text', file_path=None, file_name=None):
+    def save_message(user, msg, room, recipient=None, msg_type='text', file_path=None, file_name=None, is_favorite=False):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
-            c.execute('INSERT INTO messages (username, message, room, recipient, message_type, file_path, file_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                      (user, msg, room, recipient, msg_type, file_path, file_name))
+            c.execute('INSERT INTO messages (username, message, room, recipient, message_type, file_path, file_name, is_favorite) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                      (user, msg, room, recipient, msg_type, file_path, file_name, is_favorite))
             conn.commit()
             return c.lastrowid
+
+    def add_to_favorites(username, content=None, file_path=None, file_name=None, file_type='text', category='general'):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            try:
+                c.execute('INSERT INTO favorites (username, content, file_path, file_name, file_type, category) VALUES (?, ?, ?, ?, ?, ?)',
+                          (username, content, file_path, file_name, file_type, category))
+                conn.commit()
+                return c.lastrowid
+            except Exception as e:
+                print(f"Error adding to favorites: {e}")
+                return None
+
+    def get_favorites(username, category=None):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            if category:
+                c.execute('''
+                    SELECT id, content, file_path, file_name, file_type, created_at, is_pinned, category 
+                    FROM favorites 
+                    WHERE username = ? AND category = ?
+                    ORDER BY is_pinned DESC, created_at DESC
+                ''', (username, category))
+            else:
+                c.execute('''
+                    SELECT id, content, file_path, file_name, file_type, created_at, is_pinned, category 
+                    FROM favorites 
+                    WHERE username = ? 
+                    ORDER BY is_pinned DESC, created_at DESC
+                ''', (username,))
+            
+            favorites = []
+            for row in c.fetchall():
+                favorites.append({
+                    'id': row[0],
+                    'content': row[1],
+                    'file_path': row[2],
+                    'file_name': row[3],
+                    'file_type': row[4],
+                    'created_at': row[5],
+                    'is_pinned': bool(row[6]),
+                    'category': row[7]
+                })
+            return favorites
+
+    def delete_favorite(favorite_id, username):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('DELETE FROM favorites WHERE id = ? AND username = ?', (favorite_id, username))
+            conn.commit()
+            return c.rowcount > 0
+
+    def toggle_pin_favorite(favorite_id, username):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            # Получаем текущее состояние
+            c.execute('SELECT is_pinned FROM favorites WHERE id = ? AND username = ?', (favorite_id, username))
+            row = c.fetchone()
+            if row:
+                new_state = not bool(row[0])
+                c.execute('UPDATE favorites SET is_pinned = ? WHERE id = ? AND username = ?', 
+                         (new_state, favorite_id, username))
+                conn.commit()
+                return new_state
+            return None
+
+    def get_favorite_categories(username):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('SELECT DISTINCT category FROM favorites WHERE username = ? ORDER BY category', (username,))
+            return [row[0] for row in c.fetchall()]
 
     def get_messages_for_room(room):
         with sqlite3.connect('messenger.db') as conn:
@@ -447,6 +525,93 @@ def create_app():
                 'theme': user['theme']
             })
         return jsonify({'success': False, 'error': 'Пользователь не найден'})
+
+    # Избранное
+    @app.route('/add_to_favorites', methods=['POST'])
+    def add_to_favorites_handler():
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        content = request.form.get('content', '').strip()
+        category = request.form.get('category', 'general').strip()
+        
+        file_path = None
+        file_name = None
+        file_type = 'text'
+        
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename:
+                path, filename = save_uploaded_file(file, app.config['FAVORITE_FOLDER'])
+                if path:
+                    file_path = path
+                    file_name = filename
+                    file_type = 'file'
+                    content = content or f"Файл: {filename}"
+        
+        elif request.is_json:
+            data = request.json
+            content = data.get('content', '').strip()
+            category = data.get('category', 'general').strip()
+            file_data = data.get('file')
+            
+            if file_data:
+                file_type = data.get('fileType', 'image')
+                file_extension = 'png' if file_type == 'image' else 'mp4'
+                path, filename = save_base64_file(file_data, app.config['FAVORITE_FOLDER'], file_extension)
+                if path:
+                    file_path = path
+                    file_name = filename
+                    content = content or f"Медиа файл"
+        
+        favorite_id = add_to_favorites(
+            session['username'],
+            content,
+            file_path,
+            file_name,
+            file_type,
+            category
+        )
+        
+        if favorite_id:
+            return jsonify({'success': True, 'id': favorite_id})
+        return jsonify({'success': False, 'error': 'Не удалось добавить в избранное'})
+
+    @app.route('/get_favorites')
+    def get_favorites_handler():
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        category = request.args.get('category', None)
+        favorites = get_favorites(session['username'], category)
+        return jsonify({'success': True, 'favorites': favorites})
+
+    @app.route('/get_favorite_categories')
+    def get_favorite_categories_handler():
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        categories = get_favorite_categories(session['username'])
+        return jsonify({'success': True, 'categories': categories})
+
+    @app.route('/delete_favorite/<int:favorite_id>', methods=['DELETE'])
+    def delete_favorite_handler(favorite_id):
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        if delete_favorite(favorite_id, session['username']):
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': 'Не удалось удалить'})
+
+    @app.route('/toggle_pin_favorite/<int:favorite_id>', methods=['POST'])
+    def toggle_pin_favorite_handler(favorite_id):
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        new_state = toggle_pin_favorite(favorite_id, session['username'])
+        if new_state is not None:
+            return jsonify({'success': True, 'pinned': new_state})
+        return jsonify({'success': False, 'error': 'Не удалось закрепить/открепить'})
 
     # Статические файлы
     @app.route('/static/<path:filename>')
@@ -785,6 +950,7 @@ def create_app():
         
         theme = user['theme']
         
+        # Генерируем HTML с новым функционалом Избранного
         return f'''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
@@ -801,6 +967,7 @@ def create_app():
             --border: #ddd;
             --accent: #667eea;
             --sidebar-width: 300px;
+            --favorite-color: #ffd700;
         }}
         
         [data-theme="dark"] {{
@@ -809,6 +976,7 @@ def create_app():
             --input: #2d2d2d;
             --border: #444;
             --accent: #8b5cf6;
+            --favorite-color: #ffed4e;
         }}
         
         * {{
@@ -934,6 +1102,10 @@ def create_app():
             color: white;
         }}
         
+        .nav-item.favorite {{
+            border-left: 3px solid var(--favorite-color);
+        }}
+        
         .nav-item i {{
             width: 20px;
             text-align: center;
@@ -988,76 +1160,132 @@ def create_app():
             flex-direction: column;
         }}
         
-        .msg {{
-            margin: 8px 0;
-            max-width: 85%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            word-wrap: break-word;
+        /* Стили для избранного */
+        .favorites-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
         }}
         
-        .msg.own {{
-            background: var(--accent);
-            color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 6px;
-        }}
-        
-        .msg.other {{
-            background: #e9ecef;
-            color: #333;
-            border-bottom-left-radius: 6px;
-        }}
-        
-        [data-theme="dark"] .msg.other {{
-            background: #333;
-            color: #eee;
-        }}
-        
-        .msg-header {{
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 4px;
-        }}
-        
-        .msg-avatar {{
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: var(--accent);
-            font-size: 0.7rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            background-size: cover;
-            background-position: center;
-        }}
-        
-        .msg-sender {{
-            font-weight: 600;
-            font-size: 0.9rem;
-        }}
-        
-        .msg-time {{
-            font-size: 0.75rem;
-            opacity: 0.7;
-            margin-top: 4px;
-        }}
-        
-        .file-preview {{
-            margin: 8px 0;
-            max-width: 300px;
+        .favorite-item {{
+            background: var(--input);
             border-radius: 12px;
-            overflow: hidden;
+            padding: 15px;
+            border: 1px solid var(--border);
+            position: relative;
+            transition: transform 0.2s ease;
         }}
         
-        .file-preview img, .file-preview video {{
+        .favorite-item:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }}
+        
+        .favorite-item.pinned {{
+            border-left: 4px solid var(--favorite-color);
+        }}
+        
+        .favorite-content {{
+            margin-bottom: 10px;
+            word-break: break-word;
+        }}
+        
+        .favorite-file {{
+            max-width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }}
+        
+        .favorite-file img, .favorite-file video {{
             width: 100%;
             height: auto;
             display: block;
+        }}
+        
+        .favorite-meta {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 10px;
+        }}
+        
+        .favorite-actions {{
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }}
+        
+        .favorite-item:hover .favorite-actions {{
+            opacity: 1;
+        }}
+        
+        .favorite-action-btn {{
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
+            font-size: 0.8rem;
+        }}
+        
+        .category-badge {{
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--accent);
+            color: white;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin-top: 5px;
+        }}
+        
+        .empty-favorites {{
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }}
+        
+        .empty-favorites i {{
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #ccc;
+        }}
+        
+        .categories-filter {{
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: var(--input);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }}
+        
+        .category-filter-btn {{
+            padding: 6px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }}
+        
+        .category-filter-btn.active {{
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
         }}
         
         .input-area {{
@@ -1118,11 +1346,19 @@ def create_app():
             padding: 25px;
             border-radius: 15px;
             width: 90%;
-            max-width: 400px;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
         }}
         
         .form-group {{
             margin-bottom: 15px;
+        }}
+        
+        .form-label {{
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
         }}
         
         .form-control {{
@@ -1132,6 +1368,34 @@ def create_app():
             border-radius: 8px;
             background: var(--bg);
             color: var(--text);
+        }}
+        
+        .form-control:focus {{
+            outline: none;
+            border-color: var(--accent);
+        }}
+        
+        .btn {{
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }}
+        
+        .btn-primary {{
+            background: var(--accent);
+            color: white;
+        }}
+        
+        .btn-primary:hover {{
+            opacity: 0.9;
+        }}
+        
+        .btn-secondary {{
+            background: #6c757d;
+            color: white;
         }}
         
         .avatar-upload {{
@@ -1209,13 +1473,26 @@ def create_app():
             </div>
             <div class="nav">
                 <div class="nav-title">
+                    <span>Избранное</span>
+                    <button class="add-btn" onclick="openAddFavoriteModal()" title="Добавить заметку">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div id="favorites-nav">
+                    <div class="nav-item favorite" onclick="openFavorites()">
+                        <i class="fas fa-star"></i>
+                        <span>Все заметки</span>
+                    </div>
+                </div>
+                
+                <div class="nav-title">
                     <span>Каналы</span>
                     <button class="add-btn" onclick="openCreateChannelModal()">
                         <i class="fas fa-plus"></i>
                     </button>
                 </div>
                 <div id="channels">
-                    <div class="nav-item active" onclick="openRoom('channel_general', 'channel', 'General')">
+                    <div class="nav-item" onclick="openRoom('channel_general', 'channel', 'General')">
                         <i class="fas fa-hashtag"></i>
                         <span>General</span>
                     </div>
@@ -1239,7 +1516,7 @@ def create_app():
         <!-- Область чата -->
         <div class="chat-area">
             <div class="chat-header">
-                <span id="chat-title"># General</span>
+                <span id="chat-title">Избранное</span>
                 <div class="channel-actions" id="channel-actions" style="display: none;">
                     <button class="channel-btn" onclick="openChannelSettings()">
                         <i class="fas fa-cog"></i>
@@ -1249,13 +1526,26 @@ def create_app():
                     </button>
                 </div>
             </div>
-            <div class="messages" id="messages"></div>
-            <div class="input-area">
+            
+            <div class="categories-filter" id="categories-filter" style="display: none;">
+                <button class="category-filter-btn active" onclick="filterFavorites('all')">Все</button>
+                <!-- Категории будут добавлены динамически -->
+            </div>
+            
+            <div class="messages" id="messages">
+                <!-- Для избранного показываем сетку заметок -->
+                <div id="favorites-grid" class="favorites-grid"></div>
+                
+                <!-- Для чата показываем сообщения -->
+                <div id="chat-messages" style="display: none;"></div>
+            </div>
+            
+            <div class="input-area" id="input-area" style="display: none;">
                 <div class="input-row">
                     <button onclick="document.getElementById('file-input').click()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text);">
                         <i class="fas fa-paperclip"></i>
                     </button>
-                    <input type="file" id="file-input" accept="image/*,video/*" style="display:none" onchange="handleFileSelect(this)">
+                    <input type="file" id="file-input" accept="image/*,video/*,text/*,.pdf,.doc,.docx" style="display:none" onchange="handleFileSelect(this)">
                     <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1" onkeydown="handleKeydown(event)"></textarea>
                     <button class="send-btn" onclick="sendMessage()">
                         <i class="fas fa-paper-plane"></i>
@@ -1275,7 +1565,7 @@ def create_app():
                 <button class="theme-btn" onclick="setTheme('dark')">🌙 Темная</button>
                 <button class="theme-btn" onclick="setTheme('auto')">⚙️ Авто</button>
             </div>
-            <button class="btn btn-primary" onclick="closeThemeModal()">Закрыть</button>
+            <button class="btn btn-secondary" onclick="closeThemeModal()">Закрыть</button>
         </div>
     </div>
 
@@ -1287,10 +1577,10 @@ def create_app():
                 <input type="file" id="avatar-input" accept="image/*" style="display:none" onchange="previewAvatar(this)">
                 <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
                     <button class="btn btn-primary" onclick="uploadAvatar()">Загрузить</button>
-                    <button class="btn" onclick="removeAvatar()">Удалить</button>
+                    <button class="btn btn-secondary" onclick="removeAvatar()">Удалить</button>
                 </div>
             </div>
-            <button class="btn" onclick="closeAvatarModal()">Закрыть</button>
+            <button class="btn btn-secondary" onclick="closeAvatarModal()">Закрыть</button>
         </div>
     </div>
 
@@ -1305,7 +1595,7 @@ def create_app():
             </div>
             <div style="display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="createChannel()">Создать</button>
-                <button class="btn" onclick="closeCreateChannelModal()">Отмена</button>
+                <button class="btn btn-secondary" onclick="closeCreateChannelModal()">Отмена</button>
             </div>
         </div>
     </div>
@@ -1318,7 +1608,30 @@ def create_app():
             </div>
             <div style="display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="renameChannel()">Переименовать</button>
-                <button class="btn" onclick="closeRenameModal()">Отмена</button>
+                <button class="btn btn-secondary" onclick="closeRenameModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="add-favorite-modal">
+        <div class="modal-content">
+            <h3>Добавить в избранное</h3>
+            <div class="form-group">
+                <label class="form-label">Текст заметки</label>
+                <textarea class="form-control" id="favorite-content" placeholder="Введите текст заметки..." rows="4"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Категория</label>
+                <input type="text" class="form-control" id="favorite-category" placeholder="Например: идеи, ссылки, работа" value="general">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Файл (опционально)</label>
+                <input type="file" class="form-control" id="favorite-file" accept="image/*,video/*,text/*,.pdf,.doc,.docx">
+                <div id="favorite-file-preview" style="margin-top: 10px;"></div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="saveFavorite()">Сохранить</button>
+                <button class="btn btn-secondary" onclick="closeAddFavoriteModal()">Отмена</button>
             </div>
         </div>
     </div>
@@ -1327,9 +1640,10 @@ def create_app():
     <script>
         const socket = io();
         const user = "{username}";
-        let room = "channel_general";
-        let roomType = "channel";
-        let currentChannel = "general";
+        let room = "favorites";
+        let roomType = "favorites";
+        let currentChannel = "";
+        let currentCategory = "all";
 
         // Инициализация при загрузке
         window.onload = function() {{
@@ -1337,12 +1651,11 @@ def create_app():
             loadUserChannels();
             loadUsers();
             loadPersonalChats();
+            loadFavoritesCategories();
+            loadFavorites();
             
-            // Подключаемся к общему каналу
-            socket.emit('join', {{ room: 'channel_general' }});
-            
-            // Загружаем историю сообщений
-            loadMessages('channel_general');
+            // Открываем избранное по умолчанию
+            openFavorites();
         }};
 
         // Загрузка аватарки пользователя
@@ -1364,12 +1677,293 @@ def create_app():
                 }});
         }}
 
+        // Загрузка категорий избранного
+        function loadFavoritesCategories() {{
+            fetch('/get_favorite_categories')
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        const filterContainer = document.getElementById('categories-filter');
+                        filterContainer.innerHTML = '';
+                        
+                        // Добавляем кнопку "Все"
+                        const allBtn = document.createElement('button');
+                        allBtn.className = 'category-filter-btn active';
+                        allBtn.textContent = 'Все';
+                        allBtn.onclick = () => filterFavorites('all');
+                        filterContainer.appendChild(allBtn);
+                        
+                        // Добавляем категории
+                        data.categories.forEach(category => {{
+                            const btn = document.createElement('button');
+                            btn.className = 'category-filter-btn';
+                            btn.textContent = category || 'Без категории';
+                            btn.onclick = () => filterFavorites(category);
+                            filterContainer.appendChild(btn);
+                        }});
+                    }}
+                }});
+        }}
+
+        // Загрузка избранного
+        function loadFavorites(category = null) {{
+            let url = '/get_favorites';
+            if (category && category !== 'all') {{
+                url += `?category=${{encodeURIComponent(category)}}`;
+            }}
+            
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        const grid = document.getElementById('favorites-grid');
+                        
+                        if (data.favorites.length === 0) {{
+                            grid.innerHTML = `
+                                <div class="empty-favorites">
+                                    <i class="fas fa-star"></i>
+                                    <h3>Пока ничего нет</h3>
+                                    <p>Добавьте свои заметки, фото или видео</p>
+                                    <button class="btn btn-primary" onclick="openAddFavoriteModal()" style="margin-top: 15px;">
+                                        <i class="fas fa-plus"></i> Добавить заметку
+                                    </button>
+                                </div>
+                            `;
+                        }} else {{
+                            grid.innerHTML = '';
+                            data.favorites.forEach(favorite => {{
+                                const item = createFavoriteItem(favorite);
+                                grid.appendChild(item);
+                            }});
+                        }}
+                    }}
+                }});
+        }}
+
+        // Создание элемента избранного
+        function createFavoriteItem(favorite) {{
+            const item = document.createElement('div');
+            item.className = `favorite-item ${{favorite.is_pinned ? 'pinned' : ''}}`;
+            item.id = `favorite-${{favorite.id}}`;
+            
+            let contentHTML = '';
+            
+            if (favorite.content) {{
+                contentHTML += `<div class="favorite-content">${{favorite.content}}</div>`;
+            }}
+            
+            if (favorite.file_path) {{
+                if (favorite.file_type === 'image' || favorite.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {{
+                    contentHTML += `
+                        <div class="favorite-file">
+                            <img src="${{favorite.file_path}}" alt="${{favorite.file_name}}" onclick="openFilePreview('${{favorite.file_path}}')">
+                        </div>
+                    `;
+                }} else if (favorite.file_type === 'video' || favorite.file_name.match(/\.(mp4|webm|mov)$/i)) {{
+                    contentHTML += `
+                        <div class="favorite-file">
+                            <video src="${{favorite.file_path}}" controls></video>
+                        </div>
+                    `;
+                }} else {{
+                    contentHTML += `
+                        <div class="favorite-content">
+                            <i class="fas fa-file"></i> ${{favorite.file_name}}
+                            <br>
+                            <a href="${{favorite.file_path}}" target="_blank" style="font-size: 0.8rem;">Скачать</a>
+                        </div>
+                    `;
+                }}
+            }}
+            
+            const category = favorite.category && favorite.category !== 'general' ? 
+                `<span class="category-badge">${{favorite.category}}</span>` : '';
+            
+            const date = new Date(favorite.created_at).toLocaleDateString('ru-RU', {{
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            }});
+            
+            item.innerHTML = `
+                <div class="favorite-actions">
+                    <button class="favorite-action-btn" onclick="togglePinFavorite(${{favorite.id}})" title="${{favorite.is_pinned ? 'Открепить' : 'Закрепить'}}">
+                        <i class="fas fa-thumbtack"></i>
+                    </button>
+                    <button class="favorite-action-btn" onclick="deleteFavorite(${{favorite.id}})" title="Удалить">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                ${{contentHTML}}
+                <div class="favorite-meta">
+                    <span>${{date}}</span>
+                    ${{category}}
+                </div>
+            `;
+            
+            return item;
+        }}
+
+        // Фильтрация избранного по категории
+        function filterFavorites(category) {{
+            currentCategory = category;
+            
+            // Обновляем активную кнопку
+            document.querySelectorAll('.category-filter-btn').forEach(btn => {{
+                btn.classList.remove('active');
+            }});
+            event?.currentTarget.classList.add('active');
+            
+            loadFavorites(category === 'all' ? null : category);
+        }}
+
+        // Функции для работы с избранным
+        function openAddFavoriteModal() {{
+            document.getElementById('add-favorite-modal').style.display = 'flex';
+            document.getElementById('favorite-file').addEventListener('change', function(e) {{
+                const file = e.target.files[0];
+                const preview = document.getElementById('favorite-file-preview');
+                
+                if (file) {{
+                    if (file.type.startsWith('image/')) {{
+                        const reader = new FileReader();
+                        reader.onload = (e) => {{
+                            preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 100%; border-radius: 8px;">`;
+                        }};
+                        reader.readAsDataURL(file);
+                    }} else if (file.type.startsWith('video/')) {{
+                        const reader = new FileReader();
+                        reader.onload = (e) => {{
+                            preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
+                        }};
+                        reader.readAsDataURL(file);
+                    }} else {{
+                        preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                            <i class="fas fa-file"></i> ${{file.name}}
+                        </div>`;
+                    }}
+                }}
+            }});
+        }}
+
+        function closeAddFavoriteModal() {{
+            document.getElementById('add-favorite-modal').style.display = 'none';
+            document.getElementById('favorite-content').value = '';
+            document.getElementById('favorite-category').value = 'general';
+            document.getElementById('favorite-file').value = '';
+            document.getElementById('favorite-file-preview').innerHTML = '';
+        }}
+
+        function saveFavorite() {{
+            const content = document.getElementById('favorite-content').value.trim();
+            const category = document.getElementById('favorite-category').value.trim() || 'general';
+            const fileInput = document.getElementById('favorite-file');
+            const file = fileInput.files[0];
+            
+            if (!content && !file) {{
+                alert('Добавьте текст или файл');
+                return;
+            }}
+            
+            const formData = new FormData();
+            formData.append('content', content);
+            formData.append('category', category);
+            
+            if (file) {{
+                formData.append('file', file);
+            }}
+            
+            fetch('/add_to_favorites', {{
+                method: 'POST',
+                body: formData
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeAddFavoriteModal();
+                    loadFavoritesCategories();
+                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
+                    alert('Добавлено в избранное!');
+                }} else {{
+                    alert(data.error || 'Ошибка при сохранении');
+                }}
+            }});
+        }}
+
+        function deleteFavorite(favoriteId) {{
+            if (!confirm('Удалить эту заметку?')) return;
+            
+            fetch(`/delete_favorite/${{favoriteId}}`, {{
+                method: 'DELETE'
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    document.getElementById(`favorite-${{favoriteId}}`).remove();
+                    
+                    // Если удалили последний элемент, показываем пустой экран
+                    const grid = document.getElementById('favorites-grid');
+                    if (grid.children.length === 0) {{
+                        loadFavorites(currentCategory === 'all' ? null : currentCategory);
+                    }}
+                }} else {{
+                    alert('Ошибка при удалении');
+                }}
+            }});
+        }}
+
+        function togglePinFavorite(favoriteId) {{
+            fetch(`/toggle_pin_favorite/${{favoriteId}}`, {{
+                method: 'POST'
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    const item = document.getElementById(`favorite-${{favoriteId}}`);
+                    if (data.pinned) {{
+                        item.classList.add('pinned');
+                    }} else {{
+                        item.classList.remove('pinned');
+                    }}
+                    
+                    // Перезагружаем чтобы обновить порядок
+                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
+                }}
+            }});
+        }}
+
+        function openFilePreview(filePath) {{
+            const win = window.open(filePath, '_blank');
+            if (win) {{
+                win.focus();
+            }}
+        }}
+
+        // Открытие избранного
+        function openFavorites() {{
+            room = "favorites";
+            roomType = "favorites";
+            
+            document.getElementById('chat-title').textContent = 'Избранное';
+            document.getElementById('categories-filter').style.display = 'flex';
+            document.getElementById('favorites-grid').style.display = 'grid';
+            document.getElementById('chat-messages').style.display = 'none';
+            document.getElementById('input-area').style.display = 'none';
+            document.getElementById('channel-actions').style.display = 'none';
+            
+            // Обновляем активные элементы в навигации
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            loadFavorites(currentCategory === 'all' ? null : currentCategory);
+        }}
+
         // Загрузка сообщений комнаты
         function loadMessages(roomName) {{
             fetch('/get_messages/' + roomName)
                 .then(r => r.json())
                 .then(messages => {{
-                    const messagesContainer = document.getElementById('messages');
+                    const messagesContainer = document.getElementById('chat-messages');
                     messagesContainer.innerHTML = '';
                     
                     if (messages && Array.isArray(messages)) {{
@@ -1385,7 +1979,7 @@ def create_app():
 
         // Добавление сообщения в чат
         function addMessageToChat(data) {{
-            const messagesContainer = document.getElementById('messages');
+            const messagesContainer = document.getElementById('chat-messages');
             const msg = document.createElement('div');
             msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
             
@@ -1694,19 +2288,23 @@ def create_app():
                 }});
         }}
 
-        // Открытие комнаты
+        // Открытие комнаты (чат или канал)
         function openRoom(r, t, title) {{
             room = r;
             roomType = t;
             currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
             
             document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
+            document.getElementById('categories-filter').style.display = 'none';
+            document.getElementById('favorites-grid').style.display = 'none';
+            document.getElementById('chat-messages').style.display = 'block';
+            document.getElementById('input-area').style.display = 'flex';
             
             // Обновляем активные элементы в навигации
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
             
-            document.getElementById('messages').innerHTML = '';
+            document.getElementById('chat-messages').innerHTML = '';
             
             // Показываем/скрываем кнопки управления каналом
             const channelActions = document.getElementById('channel-actions');
@@ -1774,8 +2372,12 @@ def create_app():
                     const preview = document.getElementById('file-preview');
                     if (file.type.startsWith('image/')) {{
                         preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 200px; border-radius: 8px;">`;
-                    }} else {{
+                    }} else if (file.type.startsWith('video/')) {{
                         preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 200px; border-radius: 8px;"></video>`;
+                    }} else {{
+                        preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                            <i class="fas fa-file"></i> ${{file.name}}
+                        </div>`;
                     }}
                 }};
                 reader.readAsDataURL(file);
