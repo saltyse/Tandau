@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger (полная рабочая версия)
+# web_messenger.py - Tandau Messenger (исправленная версия с работающей регистрацией/авторизацией)
 from flask import Flask, request, jsonify, session, redirect, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -133,7 +133,19 @@ def create_app():
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             c.execute('SELECT * FROM users WHERE username = ?', (username,))
-            return c.fetchone()
+            row = c.fetchone()
+            if row:
+                return {
+                    'id': row[0],
+                    'username': row[1],
+                    'password_hash': row[2],
+                    'created_at': row[3],
+                    'is_online': row[4],
+                    'avatar_color': row[5],
+                    'avatar_path': row[6],
+                    'theme': row[7]
+                }
+            return None
 
     def get_all_users():
         with sqlite3.connect('messenger.db') as conn:
@@ -145,26 +157,41 @@ def create_app():
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             try:
+                # Проверяем, существует ли пользователь
+                c.execute('SELECT id FROM users WHERE username = ?', (username,))
+                if c.fetchone():
+                    return False, "Пользователь уже существует"
+                
+                # Создаем пользователя
                 c.execute('INSERT INTO users (username, password_hash, avatar_color) VALUES (?, ?, ?)',
                           (username, generate_password_hash(password), random.choice(['#6366F1','#8B5CF6','#10B981','#F59E0B','#EF4444','#3B82F6'])))
+                
+                # Добавляем пользователя в общий канал
                 c.execute('INSERT OR IGNORE INTO channel_members (channel_id, username) SELECT id, ? FROM channels WHERE name="general"', (username,))
-                conn.commit(); return True
-            except: return False
+                conn.commit()
+                return True, "Пользователь создан успешно"
+            except Exception as e:
+                return False, f"Ошибка при создании пользователя: {str(e)}"
 
     def verify_user(username, password):
         user = get_user(username)
-        return user if user and check_password_hash(user[2], password) else None
+        if user and check_password_hash(user['password_hash'], password):
+            return user
+        return None
 
     def update_online(username, status):
         with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor(); c.execute('UPDATE users SET is_online = ? WHERE username = ?', (status, username)); conn.commit()
+            c = conn.cursor()
+            c.execute('UPDATE users SET is_online = ? WHERE username = ?', (status, username))
+            conn.commit()
 
     def save_message(user, msg, room, recipient=None, msg_type='text', file_path=None, file_name=None):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             c.execute('INSERT INTO messages (username, message, room, recipient, message_type, file_path, file_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
                       (user, msg, room, recipient, msg_type, file_path, file_name))
-            conn.commit(); return c.lastrowid
+            conn.commit()
+            return c.lastrowid
 
     def get_messages_for_room(room):
         with sqlite3.connect('messenger.db') as conn:
@@ -175,14 +202,19 @@ def create_app():
                 WHERE room = ? 
                 ORDER BY timestamp ASC
             ''', (room,))
-            return [{
-                'user': row[0],
-                'message': row[1],
-                'type': row[2],
-                'file': row[3],
-                'file_name': row[4],
-                'timestamp': row[5][11:16] if row[5] else ''
-            } for row in c.fetchall()]
+            messages = []
+            for row in c.fetchall():
+                user_info = get_user(row[0])
+                messages.append({
+                    'user': row[0],
+                    'message': row[1],
+                    'type': row[2],
+                    'file': row[3],
+                    'file_name': row[4],
+                    'timestamp': row[5][11:16] if row[5] else '',
+                    'color': user_info['avatar_color'] if user_info else '#6366F1'
+                })
+            return messages
 
     def get_user_personal_chats(username):
         with sqlite3.connect('messenger.db') as conn:
@@ -301,13 +333,13 @@ def create_app():
     @app.route('/upload_avatar', methods=['POST'])
     def upload_avatar_handler():
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
+            return jsonify({'success': False, 'error': 'Не авторизован'})
         
         if 'avatar' in request.files:
             file = request.files['avatar']
             path, filename = save_uploaded_file(file, app.config['AVATAR_FOLDER'])
         else:
-            return jsonify({'error': 'no file'})
+            return jsonify({'success': False, 'error': 'Файл не найден'})
         
         if path:
             with sqlite3.connect('messenger.db') as conn:
@@ -315,12 +347,12 @@ def create_app():
                 c.execute('UPDATE users SET avatar_path = ? WHERE username = ?', (path, session['username']))
                 conn.commit()
             return jsonify({'success': True, 'path': path})
-        return jsonify({'error': 'invalid'})
+        return jsonify({'success': False, 'error': 'Неверный формат файла'})
 
     @app.route('/delete_avatar', methods=['POST'])
     def delete_avatar_handler():
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
+            return jsonify({'success': False, 'error': 'Не авторизован'})
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             c.execute('UPDATE users SET avatar_path = NULL WHERE username = ?', (session['username'],))
@@ -330,10 +362,10 @@ def create_app():
     @app.route('/set_theme', methods=['POST'])
     def set_theme_handler():
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
+            return jsonify({'success': False, 'error': 'Не авторизован'})
         theme = request.json.get('theme', 'light')
         if theme not in ['light', 'dark', 'auto']: 
-            return jsonify({'error': 'invalid'})
+            return jsonify({'success': False, 'error': 'Неверная тема'})
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             c.execute('UPDATE users SET theme = ? WHERE username = ?', (theme, session['username']))
@@ -343,7 +375,7 @@ def create_app():
     @app.route('/create_channel', methods=['POST'])
     def create_channel_handler():
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
+            return jsonify({'success': False, 'error': 'Не авторизован'})
         
         name = request.json.get('name', '').strip()
         display_name = request.json.get('display_name', '').strip()
@@ -351,7 +383,7 @@ def create_app():
         is_private = request.json.get('is_private', False)
         
         if not name or len(name) < 2:
-            return jsonify({'error': 'Название канала должно быть не менее 2 символов'})
+            return jsonify({'success': False, 'error': 'Название канала должно быть не менее 2 символов'})
         
         if not display_name:
             display_name = name.capitalize()
@@ -359,61 +391,62 @@ def create_app():
         channel_id = create_channel(name, display_name, description, session['username'], is_private)
         if channel_id:
             return jsonify({'success': True, 'channel_name': name, 'display_name': display_name})
-        return jsonify({'error': 'Канал с таким названием уже существует'})
+        return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
 
     @app.route('/rename_channel', methods=['POST'])
     def rename_channel_handler():
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
+            return jsonify({'success': False, 'error': 'Не авторизован'})
         
         channel_name = request.json.get('channel_name')
         new_display_name = request.json.get('new_display_name', '').strip()
         
         if not new_display_name:
-            return jsonify({'error': 'Новое название не может быть пустым'})
+            return jsonify({'success': False, 'error': 'Новое название не может быть пустым'})
         
         if rename_channel(channel_name, new_display_name, session['username']):
             return jsonify({'success': True})
-        return jsonify({'error': 'Не удалось переименовать канал или нет прав'})
+        return jsonify({'success': False, 'error': 'Не удалось переименовать канал или нет прав'})
 
     @app.route('/channel_info/<channel_name>')
     def channel_info_handler(channel_name):
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
+            return jsonify({'success': False, 'error': 'Не авторизован'})
         info = get_channel_info(channel_name)
         if info:
             info['is_member'] = is_channel_member(channel_name, session['username'])
             info['members'] = get_channel_members(channel_name)
-            return jsonify(info)
-        return jsonify({'error': 'Канал не найден'})
+            return jsonify({'success': True, 'data': info})
+        return jsonify({'success': False, 'error': 'Канал не найден'})
 
     @app.route('/user_channels')
     def user_channels_handler():
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
-        return jsonify(get_user_channels(session['username']))
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        return jsonify({'success': True, 'channels': get_user_channels(session['username'])})
 
     @app.route('/personal_chats')
     def personal_chats_handler():
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
-        return jsonify(get_user_personal_chats(session['username']))
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        return jsonify({'success': True, 'chats': get_user_personal_chats(session['username'])})
 
     @app.route('/user_info/<username>')
     def user_info_handler(username):
         if 'username' not in session: 
-            return jsonify({'error': 'auth'})
+            return jsonify({'success': False, 'error': 'Не авторизован'})
         
         user = get_user(username)
         if user:
             return jsonify({
-                'username': user[1],
-                'online': user[4],
-                'avatar_color': user[5],
-                'avatar_path': user[6],
-                'theme': user[7]
+                'success': True,
+                'username': user['username'],
+                'online': user['is_online'],
+                'avatar_color': user['avatar_color'],
+                'avatar_path': user['avatar_path'],
+                'theme': user['theme']
             })
-        return jsonify({'error': 'Пользователь не найден'})
+        return jsonify({'success': False, 'error': 'Пользователь не найден'})
 
     # Статические файлы
     @app.route('/static/<path:filename>')
@@ -598,7 +631,7 @@ def create_app():
                 }
 
                 async function login() {
-                    const username = document.getElementById('login-username').value;
+                    const username = document.getElementById('login-username').value.trim();
                     const password = document.getElementById('login-password').value;
                     
                     if (!username || !password) {
@@ -624,11 +657,12 @@ def create_app():
                         }
                     } catch (error) {
                         showAlert('Ошибка соединения');
+                        console.error('Login error:', error);
                     }
                 }
 
                 async function register() {
-                    const username = document.getElementById('register-username').value;
+                    const username = document.getElementById('register-username').value.trim();
                     const password = document.getElementById('register-password').value;
                     const confirm = document.getElementById('register-confirm').value;
                     
@@ -661,12 +695,27 @@ def create_app():
                         
                         if (data.success) {
                             showAlert('Аккаунт создан! Входим...', 'success');
-                            setTimeout(() => window.location.href = '/chat', 1500);
+                            // Автоматически входим после регистрации
+                            setTimeout(async () => {
+                                const loginResponse = await fetch('/login', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                                    body: new URLSearchParams({ username, password })
+                                });
+                                const loginData = await loginResponse.json();
+                                if (loginData.success) {
+                                    window.location.href = '/chat';
+                                } else {
+                                    showAlert('Автоматический вход не удался. Войдите вручную.');
+                                    showTab('login');
+                                }
+                            }, 1500);
                         } else {
                             showAlert(data.error || 'Ошибка регистрации');
                         }
                     } catch (error) {
                         showAlert('Ошибка соединения');
+                        console.error('Register error:', error);
                     }
                 }
 
@@ -684,37 +733,57 @@ def create_app():
 
     @app.route('/login', methods=['POST'])
     def login_handler(): 
-        u, p = request.form.get('username'), request.form.get('password')
+        u = request.form.get('username', '').strip()
+        p = request.form.get('password', '')
+        
+        if not u or not p:
+            return jsonify({'success': False, 'error': 'Заполните все поля'})
+        
         user = verify_user(u, p)
         if user: 
             session['username'] = u
             update_online(u, True)
             return jsonify({'success': True})
-        return jsonify({'error': 'Неверные данные'})
+        return jsonify({'success': False, 'error': 'Неверный логин или пароль'})
 
     @app.route('/register', methods=['POST'])
     def register_handler():
-        u, p = request.form.get('username'), request.form.get('password')
-        if not u or not p or len(u)<3 or len(p)<4: 
-            return jsonify({'error': 'Некорректные данные'})
-        if create_user(u, p): 
+        u = request.form.get('username', '').strip()
+        p = request.form.get('password', '')
+        
+        if not u or not p:
+            return jsonify({'success': False, 'error': 'Заполните все поля'})
+        
+        if len(u) < 3:
+            return jsonify({'success': False, 'error': 'Логин должен быть не менее 3 символов'})
+        
+        if len(p) < 4:
+            return jsonify({'success': False, 'error': 'Пароль должен быть не менее 4 символов'})
+        
+        success, message = create_user(u, p)
+        if success:
             return jsonify({'success': True})
-        return jsonify({'error': 'Пользователь существует'})
+        return jsonify({'success': False, 'error': message})
 
     @app.route('/logout')
     def logout_handler():
         if 'username' in session: 
             update_online(session['username'], False)
-            session.pop('username')
+            session.pop('username', None)
         return redirect('/')
 
     @app.route('/chat')
     def chat_handler():
         if 'username' not in session: 
             return redirect('/')
-        user = get_user(session['username'])
-        theme = user[7] if user else 'light'
+        
         username = session['username']
+        user = get_user(username)
+        if not user:
+            session.pop('username', None)
+            return redirect('/')
+        
+        theme = user['theme']
         
         return f'''
 <!DOCTYPE html>
@@ -722,7 +791,7 @@ def create_app():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tandau Chat</title>
+    <title>Tandau Chat - {username}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         :root {{
@@ -1101,6 +1170,24 @@ def create_app():
             cursor: pointer;
             font-weight: 600;
         }}
+        
+        /* Скроллбар */
+        ::-webkit-scrollbar {{
+            width: 8px;
+        }}
+        
+        ::-webkit-scrollbar-track {{
+            background: transparent;
+        }}
+        
+        ::-webkit-scrollbar-thumb {{
+            background: #ccc;
+            border-radius: 4px;
+        }}
+        
+        [data-theme="dark"] ::-webkit-scrollbar-thumb {{
+            background: #555;
+        }}
     </style>
 </head>
 <body>
@@ -1211,7 +1298,7 @@ def create_app():
         <div class="modal-content">
             <h3>Создать канал</h3>
             <div class="form-group">
-                <input type="text" class="form-control" id="channel-name" placeholder="Идентификатор канала">
+                <input type="text" class="form-control" id="channel-name" placeholder="Идентификатор канала (латинские буквы, цифры, _)">
                 <input type="text" class="form-control" id="channel-display-name" placeholder="Отображаемое название">
                 <input type="text" class="form-control" id="channel-description" placeholder="Описание">
                 <label><input type="checkbox" id="channel-private"> Приватный канал</label>
@@ -1244,34 +1331,56 @@ def create_app():
         let roomType = "channel";
         let currentChannel = "general";
 
+        // Инициализация при загрузке
+        window.onload = function() {{
+            loadUserAvatar();
+            loadUserChannels();
+            loadUsers();
+            loadPersonalChats();
+            
+            // Подключаемся к общему каналу
+            socket.emit('join', {{ room: 'channel_general' }});
+            
+            // Загружаем историю сообщений
+            loadMessages('channel_general');
+        }};
+
         // Загрузка аватарки пользователя
         function loadUserAvatar() {{
             fetch('/user_info/' + user)
                 .then(r => r.json())
                 .then(userInfo => {{
-                    const avatar = document.getElementById('user-avatar');
-                    if (userInfo.avatar_path) {{
-                        avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                        avatar.textContent = '';
-                    }} else {{
-                        avatar.style.backgroundImage = 'none';
-                        avatar.style.backgroundColor = userInfo.avatar_color;
-                        avatar.textContent = user.slice(0, 2).toUpperCase();
+                    if (userInfo.success) {{
+                        const avatar = document.getElementById('user-avatar');
+                        if (userInfo.avatar_path) {{
+                            avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                            avatar.textContent = '';
+                        }} else {{
+                            avatar.style.backgroundImage = 'none';
+                            avatar.style.backgroundColor = userInfo.avatar_color;
+                            avatar.textContent = user.slice(0, 2).toUpperCase();
+                        }}
                     }}
                 }});
         }}
 
-        // Загрузка аватарки другого пользователя
-        function getUserAvatar(username, color, callback) {{
-            fetch('/user_info/' + username)
+        // Загрузка сообщений комнаты
+        function loadMessages(roomName) {{
+            fetch('/get_messages/' + roomName)
                 .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.avatar_path) {{
-                        callback(userInfo.avatar_path);
-                    }} else {{
-                        callback(null, color);
+                .then(messages => {{
+                    const messagesContainer = document.getElementById('messages');
+                    messagesContainer.innerHTML = '';
+                    
+                    if (messages && Array.isArray(messages)) {{
+                        messages.forEach(msg => {{
+                            addMessageToChat(msg);
+                        }});
                     }}
-                }});
+                    
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }})
+                .catch(error => console.error('Error loading messages:', error));
         }}
 
         // Добавление сообщения в чат
@@ -1280,35 +1389,33 @@ def create_app():
             const msg = document.createElement('div');
             msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
             
-            getUserAvatar(data.user, data.color || '#6366F1', (avatarPath, color) => {{
-                let avatarHtml = '';
-                if (avatarPath) {{
-                    avatarHtml = `<div class="msg-avatar" style="background-image: url(${{avatarPath}})"></div>`;
+            let avatarHtml = '';
+            if (data.color) {{
+                avatarHtml = `<div class="msg-avatar" style="background-color: ${{data.color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+            }} else {{
+                avatarHtml = `<div class="msg-avatar">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+            }}
+            
+            let content = `
+                <div class="msg-header">
+                    ${{avatarHtml}}
+                    <div class="msg-sender">${{data.user}}</div>
+                </div>
+                ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
+            `;
+            
+            if (data.file) {{
+                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
+                    content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
                 }} else {{
-                    avatarHtml = `<div class="msg-avatar" style="background-color: ${{color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+                    content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
                 }}
-                
-                let content = `
-                    <div class="msg-header">
-                        ${{avatarHtml}}
-                        <div class="msg-sender">${{data.user}}</div>
-                    </div>
-                    ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
-                `;
-                
-                if (data.file) {{
-                    if (data.fileType === 'image') {{
-                        content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
-                    }} else {{
-                        content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
-                    }}
-                }}
-                
-                content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
-                msg.innerHTML = content;
-                messagesContainer.appendChild(msg);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }});
+            }}
+            
+            content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
+            msg.innerHTML = content;
+            messagesContainer.appendChild(msg);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }}
 
         // Функции для работы с аватарками
@@ -1318,13 +1425,15 @@ def create_app():
             fetch('/user_info/' + user)
                 .then(r => r.json())
                 .then(userInfo => {{
-                    if (userInfo.avatar_path) {{
-                        preview.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                        preview.textContent = '';
-                    }} else {{
-                        preview.style.backgroundImage = 'none';
-                        preview.style.backgroundColor = userInfo.avatar_color;
-                        preview.textContent = user.slice(0, 2).toUpperCase();
+                    if (userInfo.success) {{
+                        if (userInfo.avatar_path) {{
+                            preview.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                            preview.textContent = '';
+                        }} else {{
+                            preview.style.backgroundImage = 'none';
+                            preview.style.backgroundColor = userInfo.avatar_color;
+                            preview.textContent = user.slice(0, 2).toUpperCase();
+                        }}
                     }}
                 }});
         }}
@@ -1365,7 +1474,7 @@ def create_app():
                         closeAvatarModal();
                         alert('Аватарка обновлена!');
                     }} else {{
-                        alert('Ошибка загрузки аватарки');
+                        alert(data.error || 'Ошибка загрузки аватарки');
                     }}
                 }});
             }} else {{
@@ -1427,13 +1536,19 @@ def create_app():
         }}
 
         function createChannel() {{
-            const name = document.getElementById('channel-name').value;
-            const displayName = document.getElementById('channel-display-name').value;
-            const description = document.getElementById('channel-description').value;
+            const name = document.getElementById('channel-name').value.trim();
+            const displayName = document.getElementById('channel-display-name').value.trim();
+            const description = document.getElementById('channel-description').value.trim();
             const isPrivate = document.getElementById('channel-private').checked;
             
             if (!name) {{
                 alert('Введите идентификатор канала');
+                return;
+            }}
+            
+            // Проверка имени канала
+            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
+                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
                 return;
             }}
             
@@ -1454,13 +1569,13 @@ def create_app():
                     loadUserChannels();
                     alert('Канал создан!');
                 }} else {{
-                    alert(data.error);
+                    alert(data.error || 'Ошибка при создании канала');
                 }}
             }});
         }}
 
         function renameChannel() {{
-            const newName = document.getElementById('channel-rename-input').value;
+            const newName = document.getElementById('channel-rename-input').value.trim();
             if (!newName) {{
                 alert('Введите новое название');
                 return;
@@ -1482,7 +1597,7 @@ def create_app():
                     loadUserChannels();
                     alert('Канал переименован!');
                 }} else {{
-                    alert(data.error);
+                    alert(data.error || 'Ошибка при переименовании канала');
                 }}
             }});
         }}
@@ -1491,20 +1606,91 @@ def create_app():
         function loadUserChannels() {{
             fetch('/user_channels')
                 .then(r => r.json())
-                .then(channels => {{
-                    const channelsContainer = document.getElementById('channels');
-                    channelsContainer.innerHTML = '';
-                    
-                    channels.forEach(channel => {{
-                        const el = document.createElement('div');
-                        el.className = 'nav-item';
-                        el.innerHTML = `
+                .then(data => {{
+                    if (data.success) {{
+                        const channelsContainer = document.getElementById('channels');
+                        channelsContainer.innerHTML = '';
+                        
+                        // Добавляем общий канал
+                        const generalEl = document.createElement('div');
+                        generalEl.className = 'nav-item' + (room === 'channel_general' ? ' active' : '');
+                        generalEl.innerHTML = `
                             <i class="fas fa-hashtag"></i>
-                            <span>${{channel.display_name}}</span>
+                            <span>General</span>
                         `;
-                        el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
-                        channelsContainer.appendChild(el);
-                    }});
+                        generalEl.onclick = () => openRoom('channel_general', 'channel', 'General');
+                        channelsContainer.appendChild(generalEl);
+                        
+                        // Добавляем пользовательские каналы
+                        data.channels.forEach(channel => {{
+                            if (channel.name !== 'general') {{
+                                const el = document.createElement('div');
+                                el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
+                                el.innerHTML = `
+                                    <i class="fas fa-hashtag"></i>
+                                    <span>${{channel.display_name}}</span>
+                                `;
+                                el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
+                                channelsContainer.appendChild(el);
+                            }}
+                        }});
+                    }}
+                }});
+        }}
+
+        // Загрузка пользователей
+        function loadUsers() {{
+            fetch('/users')
+                .then(r => r.json())
+                .then(users => {{
+                    if (users && Array.isArray(users)) {{
+                        const usersContainer = document.getElementById('users');
+                        usersContainer.innerHTML = '';
+                        
+                        users.forEach(u => {{
+                            if (u.username !== user) {{
+                                const el = document.createElement('div');
+                                el.className = 'nav-item';
+                                el.innerHTML = `
+                                    <i class="fas fa-user${{u.online ? '-check' : ''}}"></i>
+                                    <span>${{u.username}}</span>
+                                `;
+                                el.onclick = () => openRoom(
+                                    'private_' + [user, u.username].sort().join('_'),
+                                    'private',
+                                    u.username
+                                );
+                                usersContainer.appendChild(el);
+                            }}
+                        }});
+                    }}
+                }});
+        }}
+
+        // Загрузка личных чатов
+        function loadPersonalChats() {{
+            fetch('/personal_chats')
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        const pc = document.getElementById('personal-chats');
+                        pc.innerHTML = '';
+                        
+                        data.chats.forEach(chatUser => {{
+                            const el = document.createElement('div');
+                            el.className = 'nav-item';
+                            el.innerHTML = `
+                                <i class="fas fa-user"></i>
+                                <span>${{chatUser}}</span>
+                            `;
+                            el.onclick = () => openRoom(
+                                'private_' + [user, chatUser].sort().join('_'),
+                                'private',
+                                chatUser
+                            );
+                            pc.appendChild(el);
+                        }});
+                    }}
                 }});
         }}
 
@@ -1514,7 +1700,9 @@ def create_app():
             roomType = t;
             currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
             
-            document.getElementById('chat-title').textContent = '# ' + title;
+            document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
+            
+            // Обновляем активные элементы в навигации
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
             
@@ -1529,14 +1717,9 @@ def create_app():
             }}
             
             // Загружаем историю
-            fetch('/get_messages/' + r)
-                .then(r => r.json())
-                .then(messages => {{
-                    messages.forEach(msg => {{
-                        addMessageToChat(msg);
-                    }});
-                }});
+            loadMessages(r);
             
+            // Присоединяемся к комнате через сокет
             socket.emit('join', {{ room: r }});
         }}
 
@@ -1605,60 +1788,6 @@ def create_app():
                 addMessageToChat(data);
             }}
         }});
-
-        // Инициализация
-        loadUserAvatar();
-        loadUserChannels();
-        
-        // Загрузка пользователей
-        fetch('/users')
-            .then(r => r.json())
-            .then(users => {{
-                const usersContainer = document.getElementById('users');
-                usersContainer.innerHTML = '';
-                
-                users.forEach(u => {{
-                    if (u.username !== user) {{
-                        const el = document.createElement('div');
-                        el.className = 'nav-item';
-                        el.innerHTML = `
-                            <i class="fas fa-user${{u.online ? '-check' : ''}}"></i>
-                            <span>${{u.username}}</span>
-                        `;
-                        el.onclick = () => openRoom(
-                            'private_' + [user, u.username].sort().join('_'),
-                            'private',
-                            u.username
-                        );
-                        usersContainer.appendChild(el);
-                    }}
-                }});
-            }});
-
-        // Загрузка личных чатов
-        fetch('/personal_chats')
-            .then(r => r.json())
-            .then(chats => {{
-                const pc = document.getElementById('personal-chats');
-                pc.innerHTML = '';
-                
-                chats.forEach(chatUser => {{
-                    const el = document.createElement('div');
-                    el.className = 'nav-item';
-                    el.innerHTML = `
-                        <i class="fas fa-user"></i>
-                        <span>${{chatUser}}</span>
-                    `;
-                    el.onclick = () => openRoom(
-                        'private_' + [user, chatUser].sort().join('_'),
-                        'private',
-                        chatUser
-                    );
-                    pc.appendChild(el);
-                }});
-            }});
-
-        socket.emit('join', {{ room: 'channel_general' }});
     </script>
 </body>
 </html>'''
@@ -1671,7 +1800,8 @@ def create_app():
     def get_messages_handler(room):
         if 'username' not in session:
             return jsonify({'error': 'auth'})
-        return jsonify(get_messages_for_room(room))
+        messages = get_messages_for_room(room)
+        return jsonify(messages)
 
     # === SocketIO ===
     @socketio.on('connect')
@@ -1739,7 +1869,7 @@ def create_app():
         
         # Получаем информацию об отправителе для аватарки
         user_info = get_user(session['username'])
-        user_color = user_info[5] if user_info else '#6366F1'
+        user_color = user_info['avatar_color'] if user_info else '#6366F1'
         
         # Отправляем сообщение
         emit('message', {
@@ -1769,4 +1899,4 @@ socketio = app.extensions['socketio']
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
