@@ -1,23 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Документация</title>
-</head>
-<body>
-    <header>
-        <img src="logo.png" alt="" class="logo">
-    </header>
-    <style>
-        .logo {
-            width: 6pc;
-        }
-    </style>
+{% extends "base.html" %}
 
+{% block title %}Безопасный мессенджер{% endblock %}
 
-<body>
-    <h1 class="ps">Пользовательское соглашение и прочая документация</h1>
-</body>
-</body>
-</html>
+{% block content %}
+<section class="hero">
+    <div class="container">
+        <h1>Tandau Messenger</h1>
+        <p>Безопасное и быстрое общение с шифрованием сообщений. 
+           Простой, удобный и полностью бесплатный мессенджер.</p>
+        <div class="hero-buttons">
+            <a href="{{ url_for('download_page') }}" class="btn btn-primary">
+                <i class="fas fa-download"></i> Скачать бесплатно
+            </a>
+            <a href="#features" class="btn btn-secondary">
+                <i class="fas fa-info-circle"></i> Узнать больше
+            </a>
+        </div>
+    </div>
+</section>
+
+<section id="features" class="features">
+    <div class="container">
+        <h2>Почему выбирают Tandau?</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <i class="fas fa-shield-alt"></i>
+                <h3>Безопасность</h3>
+                <p>Сквозное шифрование всех сообщений и файлов</p>
+            </div>
+            <div class="feature-card">
+                <i class="fas fa-bolt"></i>
+                <h3>Скорость</h3>
+                <p>Мгновенная доставка сообщений по всему миру</p>
+            </div>
+            <div class="feature-card">
+                <i class="fas fa-comments"></i>
+                <h3>Общение</h3>
+                <p>Групповые чаты, голосовые и видеозвонки</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
