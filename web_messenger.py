@@ -2011,13 +2011,13 @@ def create_app():
             }}
             
             if (favorite.file_path) {{
-                if (favorite.file_type === 'image' || favorite.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {{
+                if (favorite.file_type === 'image' || favorite.file_name.match(/\\.(jpg|jpeg|png|gif|webp)$/i)) {{
                     contentHTML += `
                         <div class="favorite-file">
                             <img src="${{favorite.file_path}}" alt="${{favorite.file_name}}" onclick="openFilePreview('${{favorite.file_path}}')">
                         </div>
                     `;
-                }} else if (favorite.file_type === 'video' || favorite.file_name.match(/\.(mp4|webm|mov)$/i)) {{
+                }} else if (favorite.file_type === 'video' || favorite.file_name.match(/\\.(mp4|webm|mov)$/i)) {{
                     contentHTML += `
                         <div class="favorite-file">
                             <video src="${{favorite.file_path}}" controls></video>
@@ -2574,7 +2574,7 @@ def create_app():
                             <button class="btn btn-primary" onclick="openRenameModal()">
                                 <i class="fas fa-edit"></i> Переименовать
                             </button>
-                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '${{channelInfo.display_name}')">
+                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '${channelInfo.display_name}')">
                                 <i class="fas fa-arrow-left"></i> Вернуться в чат
                             </button>
                         </div>
