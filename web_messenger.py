@@ -2511,22 +2511,22 @@ def create_app():
                     <div class="settings-section">
                         <div class="settings-title">Информация о канале</div>
                         <div style="margin-bottom: 15px;">
-                            <strong>Название:</strong> ${{channelInfo.display_name || channelInfo.name}}
+                            <strong>Название:</strong> ${channelInfo.display_name || channelInfo.name}
                         </div>
                         <div style="margin-bottom: 15px;">
-                            <strong>Описание:</strong> ${{channelInfo.description || 'Нет описания'}}
+                            <strong>Описание:</strong> ${channelInfo.description || 'Нет описания'}
                         </div>
                         <div style="margin-bottom: 15px;">
-                            <strong>Создатель:</strong> ${{channelInfo.created_by}}
+                            <strong>Создатель:</strong> ${channelInfo.created_by}
                         </div>
                         <div>
-                            <strong>Тип:</strong> ${{channelInfo.is_private ? 'Приватный' : 'Публичный'}}
+                            <strong>Тип:</strong> ${channelInfo.is_private ? 'Приватный' : 'Публичный'}
                         </div>
                     </div>
                     
                     <div class="settings-section">
                         <div class="settings-title" style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Участники (${{channelInfo.members.length}})</span>
+                            <span>Участники (${channelInfo.members.length})</span>
                             <button class="action-btn" onclick="openAddUserModal()" style="padding: 4px 12px;">
                                 <i class="fas fa-user-plus"></i> Добавить
                             </button>
@@ -2540,12 +2540,12 @@ def create_app():
                 settingsHTML += `
                     <div class="member-item">
                         <div class="member-info">
-                            <div class="member-avatar" style="background-color: ${{member.color}};">
-                                ${{member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}}
+                            <div class="member-avatar" style="background-color: ${member.color};">
+                                ${member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}
                             </div>
                             <div class="member-name">
-                                ${{member.username}}
-                                ${{member.is_admin ? '<span class="member-role admin">Админ</span>' : '<span class="member-role">Участник</span>'}}
+                                ${member.username}
+                                ${member.is_admin ? '<span class="member-role admin">Админ</span>' : '<span class="member-role">Участник</span>'}
                             </div>
                         </div>
                 `;
@@ -2554,7 +2554,7 @@ def create_app():
                 if (channelInfo.created_by === user && !isCurrentUser) {{
                     settingsHTML += `
                         <div class="member-actions">
-                            <button class="action-btn remove" onclick="removeUserFromChannel('${{member.username}}')" title="Удалить из канала">
+                            <button class="action-btn remove" onclick="removeUserFromChannel('${member.username}')" title="Удалить из канала">
                                 <i class="fas fa-user-minus"></i>
                             </button>
                         </div>
@@ -2587,9 +2587,9 @@ def create_app():
             // Загружаем аватарки участников
             channelInfo.members.forEach(member => {{
                 if (member.avatar) {{
-                    const avatar = settingsContainer.querySelector(`.member-avatar[style*="${{member.color}}"]`);
+                    const avatar = settingsContainer.querySelector('.member-avatar[style*="${member.color}"]');
                     if (avatar) {{
-                        avatar.style.backgroundImage = `url(${{member.avatar}})`;
+                        avatar.style.backgroundImage = `url(${member.avatar})`;
                         avatar.textContent = '';
                     }}
                 }}
@@ -2622,7 +2622,7 @@ def create_app():
                                 el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
                                 el.innerHTML = `
                                     <i class="fas fa-hashtag"></i>
-                                    <span>${{channel.display_name}}</span>
+                                    <span>${channel.display_name}</span>
                                 `;
                                 el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
                                 channelsContainer.appendChild(el);
@@ -2646,8 +2646,8 @@ def create_app():
                                 const el = document.createElement('div');
                                 el.className = 'nav-item';
                                 el.innerHTML = `
-                                    <i class="fas fa-user${{u.online ? '-check' : ''}}"></i>
-                                    <span>${{u.username}}</span>
+                                    <i class="fas fa-user${u.online ? '-check' : ''}"></i>
+                                    <span>${u.username}</span>
                                 `;
                                 el.onclick = () => openRoom(
                                     'private_' + [user, u.username].sort().join('_'),
@@ -2675,7 +2675,7 @@ def create_app():
                             el.className = 'nav-item';
                             el.innerHTML = `
                                 <i class="fas fa-user"></i>
-                                <span>${{chatUser}}</span>
+                                <span>${chatUser}</span>
                             `;
                             el.onclick = () => openRoom(
                                 'private_' + [user, chatUser].sort().join('_'),
@@ -2745,32 +2745,32 @@ def create_app():
         function addMessageToChat(data) {{
             const messagesContainer = document.getElementById('chat-messages');
             const msg = document.createElement('div');
-            msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
+            msg.className = `msg ${data.user === user ? 'own' : 'other'}`;
             
             let avatarHtml = '';
             if (data.color) {{
-                avatarHtml = `<div class="msg-avatar" style="background-color: ${{data.color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+                avatarHtml = `<div class="msg-avatar" style="background-color: ${data.color}">${data.user.slice(0, 2).toUpperCase()}</div>`;
             }} else {{
-                avatarHtml = `<div class="msg-avatar">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+                avatarHtml = `<div class="msg-avatar">${data.user.slice(0, 2).toUpperCase()}</div>`;
             }}
             
             let content = `
                 <div class="msg-header">
-                    ${{avatarHtml}}
-                    <div class="msg-sender">${{data.user}}</div>
+                    ${avatarHtml}
+                    <div class="msg-sender">${data.user}</div>
                 </div>
-                ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
+                ${data.message ? data.message.replace(/\\n/g, '<br>') : ''}
             `;
             
             if (data.file) {{
                 if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
-                    content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
+                    content += `<div class="file-preview"><video src="${data.file}" controls></video></div>`;
                 }} else {{
-                    content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
+                    content += `<div class="file-preview"><img src="${data.file}"></div>`;
                 }}
             }}
             
-            content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
+            content += `<div class="msg-time">${data.timestamp || ''}</div>`;
             msg.innerHTML = content;
             messagesContainer.appendChild(msg);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -2826,12 +2826,12 @@ def create_app():
                 reader.onload = (e) => {{
                     const preview = document.getElementById('file-preview');
                     if (file.type.startsWith('image/')) {{
-                        preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 200px; border-radius: 8px;">`;
+                        preview.innerHTML = `<img src="${e.target.result}" style="max-width: 200px; border-radius: 8px;">`;
                     }} else if (file.type.startsWith('video/')) {{
-                        preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 200px; border-radius: 8px;"></video>`;
+                        preview.innerHTML = `<video src="${e.target.result}" controls style="max-width: 200px; border-radius: 8px;"></video>`;
                     }} else {{
                         preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                            <i class="fas fa-file"></i> ${{file.name}}
+                            <i class="fas fa-file"></i> ${file.name}
                         </div>`;
                     }}
                 }};
