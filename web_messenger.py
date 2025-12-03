@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger с Избранным
+# web_messenger.py - Tandau Messenger с Избранным и настройками каналов
 from flask import Flask, request, jsonify, session, redirect, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -159,6 +159,12 @@ def create_app():
             c = conn.cursor()
             c.execute('SELECT username, is_online, avatar_color, avatar_path, theme FROM users ORDER BY username')
             return [dict(zip(['username','online','color','avatar','theme'], row)) for row in c.fetchall()]
+
+    def get_users_except(username):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('SELECT username FROM users WHERE username != ? ORDER BY username', (username,))
+            return [row[0] for row in c.fetchall()]
 
     def create_user(username, password):
         with sqlite3.connect('messenger.db') as conn:
@@ -328,6 +334,7 @@ def create_app():
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             try:
+                # Проверяем права администратора
                 c.execute('''
                     SELECT 1 FROM channels c 
                     JOIN channel_members cm ON c.id = cm.channel_id 
@@ -341,6 +348,74 @@ def create_app():
                 return False
             except:
                 return False
+
+    def add_user_to_channel(channel_name, target_user, current_user):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            try:
+                # Проверяем права администратора
+                c.execute('''
+                    SELECT c.id FROM channels c 
+                    JOIN channel_members cm ON c.id = cm.channel_id 
+                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
+                ''', (channel_name, current_user))
+                
+                row = c.fetchone()
+                if not row:
+                    return False, "У вас нет прав администратора"
+                
+                channel_id = row[0]
+                
+                # Проверяем, существует ли пользователь
+                c.execute('SELECT 1 FROM users WHERE username = ?', (target_user,))
+                if not c.fetchone():
+                    return False, "Пользователь не найден"
+                
+                # Проверяем, не является ли пользователь уже участником
+                c.execute('SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id, target_user))
+                if c.fetchone():
+                    return False, "Пользователь уже в канале"
+                
+                # Добавляем пользователя
+                c.execute('INSERT INTO channel_members (channel_id, username, is_admin) VALUES (?, ?, ?)',
+                          (channel_id, target_user, False))
+                conn.commit()
+                return True, "Пользователь добавлен"
+            except Exception as e:
+                return False, f"Ошибка: {str(e)}"
+
+    def remove_user_from_channel(channel_name, target_user, current_user):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            try:
+                # Проверяем права администратора
+                c.execute('''
+                    SELECT c.id FROM channels c 
+                    JOIN channel_members cm ON c.id = cm.channel_id 
+                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
+                ''', (channel_name, current_user))
+                
+                row = c.fetchone()
+                if not row:
+                    return False, "У вас нет прав администратора"
+                
+                channel_id = row[0]
+                
+                # Нельзя удалить самого себя
+                if target_user == current_user:
+                    return False, "Нельзя удалить самого себя"
+                
+                # Проверяем, существует ли пользователь в канале
+                c.execute('SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id, target_user))
+                if not c.fetchone():
+                    return False, "Пользователь не найден в канале"
+                
+                # Удаляем пользователя
+                c.execute('DELETE FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id, target_user))
+                conn.commit()
+                return True, "Пользователь удален"
+            except Exception as e:
+                return False, f"Ошибка: {str(e)}"
 
     def get_channel_info(channel_name):
         with sqlite3.connect('messenger.db') as conn:
@@ -486,6 +561,34 @@ def create_app():
             return jsonify({'success': True})
         return jsonify({'success': False, 'error': 'Не удалось переименовать канал или нет прав'})
 
+    @app.route('/add_user_to_channel', methods=['POST'])
+    def add_user_to_channel_handler():
+        if 'username' not in session: 
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        channel_name = request.json.get('channel_name')
+        target_user = request.json.get('username', '').strip()
+        
+        if not channel_name or not target_user:
+            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
+        
+        success, message = add_user_to_channel(channel_name, target_user, session['username'])
+        return jsonify({'success': success, 'message': message})
+
+    @app.route('/remove_user_from_channel', methods=['POST'])
+    def remove_user_from_channel_handler():
+        if 'username' not in session: 
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        channel_name = request.json.get('channel_name')
+        target_user = request.json.get('username', '').strip()
+        
+        if not channel_name or not target_user:
+            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
+        
+        success, message = remove_user_from_channel(channel_name, target_user, session['username'])
+        return jsonify({'success': success, 'message': message})
+
     @app.route('/channel_info/<channel_name>')
     def channel_info_handler(channel_name):
         if 'username' not in session: 
@@ -496,6 +599,34 @@ def create_app():
             info['members'] = get_channel_members(channel_name)
             return jsonify({'success': True, 'data': info})
         return jsonify({'success': False, 'error': 'Канал не найден'})
+
+    @app.route('/get_available_users')
+    def get_available_users_handler():
+        if 'username' not in session: 
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        channel_name = request.args.get('channel_name')
+        if not channel_name:
+            return jsonify({'success': False, 'error': 'Не указан канал'})
+        
+        # Получаем всех пользователей, кроме уже состоящих в канале
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT username 
+                FROM users 
+                WHERE username != ? 
+                AND username NOT IN (
+                    SELECT cm.username 
+                    FROM channel_members cm 
+                    JOIN channels c ON cm.channel_id = c.id 
+                    WHERE c.name = ?
+                )
+                ORDER BY username
+            ''', (session['username'], channel_name))
+            
+            users = [row[0] for row in c.fetchall()]
+            return jsonify({'success': True, 'users': users})
 
     @app.route('/user_channels')
     def user_channels_handler():
@@ -1288,10 +1419,107 @@ def create_app():
             border-color: var(--accent);
         }}
         
-        .input-area {{
-            padding: 15px;
-            background: var(--input);
-            border-top: 1px solid var(--border);
+        /* Стили для настроек канала */
+        .settings-content {{
+            padding: 20px;
+        }}
+        
+        .settings-section {{
+            margin-bottom: 30px;
+        }}
+        
+        .settings-title {{
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--text);
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }}
+        
+        .member-list {{
+            background: var(--bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            max-height: 300px;
+            overflow-y: auto;
+        }}
+        
+        .member-item {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border);
+        }}
+        
+        .member-item:last-child {{
+            border-bottom: none;
+        }}
+        
+        .member-info {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .member-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            background-size: cover;
+            background-position: center;
+        }}
+        
+        .member-name {{
+            font-size: 0.95rem;
+        }}
+        
+        .member-role {{
+            font-size: 0.8rem;
+            color: #666;
+            padding: 2px 8px;
+            background: var(--bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }}
+        
+        .member-role.admin {{
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }}
+        
+        .member-actions {{
+            display: flex;
+            gap: 5px;
+        }}
+        
+        .action-btn {{
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+        
+        .action-btn:hover {{
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }}
+        
+        .action-btn.remove {{
+            background: #dc3545;
+            color: white;
+            border-color: #dc3545;
         }}
         
         .input-row {{
@@ -1373,6 +1601,16 @@ def create_app():
         .form-control:focus {{
             outline: none;
             border-color: var(--accent);
+        }}
+        
+        .select-control {{
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
         }}
         
         .btn {{
@@ -1536,6 +1774,9 @@ def create_app():
                 <!-- Для избранного показываем сетку заметок -->
                 <div id="favorites-grid" class="favorites-grid"></div>
                 
+                <!-- Для настроек канала -->
+                <div id="channel-settings" style="display: none;"></div>
+                
                 <!-- Для чата показываем сообщения -->
                 <div id="chat-messages" style="display: none;"></div>
             </div>
@@ -1609,6 +1850,23 @@ def create_app():
             <div style="display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="renameChannel()">Переименовать</button>
                 <button class="btn btn-secondary" onclick="closeRenameModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="add-user-modal">
+        <div class="modal-content">
+            <h3>Добавить пользователя в канал</h3>
+            <div class="form-group">
+                <label class="form-label">Пользователь</label>
+                <select class="select-control" id="user-select">
+                    <option value="">Выберите пользователя...</option>
+                    <!-- Пользователи будут загружены динамически -->
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="addUserToChannel()">Добавить</button>
+                <button class="btn btn-secondary" onclick="closeAddUserModal()">Отмена</button>
             </div>
         </div>
     </div>
@@ -1947,6 +2205,7 @@ def create_app():
             document.getElementById('chat-title').textContent = 'Избранное';
             document.getElementById('categories-filter').style.display = 'flex';
             document.getElementById('favorites-grid').style.display = 'grid';
+            document.getElementById('channel-settings').style.display = 'none';
             document.getElementById('chat-messages').style.display = 'none';
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
@@ -1956,60 +2215,6 @@ def create_app():
             event.currentTarget.classList.add('active');
             
             loadFavorites(currentCategory === 'all' ? null : currentCategory);
-        }}
-
-        // Загрузка сообщений комнаты
-        function loadMessages(roomName) {{
-            fetch('/get_messages/' + roomName)
-                .then(r => r.json())
-                .then(messages => {{
-                    const messagesContainer = document.getElementById('chat-messages');
-                    messagesContainer.innerHTML = '';
-                    
-                    if (messages && Array.isArray(messages)) {{
-                        messages.forEach(msg => {{
-                            addMessageToChat(msg);
-                        }});
-                    }}
-                    
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                }})
-                .catch(error => console.error('Error loading messages:', error));
-        }}
-
-        // Добавление сообщения в чат
-        function addMessageToChat(data) {{
-            const messagesContainer = document.getElementById('chat-messages');
-            const msg = document.createElement('div');
-            msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
-            
-            let avatarHtml = '';
-            if (data.color) {{
-                avatarHtml = `<div class="msg-avatar" style="background-color: ${{data.color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
-            }} else {{
-                avatarHtml = `<div class="msg-avatar">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
-            }}
-            
-            let content = `
-                <div class="msg-header">
-                    ${{avatarHtml}}
-                    <div class="msg-sender">${{data.user}}</div>
-                </div>
-                ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
-            `;
-            
-            if (data.file) {{
-                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
-                    content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
-                }} else {{
-                    content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
-                }}
-            }}
-            
-            content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
-            msg.innerHTML = content;
-            messagesContainer.appendChild(msg);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }}
 
         // Функции для работы с аватарками
@@ -2123,10 +2328,37 @@ def create_app():
 
         function openRenameModal() {{
             document.getElementById('rename-modal').style.display = 'flex';
+            document.getElementById('channel-rename-input').value = document.getElementById('chat-title').textContent.replace('# ', '');
         }}
 
         function closeRenameModal() {{
             document.getElementById('rename-modal').style.display = 'none';
+        }}
+
+        function openAddUserModal() {{
+            document.getElementById('add-user-modal').style.display = 'flex';
+            
+            // Загружаем доступных пользователей
+            fetch(`/get_available_users?channel_name=${{encodeURIComponent(currentChannel)}}`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        const select = document.getElementById('user-select');
+                        select.innerHTML = '<option value="">Выберите пользователя...</option>';
+                        
+                        data.users.forEach(username => {{
+                            const option = document.createElement('option');
+                            option.value = username;
+                            option.textContent = username;
+                            select.appendChild(option);
+                        }});
+                    }}
+                }});
+        }}
+
+        function closeAddUserModal() {{
+            document.getElementById('add-user-modal').style.display = 'none';
+            document.getElementById('user-select').value = '';
         }}
 
         function createChannel() {{
@@ -2192,6 +2424,174 @@ def create_app():
                     alert('Канал переименован!');
                 }} else {{
                     alert(data.error || 'Ошибка при переименовании канала');
+                }}
+            }});
+        }}
+
+        function addUserToChannel() {{
+            const selectedUser = document.getElementById('user-select').value;
+            if (!selectedUser) {{
+                alert('Выберите пользователя');
+                return;
+            }}
+            
+            fetch('/add_user_to_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    channel_name: currentChannel,
+                    username: selectedUser
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeAddUserModal();
+                    openChannelSettings(); // Обновляем настройки
+                    alert(data.message || 'Пользователь добавлен');
+                }} else {{
+                    alert(data.message || 'Ошибка при добавлении пользователя');
+                }}
+            }});
+        }}
+
+        function removeUserFromChannel(username) {{
+            if (!confirm(`Удалить пользователя ${{username}} из канала?`)) return;
+            
+            fetch('/remove_user_from_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    channel_name: currentChannel,
+                    username: username
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    openChannelSettings(); // Обновляем настройки
+                    alert(data.message || 'Пользователь удален');
+                }} else {{
+                    alert(data.message || 'Ошибка при удалении пользователя');
+                }}
+            }});
+        }}
+
+        // Открытие настроек канала
+        function openChannelSettings() {{
+            room = "settings_" + currentChannel;
+            roomType = "settings";
+            
+            document.getElementById('chat-title').textContent = 'Настройки канала';
+            document.getElementById('categories-filter').style.display = 'none';
+            document.getElementById('favorites-grid').style.display = 'none';
+            document.getElementById('chat-messages').style.display = 'none';
+            document.getElementById('input-area').style.display = 'none';
+            document.getElementById('channel-actions').style.display = 'none';
+            
+            // Загружаем информацию о канале
+            fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        renderChannelSettings(data.data);
+                    }}
+                }});
+        }}
+
+        // Рендеринг настроек канала
+        function renderChannelSettings(channelInfo) {{
+            const settingsContainer = document.getElementById('channel-settings');
+            settingsContainer.innerHTML = '';
+            settingsContainer.style.display = 'block';
+            
+            // Создаем HTML для настроек
+            let settingsHTML = `
+                <div class="settings-content">
+                    <div class="settings-section">
+                        <div class="settings-title">Информация о канале</div>
+                        <div style="margin-bottom: 15px;">
+                            <strong>Название:</strong> ${{channelInfo.display_name || channelInfo.name}}
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <strong>Описание:</strong> ${{channelInfo.description || 'Нет описания'}}
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <strong>Создатель:</strong> ${{channelInfo.created_by}}
+                        </div>
+                        <div>
+                            <strong>Тип:</strong> ${{channelInfo.is_private ? 'Приватный' : 'Публичный'}}
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <div class="settings-title" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Участники (${{channelInfo.members.length}})</span>
+                            <button class="action-btn" onclick="openAddUserModal()" style="padding: 4px 12px;">
+                                <i class="fas fa-user-plus"></i> Добавить
+                            </button>
+                        </div>
+                        <div class="member-list" id="members-list">
+            `;
+            
+            // Добавляем участников
+            channelInfo.members.forEach(member => {{
+                const isCurrentUser = member.username === user;
+                settingsHTML += `
+                    <div class="member-item">
+                        <div class="member-info">
+                            <div class="member-avatar" style="background-color: ${{member.color}};">
+                                ${{member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}}
+                            </div>
+                            <div class="member-name">
+                                ${{member.username}}
+                                ${{member.is_admin ? '<span class="member-role admin">Админ</span>' : '<span class="member-role">Участник</span>'}}
+                            </div>
+                        </div>
+                `;
+                
+                // Кнопки действий (только для администраторов и не для себя)
+                if (channelInfo.created_by === user && !isCurrentUser) {{
+                    settingsHTML += `
+                        <div class="member-actions">
+                            <button class="action-btn remove" onclick="removeUserFromChannel('${{member.username}}')" title="Удалить из канала">
+                                <i class="fas fa-user-minus"></i>
+                            </button>
+                        </div>
+                    `;
+                }}
+                
+                settingsHTML += `</div>`;
+            }});
+            
+            settingsHTML += `
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <div class="settings-title">Управление каналом</div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="openRenameModal()">
+                                <i class="fas fa-edit"></i> Переименовать
+                            </button>
+                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '${{channelInfo.display_name}')">
+                                <i class="fas fa-arrow-left"></i> Вернуться в чат
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            settingsContainer.innerHTML = settingsHTML;
+            
+            // Загружаем аватарки участников
+            channelInfo.members.forEach(member => {{
+                if (member.avatar) {{
+                    const avatar = settingsContainer.querySelector(`.member-avatar[style*="${{member.color}}"]`);
+                    if (avatar) {{
+                        avatar.style.backgroundImage = `url(${{member.avatar}})`;
+                        avatar.textContent = '';
+                    }}
                 }}
             }});
         }}
@@ -2297,6 +2697,7 @@ def create_app():
             document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
             document.getElementById('categories-filter').style.display = 'none';
             document.getElementById('favorites-grid').style.display = 'none';
+            document.getElementById('channel-settings').style.display = 'none';
             document.getElementById('chat-messages').style.display = 'block';
             document.getElementById('input-area').style.display = 'flex';
             
@@ -2319,6 +2720,60 @@ def create_app():
             
             // Присоединяемся к комнате через сокет
             socket.emit('join', {{ room: r }});
+        }}
+
+        // Загрузка сообщений комнаты
+        function loadMessages(roomName) {{
+            fetch('/get_messages/' + roomName)
+                .then(r => r.json())
+                .then(messages => {{
+                    const messagesContainer = document.getElementById('chat-messages');
+                    messagesContainer.innerHTML = '';
+                    
+                    if (messages && Array.isArray(messages)) {{
+                        messages.forEach(msg => {{
+                            addMessageToChat(msg);
+                        }});
+                    }}
+                    
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }})
+                .catch(error => console.error('Error loading messages:', error));
+        }}
+
+        // Добавление сообщения в чат
+        function addMessageToChat(data) {{
+            const messagesContainer = document.getElementById('chat-messages');
+            const msg = document.createElement('div');
+            msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
+            
+            let avatarHtml = '';
+            if (data.color) {{
+                avatarHtml = `<div class="msg-avatar" style="background-color: ${{data.color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+            }} else {{
+                avatarHtml = `<div class="msg-avatar">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+            }}
+            
+            let content = `
+                <div class="msg-header">
+                    ${{avatarHtml}}
+                    <div class="msg-sender">${{data.user}}</div>
+                </div>
+                ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
+            `;
+            
+            if (data.file) {{
+                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
+                    content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
+                }} else {{
+                    content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
+                }}
+            }}
+            
+            content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
+            msg.innerHTML = content;
+            messagesContainer.appendChild(msg);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }}
 
         // Отправка сообщения
