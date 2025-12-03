@@ -2949,287 +2949,287 @@ def create_app():
             }});
             
             settingsHTML += `
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <div class="settings-title">Управление каналом</div>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-primary" onclick="openRenameModal()">
-                                <i class="fas fa-edit"></i> Переименовать
-                            </button>
-                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '{channelInfo.display_name}')">
-                                <i class="fas fa-arrow-left"></i> Вернуться в чат
-                            </button>
-                        </div>
-                    </div>
                 </div>
-            `;
+            </div>
             
-            settingsContainer.innerHTML = settingsHTML;
-            
-            // Загружаем аватарки участников
-            channelInfo.members.forEach(member => {{
-                if (member.avatar) {{
-                    const avatar = settingsContainer.querySelector(`.member-avatar[style*="${{member.color}}"]`);
-                    if (avatar) {{
-                        avatar.style.backgroundImage = `url(${{member.avatar}})`;
-                        avatar.textContent = '';
-                    }}
-                }}
-            }});
+            <div class="settings-section">
+                <div class="settings-title">Управление каналом</div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="openRenameModal()">
+                        <i class="fas fa-edit"></i> Переименовать
+                    </button>
+                    <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', currentChannel)">
+                        <i class="fas fa-arrow-left"></i> Вернуться в чат
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    settingsContainer.innerHTML = settingsHTML;
+    
+    // Загружаем аватарки участников
+    channelInfo.members.forEach(member => {{
+        if (member.avatar) {{
+            const avatar = settingsContainer.querySelector(`.member-avatar[style*="${{member.color}}"]`);
+            if (avatar) {{
+                avatar.style.backgroundImage = `url(${{member.avatar}})`;
+                avatar.textContent = '';
+            }}
         }}
+    }});
+}}
 
-        // Загрузка каналов пользователя
-        function loadUserChannels() {{
-            fetch('/user_channels')
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        const channelsContainer = document.getElementById('channels');
-                        channelsContainer.innerHTML = '';
-                        
-                        // Добавляем общий канал
-                        const generalEl = document.createElement('div');
-                        generalEl.className = 'nav-item' + (room === 'channel_general' ? ' active' : '');
-                        generalEl.innerHTML = `
+// Загрузка каналов пользователя
+function loadUserChannels() {{
+    fetch('/user_channels')
+        .then(r => r.json())
+        .then(data => {{
+            if (data.success) {{
+                const channelsContainer = document.getElementById('channels');
+                channelsContainer.innerHTML = '';
+                
+                // Добавляем общий канал
+                const generalEl = document.createElement('div');
+                generalEl.className = 'nav-item' + (room === 'channel_general' ? ' active' : '');
+                generalEl.innerHTML = `
+                    <i class="fas fa-hashtag"></i>
+                    <span>General</span>
+                `;
+                generalEl.onclick = () => openRoom('channel_general', 'channel', 'General');
+                channelsContainer.appendChild(generalEl);
+                
+                // Добавляем пользовательские каналы
+                data.channels.forEach(channel => {{
+                    if (channel.name !== 'general') {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
+                        el.innerHTML = `
                             <i class="fas fa-hashtag"></i>
-                            <span>General</span>
+                            <span>${{channel.display_name}}</span>
                         `;
-                        generalEl.onclick = () => openRoom('channel_general', 'channel', 'General');
-                        channelsContainer.appendChild(generalEl);
-                        
-                        // Добавляем пользовательские каналы
-                        data.channels.forEach(channel => {{
-                            if (channel.name !== 'general') {{
-                                const el = document.createElement('div');
-                                el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
-                                el.innerHTML = `
-                                    <i class="fas fa-hashtag"></i>
-                                    <span>${{channel.display_name}}</span>
-                                `;
-                                el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
-                                channelsContainer.appendChild(el);
-                            }}
-                        }});
+                        el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
+                        channelsContainer.appendChild(el);
                     }}
                 }});
-        }}
-
-        // Загрузка пользователей
-        function loadUsers() {{
-            fetch('/users')
-                .then(r => r.json())
-                .then(users => {{
-                    if (users && Array.isArray(users)) {{
-                        const usersContainer = document.getElementById('users');
-                        usersContainer.innerHTML = '';
-                        
-                        users.forEach(u => {{
-                            if (u.username !== user) {{
-                                const el = document.createElement('div');
-                                el.className = 'nav-item';
-                                el.innerHTML = `
-                                    <i class="fas fa-user${{u.online ? '-check' : ''}}"></i>
-                                    <span>${{u.username}}</span>
-                                `;
-                                el.onclick = () => openRoom(
-                                    'private_' + [user, u.username].sort().join('_'),
-                                    'private',
-                                    u.username
-                                );
-                                usersContainer.appendChild(el);
-                            }}
-                        }});
-                    }}
-                }});
-        }}
-
-        // Загрузка личных чатов
-        function loadPersonalChats() {{
-            fetch('/personal_chats')
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        const pc = document.getElementById('personal-chats');
-                        pc.innerHTML = '';
-                        
-                        data.chats.forEach(chatUser => {{
-                            const el = document.createElement('div');
-                            el.className = 'nav-item';
-                            el.innerHTML = `
-                                <i class="fas fa-user"></i>
-                                <span>${{chatUser}}</span>
-                            `;
-                            el.onclick = () => openRoom(
-                                'private_' + [user, chatUser].sort().join('_'),
-                                'private',
-                                chatUser
-                            );
-                            pc.appendChild(el);
-                        }});
-                    }}
-                }});
-        }}
-
-        // Открытие комнаты (чат или канал)
-        function openRoom(r, t, title) {{
-            room = r;
-            roomType = t;
-            currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
-            
-            document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
-            document.getElementById('categories-filter').style.display = 'none';
-            document.getElementById('favorites-grid').style.display = 'none';
-            document.getElementById('channel-settings').style.display = 'none';
-            document.getElementById('chat-messages').style.display = 'block';
-            document.getElementById('input-area').style.display = 'flex';
-            
-            // Обновляем активные элементы в навигации
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            
-            document.getElementById('chat-messages').innerHTML = '';
-            
-            // Показываем/скрываем кнопки управления каналом
-            const channelActions = document.getElementById('channel-actions');
-            if (t === 'channel') {{
-                channelActions.style.display = 'flex';
-            }} else {{
-                channelActions.style.display = 'none';
-            }}
-            
-            // Загружаем историю
-            loadMessages(r);
-            
-            // Присоединяемся к комнате через сокет
-            socket.emit('join', {{ room: r }});
-        }}
-
-        // Загрузка сообщений комнаты
-        function loadMessages(roomName) {{
-            fetch('/get_messages/' + roomName)
-                .then(r => r.json())
-                .then(messages => {{
-                    const messagesContainer = document.getElementById('chat-messages');
-                    messagesContainer.innerHTML = '';
-                    
-                    if (messages && Array.isArray(messages)) {{
-                        messages.forEach(msg => {{
-                            addMessageToChat(msg);
-                        }});
-                    }}
-                    
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                }})
-                .catch(error => console.error('Error loading messages:', error));
-        }}
-
-        // Добавление сообщения в чат
-        function addMessageToChat(data) {{
-            const messagesContainer = document.getElementById('chat-messages');
-            const msg = document.createElement('div');
-            msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
-            
-            let avatarHtml = '';
-            if (data.color) {{
-                avatarHtml = `<div class="msg-avatar" style="background-color: ${{data.color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
-            }} else {{
-                avatarHtml = `<div class="msg-avatar">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
-            }}
-            
-            let content = `
-                <div class="msg-header">
-                    ${{avatarHtml}}
-                    <div class="msg-sender">${{data.user}}</div>
-                </div>
-                ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
-            `;
-            
-            if (data.file) {{
-                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
-                    content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
-                }} else {{
-                    content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
-                }}
-            }}
-            
-            content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
-            msg.innerHTML = content;
-            messagesContainer.appendChild(msg);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }}
-
-        // Отправка сообщения
-        function sendMessage() {{
-            const input = document.getElementById('msg-input');
-            const msg = input.value.trim();
-            const fileInput = document.getElementById('file-input');
-            
-            if (!msg && !fileInput.files[0]) return;
-            
-            const data = {{ 
-                message: msg, 
-                room: room, 
-                type: roomType 
-            }};
-            
-            if (fileInput.files[0]) {{
-                const reader = new FileReader();
-                reader.onload = (e) => {{
-                    data.file = e.target.result;
-                    data.fileType = fileInput.files[0].type.startsWith('image/') ? 'image' : 'video';
-                    data.fileName = fileInput.files[0].name;
-                    socket.emit('message', data);
-                    resetInput();
-                }};
-                reader.readAsDataURL(fileInput.files[0]);
-            }} else {{
-                socket.emit('message', data);
-                resetInput();
-            }}
-        }}
-
-        function resetInput() {{
-            document.getElementById('msg-input').value = '';
-            document.getElementById('file-input').value = '';
-            document.getElementById('file-preview').innerHTML = '';
-        }}
-
-        function handleKeydown(e) {{
-            if (e.key === 'Enter' && !e.shiftKey) {{
-                e.preventDefault();
-                sendMessage();
-            }}
-        }}
-
-        function handleFileSelect(input) {{
-            const file = input.files[0];
-            if (file) {{
-                const reader = new FileReader();
-                reader.onload = (e) => {{
-                    const preview = document.getElementById('file-preview');
-                    if (file.type.startsWith('image/')) {{
-                        preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 200px; border-radius: 8px;">`;
-                    }} else if (file.type.startsWith('video/')) {{
-                        preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 200px; border-radius: 8px;"></video>`;
-                    }} else {{
-                        preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                            <i class="fas fa-file"></i> ${{file.name}}
-                        </div>`;
-                    }}
-                }};
-                reader.readAsDataURL(file);
-            }}
-        }}
-
-        // Socket events
-        socket.on('message', (data) => {{
-            if (data.room === room) {{
-                addMessageToChat(data);
             }}
         }});
-    </script>
+}}
+
+// Загрузка пользователей
+function loadUsers() {{
+    fetch('/users')
+        .then(r => r.json())
+        .then(users => {{
+            if (users && Array.isArray(users)) {{
+                const usersContainer = document.getElementById('users');
+                usersContainer.innerHTML = '';
+                
+                users.forEach(u => {{
+                    if (u.username !== user) {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item';
+                        el.innerHTML = `
+                            <i class="fas fa-user${{u.online ? '-check' : ''}}"></i>
+                            <span>${{u.username}}</span>
+                        `;
+                        el.onclick = () => openRoom(
+                            'private_' + [user, u.username].sort().join('_'),
+                            'private',
+                            u.username
+                        );
+                        usersContainer.appendChild(el);
+                    }}
+                }});
+            }}
+        }});
+}}
+
+// Загрузка личных чатов
+function loadPersonalChats() {{
+    fetch('/personal_chats')
+        .then(r => r.json())
+        .then(data => {{
+            if (data.success) {{
+                const pc = document.getElementById('personal-chats');
+                pc.innerHTML = '';
+                
+                data.chats.forEach(chatUser => {{
+                    const el = document.createElement('div');
+                    el.className = 'nav-item';
+                    el.innerHTML = `
+                        <i class="fas fa-user"></i>
+                        <span>${{chatUser}}</span>
+                    `;
+                    el.onclick = () => openRoom(
+                        'private_' + [user, chatUser].sort().join('_'),
+                        'private',
+                        chatUser
+                    );
+                    pc.appendChild(el);
+                }});
+            }}
+        }});
+}}
+
+// Открытие комнаты (чат или канал)
+function openRoom(r, t, title) {{
+    room = r;
+    roomType = t;
+    currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
+    
+    document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
+    document.getElementById('categories-filter').style.display = 'none';
+    document.getElementById('favorites-grid').style.display = 'none';
+    document.getElementById('channel-settings').style.display = 'none';
+    document.getElementById('chat-messages').style.display = 'block';
+    document.getElementById('input-area').style.display = 'flex';
+    
+    // Обновляем активные элементы в навигации
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    
+    document.getElementById('chat-messages').innerHTML = '';
+    
+    // Показываем/скрываем кнопки управления каналом
+    const channelActions = document.getElementById('channel-actions');
+    if (t === 'channel') {{
+        channelActions.style.display = 'flex';
+    }} else {{
+        channelActions.style.display = 'none';
+    }}
+    
+    // Загружаем историю
+    loadMessages(r);
+    
+    // Присоединяемся к комнате через сокет
+    socket.emit('join', {{ room: r }});
+}}
+
+// Загрузка сообщений комнаты
+function loadMessages(roomName) {{
+    fetch('/get_messages/' + roomName)
+        .then(r => r.json())
+        .then(messages => {{
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.innerHTML = '';
+            
+            if (messages && Array.isArray(messages)) {{
+                messages.forEach(msg => {{
+                    addMessageToChat(msg);
+                }});
+            }}
+            
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }})
+        .catch(error => console.error('Error loading messages:', error));
+}}
+
+// Добавление сообщения в чат
+function addMessageToChat(data) {{
+    const messagesContainer = document.getElementById('chat-messages');
+    const msg = document.createElement('div');
+    msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
+    
+    let avatarHtml = '';
+    if (data.color) {{
+        avatarHtml = `<div class="msg-avatar" style="background-color: ${{data.color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+    }} else {{
+        avatarHtml = `<div class="msg-avatar">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+    }}
+    
+    let content = `
+        <div class="msg-header">
+            ${{avatarHtml}}
+            <div class="msg-sender">${{data.user}}</div>
+        </div>
+        ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
+    `;
+    
+    if (data.file) {{
+        if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
+            content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
+        }} else {{
+            content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
+        }}
+    }}
+    
+    content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
+    msg.innerHTML = content;
+    messagesContainer.appendChild(msg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}}
+
+// Отправка сообщения
+function sendMessage() {{
+    const input = document.getElementById('msg-input');
+    const msg = input.value.trim();
+    const fileInput = document.getElementById('file-input');
+    
+    if (!msg && !fileInput.files[0]) return;
+    
+    const data = {{ 
+        message: msg, 
+        room: room, 
+        type: roomType 
+    }};
+    
+    if (fileInput.files[0]) {{
+        const reader = new FileReader();
+        reader.onload = (e) => {{
+            data.file = e.target.result;
+            data.fileType = fileInput.files[0].type.startsWith('image/') ? 'image' : 'video';
+            data.fileName = fileInput.files[0].name;
+            socket.emit('message', data);
+            resetInput();
+        }};
+        reader.readAsDataURL(fileInput.files[0]);
+    }} else {{
+        socket.emit('message', data);
+        resetInput();
+    }}
+}}
+
+function resetInput() {{
+    document.getElementById('msg-input').value = '';
+    document.getElementById('file-input').value = '';
+    document.getElementById('file-preview').innerHTML = '';
+}}
+
+function handleKeydown(e) {{
+    if (e.key === 'Enter' && !e.shiftKey) {{
+        e.preventDefault();
+        sendMessage();
+    }}
+}}
+
+function handleFileSelect(input) {{
+    const file = input.files[0];
+    if (file) {{
+        const reader = new FileReader();
+        reader.onload = (e) => {{
+            const preview = document.getElementById('file-preview');
+            if (file.type.startsWith('image/')) {{
+                preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 200px; border-radius: 8px;">`;
+            }} else if (file.type.startsWith('video/')) {{
+                preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 200px; border-radius: 8px;"></video>`;
+            }} else {{
+                preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                    <i class="fas fa-file"></i> ${{file.name}}
+                </div>`;
+            }}
+        }};
+        reader.readAsDataURL(file);
+    }}
+}}
+
+// Socket events
+socket.on('message', (data) => {{
+    if (data.room === room) {{
+        addMessageToChat(data);
+    }}
+}});
+</script>
 </body>
 </html>'''
 
