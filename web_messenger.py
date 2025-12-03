@@ -2500,7 +2500,7 @@ def create_app():
         }}
 
         // Рендеринг настроек канала
-        function renderChannelSettings(channelInfo) {{
+        function renderChannelSettings(channel) {{
             const settingsContainer = document.getElementById('channel-settings');
             settingsContainer.innerHTML = '';
             settingsContainer.style.display = 'block';
@@ -2511,22 +2511,22 @@ def create_app():
                     <div class="settings-section">
                         <div class="settings-title">Информация о канале</div>
                         <div style="margin-bottom: 15px;">
-                            <strong>Название:</strong> ${channelInfo.display_name || channelInfo.name}
+                            <strong>Название:</strong> ${channel.display_name || channel.name}
                         </div>
                         <div style="margin-bottom: 15px;">
-                            <strong>Описание:</strong> ${channelInfo.description || 'Нет описания'}
+                            <strong>Описание:</strong> ${channel.description || 'Нет описания'}
                         </div>
                         <div style="margin-bottom: 15px;">
-                            <strong>Создатель:</strong> ${channelInfo.created_by}
+                            <strong>Создатель:</strong> ${channel.created_by}
                         </div>
                         <div>
-                            <strong>Тип:</strong> ${channelInfo.is_private ? 'Приватный' : 'Публичный'}
+                            <strong>Тип:</strong> ${channel.is_private ? 'Приватный' : 'Публичный'}
                         </div>
                     </div>
                     
                     <div class="settings-section">
                         <div class="settings-title" style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Участники (${channelInfo.members.length})</span>
+                            <span>Участники (${channel.members.length})</span>
                             <button class="action-btn" onclick="openAddUserModal()" style="padding: 4px 12px;">
                                 <i class="fas fa-user-plus"></i> Добавить
                             </button>
@@ -2535,7 +2535,7 @@ def create_app():
             `;
             
             // Добавляем участников
-            channelInfo.members.forEach(member => {{
+            channel.members.forEach(member => {{
                 const isCurrentUser = member.username === user;
                 settingsHTML += `
                     <div class="member-item">
@@ -2551,7 +2551,7 @@ def create_app():
                 `;
                 
                 // Кнопки действий (только для администраторов и не для себя)
-                if (channelInfo.created_by === user && !isCurrentUser) {{
+                if (channel.created_by === user && !isCurrentUser) {{
                     settingsHTML += `
                         <div class="member-actions">
                             <button class="action-btn remove" onclick="removeUserFromChannel('${member.username}')" title="Удалить из канала">
@@ -2574,7 +2574,7 @@ def create_app():
                             <button class="btn btn-primary" onclick="openRenameModal()">
                                 <i class="fas fa-edit"></i> Переименовать
                             </button>
-                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '${channelInfo.display_name || channelInfo.name}')">
+                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '${channel.display_name}')">
                                 <i class="fas fa-arrow-left"></i> Вернуться в чат
                             </button>
                         </div>
@@ -2585,7 +2585,7 @@ def create_app():
             settingsContainer.innerHTML = settingsHTML;
             
             // Загружаем аватарки участников
-            channelInfo.members.forEach(member => {{
+            channel.members.forEach(member => {{
                 if (member.avatar) {{
                     const avatar = settingsContainer.querySelector('.member-avatar[style*="${member.color}"]');
                     if (avatar) {{
