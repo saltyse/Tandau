@@ -1081,7 +1081,7 @@ def create_app():
         
         theme = user['theme']
         
-        # Генерируем HTML с новым функционалом Избранного
+        # Генерируем HTML с новым функционалом
         return f'''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
@@ -2574,7 +2574,7 @@ def create_app():
                             <button class="btn btn-primary" onclick="openRenameModal()">
                                 <i class="fas fa-edit"></i> Переименовать
                             </button>
-                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '${channelInfo.display_name}')">
+                            <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', '${channelInfo.display_name || channelInfo.name}')">
                                 <i class="fas fa-arrow-left"></i> Вернуться в чат
                             </button>
                         </div>
