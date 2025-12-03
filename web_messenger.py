@@ -1,6 +1,15 @@
-# app.py - Tandau Messenger для Render (один файл)
-import eventlet
-eventlet.monkey_patch()
+# app.py - Tandau Messenger (один файл для Render)
+import sys
+print(f"Python version: {sys.version}")
+print("Starting Tandau Messenger...")
+
+try:
+    import eventlet
+    eventlet.monkey_patch()
+    print("Eventlet imported and patched successfully")
+except Exception as e:
+    print(f"Eventlet import error: {e}")
+    # Продолжаем без eventlet для отладки
 
 from flask import Flask, request, jsonify, session, redirect, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -13,6 +22,8 @@ import os
 import re
 import base64
 import json
+
+print("All imports successful!")
 
 # === Создание приложения ===
 app = Flask(__name__)
@@ -28,81 +39,88 @@ try:
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
     os.makedirs(app.config['FAVORITE_FOLDER'], exist_ok=True)
-except:
-    pass
+    print("Created upload directories")
+except Exception as e:
+    print(f"Error creating directories: {e}")
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# Используем простую конфигурацию SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+print("SocketIO initialized")
 
 # === Инициализация БД ===
 def init_db():
-    with sqlite3.connect('messenger.db', check_same_thread=False) as conn:
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_online BOOLEAN DEFAULT FALSE,
-                avatar_color TEXT DEFAULT '#6366F1',
-                avatar_path TEXT,
-                theme TEXT DEFAULT 'light'
-            )
-        ''')
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                message TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                room TEXT DEFAULT 'public',
-                recipient TEXT,
-                message_type TEXT DEFAULT 'text',
-                file_path TEXT,
-                file_name TEXT,
-                is_favorite BOOLEAN DEFAULT FALSE
-            )
-        ''')
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS channels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                display_name TEXT,
-                description TEXT,
-                created_by TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_private BOOLEAN DEFAULT FALSE,
-                allow_messages BOOLEAN DEFAULT TRUE
-            )
-        ''')
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS channel_members (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                channel_id INTEGER,
-                username TEXT NOT NULL,
-                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_admin BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (channel_id) REFERENCES channels (id),
-                UNIQUE(channel_id, username)
-            )
-        ''')
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS favorites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                content TEXT,
-                file_path TEXT,
-                file_name TEXT,
-                file_type TEXT DEFAULT 'text',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_pinned BOOLEAN DEFAULT FALSE,
-                category TEXT DEFAULT 'general'
-            )
-        ''')
-        # Создаем общий канал по умолчанию
-        c.execute('INSERT OR IGNORE INTO channels (name, display_name, description, created_by) VALUES (?, ?, ?, ?)',
-                  ('general', 'General', 'Общий канал', 'system'))
-        conn.commit()
+    try:
+        with sqlite3.connect('messenger.db', check_same_thread=False) as conn:
+            c = conn.cursor()
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_online BOOLEAN DEFAULT FALSE,
+                    avatar_color TEXT DEFAULT '#6366F1',
+                    avatar_path TEXT,
+                    theme TEXT DEFAULT 'light'
+                )
+            ''')
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    message TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    room TEXT DEFAULT 'public',
+                    recipient TEXT,
+                    message_type TEXT DEFAULT 'text',
+                    file_path TEXT,
+                    file_name TEXT,
+                    is_favorite BOOLEAN DEFAULT FALSE
+                )
+            ''')
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS channels (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    display_name TEXT,
+                    description TEXT,
+                    created_by TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_private BOOLEAN DEFAULT FALSE,
+                    allow_messages BOOLEAN DEFAULT TRUE
+                )
+            ''')
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS channel_members (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id INTEGER,
+                    username TEXT NOT NULL,
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_admin BOOLEAN DEFAULT FALSE,
+                    FOREIGN KEY (channel_id) REFERENCES channels (id),
+                    UNIQUE(channel_id, username)
+                )
+            ''')
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS favorites (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    content TEXT,
+                    file_path TEXT,
+                    file_name TEXT,
+                    file_type TEXT DEFAULT 'text',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_pinned BOOLEAN DEFAULT FALSE,
+                    category TEXT DEFAULT 'general'
+                )
+            ''')
+            # Создаем общий канал по умолчанию
+            c.execute('INSERT OR IGNORE INTO channels (name, display_name, description, created_by) VALUES (?, ?, ?, ?)',
+                      ('general', 'General', 'Общий канал', 'system'))
+            conn.commit()
+            print("Database initialized successfully")
+    except Exception as e:
+        print(f"Database initialization error: {e}")
 
 init_db()
 
@@ -118,8 +136,12 @@ def save_uploaded_file(file, folder):
     
     filename = secure_filename(f"{int(datetime.now().timestamp())}_{file.filename}")
     path = os.path.join(folder, filename)
-    file.save(path)
-    return f'/static/{os.path.basename(folder)}/{filename}', filename
+    try:
+        file.save(path)
+        return f'/static/{os.path.basename(folder)}/{filename}', filename
+    except Exception as e:
+        print(f"Error saving file: {e}")
+        return None, None
 
 def save_base64_file(base64_data, folder, file_extension):
     try:
@@ -736,6 +758,7 @@ def static_files(filename):
 def index():
     if 'username' in session: 
         return redirect('/chat')
+    
     return '''
     <!DOCTYPE html>
     <html lang="ru">
@@ -1062,8 +1085,8 @@ def chat_handler():
     
     theme = user['theme']
     
-    # Генерируем HTML с новым функционалом
-    return f'''
+    # HTML для чата
+    html_content = f'''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
 <head>
@@ -1270,6 +1293,62 @@ def chat_handler():
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+        }}
+        
+        .msg {{
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: var(--input);
+            border-radius: 15px;
+            max-width: 70%;
+            border: 1px solid var(--border);
+        }}
+        
+        .msg.own {{
+            margin-left: auto;
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }}
+        
+        .msg-header {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }}
+        
+        .msg-avatar {{
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }}
+        
+        .msg-sender {{
+            font-weight: 600;
+            font-size: 0.9rem;
+        }}
+        
+        .msg-time {{
+            font-size: 0.7rem;
+            opacity: 0.7;
+            margin-top: 5px;
+            text-align: right;
+        }}
+        
+        .file-preview {{
+            margin-top: 10px;
+            max-width: 300px;
+        }}
+        
+        .file-preview img, .file-preview video {{
+            max-width: 100%;
+            border-radius: 8px;
         }}
         
         /* Стили для избранного */
@@ -1507,6 +1586,9 @@ def chat_handler():
             display: flex;
             gap: 10px;
             align-items: flex-end;
+            padding: 15px;
+            background: var(--input);
+            border-top: 1px solid var(--border);
         }}
         
         .msg-input {{
@@ -2829,6 +2911,8 @@ def chat_handler():
     </script>
 </body>
 </html>'''
+    
+    return html_content
 
 @app.route('/users')
 def users_handler():
@@ -2844,22 +2928,30 @@ def get_messages_handler(room):
 # === SocketIO ===
 @socketio.on('connect')
 def on_connect():
+    print(f"Client connected: {request.sid}")
     if 'username' in session:
         join_room('channel_general')
         update_online(session['username'], True)
+        print(f"User {session['username']} connected and joined general channel")
 
 @socketio.on('disconnect')
 def on_disconnect():
+    print(f"Client disconnected: {request.sid}")
     if 'username' in session:
         update_online(session['username'], False)
 
 @socketio.on('join')
 def on_join(data): 
-    join_room(data['room'])
+    room = data.get('room')
+    if room:
+        join_room(room)
+        print(f"Client joined room: {room}")
 
 @socketio.on('leave')
 def on_leave(data): 
-    leave_room(data['room'])
+    room = data.get('room')
+    if room:
+        leave_room(room)
 
 @socketio.on('message')
 def on_message(data):
@@ -2888,7 +2980,7 @@ def on_message(data):
     
     # Для приватных чатов
     recipient = None
-    if room.startswith('private_'):
+    if room and room.startswith('private_'):
         parts = room.split('_')
         if len(parts) == 3:
             user1, user2 = parts[1], parts[2]
@@ -2930,7 +3022,12 @@ def health_check():
 def not_found(e):
     return redirect('/')
 
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
 # === Запуск приложения ===
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=True)
+    print(f"Starting server on port {port}")
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
