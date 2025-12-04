@@ -2110,11 +2110,11 @@ def create_app():
             border-color: #dc3545;
         }}
         
-        /* Область ввода сообщения */
+        /* ИСПРАВЛЕНИЕ: Область ввода сообщения - фиксированное позиционирование для мобильных */
         .input-area {{
-            padding: 15px 20px;
             background: var(--input);
             border-top: 1px solid var(--border);
+            padding: 15px 20px;
         }}
         
         .input-row {{
@@ -2422,18 +2422,57 @@ def create_app():
                 font-size: 0.8rem;
             }}
             
+            /* ИСПРАВЛЕНИЕ: Фиксированное позиционирование для input-area в мобильной версии */
             .input-area {{
-                padding: 10px 15px;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 12px 15px;
+                background: var(--input);
+                border-top: 1px solid var(--border);
+                z-index: 1000;
+                box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
             }}
             
             .msg-input {{
-                padding: 10px 14px;
+                padding: 12px 14px;
                 font-size: 16px;
+                min-height: 44px;
             }}
             
             .attachment-btn, .send-btn {{
-                width: 40px;
-                height: 40px;
+                width: 44px;
+                height: 44px;
+                flex-shrink: 0;
+            }}
+            
+            /* Корректировка области сообщений, чтобы не перекрывалось полем ввода */
+            .messages {{
+                padding-bottom: 80px !important;
+                height: calc(100vh - 140px) !important;
+            }}
+            
+            /* Корректировка для избранного */
+            .favorites-grid {{
+                padding-bottom: 80px;
+            }}
+            
+            /* Уменьшаем высоту header */
+            .chat-header {{
+                padding: 12px 15px;
+                min-height: 56px;
+            }}
+            
+            /* Фиксированная область чата для мобильных */
+            .chat-area.active {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 1000;
+                background: var(--bg);
             }}
         }}
         
@@ -2734,7 +2773,34 @@ def create_app():
             
             // Слушаем изменения размера окна
             window.addEventListener('resize', checkMobile);
+            
+            // Настраиваем управление клавиатурой для мобильных
+            setupMobileKeyboard();
         }};
+
+        // Управление клавиатурой на мобильных устройствах
+        function setupMobileKeyboard() {{
+            if (!isMobile) return;
+            
+            const msgInput = document.getElementById('msg-input');
+            const messagesContainer = document.getElementById('messages');
+            
+            msgInput.addEventListener('focus', function() {{
+                // Прокручиваем к последнему сообщению при фокусе на поле ввода
+                setTimeout(() => {{
+                    if (messagesContainer.scrollHeight > messagesContainer.clientHeight) {{
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }}
+                }}, 300);
+            }});
+            
+            msgInput.addEventListener('blur', function() {{
+                // Мягкая прокрутка при скрытии клавиатуры
+                setTimeout(() => {{
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }}, 100);
+            }});
+        }}
 
         // Загрузка аватарки пользователя
         function loadUserAvatar() {{
@@ -3409,6 +3475,19 @@ function openRoom(r, t, title) {{
     if (isMobile) {{
         document.getElementById('sidebar').classList.add('hidden');
         document.getElementById('chat-area').classList.add('active');
+        
+        // Убедимся, что поле ввода всегда видно
+        setTimeout(() => {{
+            const inputArea = document.getElementById('input-area');
+            if (inputArea) {{
+                inputArea.style.display = 'flex';
+                inputArea.style.position = 'fixed';
+                inputArea.style.bottom = '0';
+                inputArea.style.left = '0';
+                inputArea.style.right = '0';
+                inputArea.style.zIndex = '1000';
+            }}
+        }}, 50);
     }}
     
     // Обновляем активные элементы в навигации
