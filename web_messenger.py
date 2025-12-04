@@ -1464,13 +1464,13 @@ def create_app():
         
         theme = user['theme']
         
-        # Генерируем HTML с новым функционалом Избранного
+        # Генерируем HTML с мобильной адаптацией
         return f'''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tandau Chat - {username}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
@@ -1500,6 +1500,7 @@ def create_app():
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }}
         
         body {{
@@ -1508,20 +1509,32 @@ def create_app():
             color: var(--text);
             height: 100vh;
             overflow: hidden;
+            touch-action: manipulation;
         }}
         
+        /* Основной контейнер для мобильной версии */
         .app-container {{
             display: flex;
             height: 100vh;
+            position: relative;
         }}
         
-        /* Сайдбар */
+        /* Сайдбар - виден по умолчанию на мобилке */
         .sidebar {{
-            width: var(--sidebar-width);
+            width: 100%;
             background: var(--input);
-            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 1000;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        
+        .sidebar.hidden {{
+            transform: translateX(-100%);
         }}
         
         .sidebar-header {{
@@ -1535,6 +1548,18 @@ def create_app():
             align-items: center;
             justify-content: center;
             gap: 12px;
+            position: relative;
+        }}
+        
+        .menu-toggle {{
+            position: absolute;
+            left: 20px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: none;
         }}
         
         .logo-placeholder {{
@@ -1612,6 +1637,7 @@ def create_app():
             flex: 1;
             overflow-y: auto;
             padding: 10px;
+            -webkit-overflow-scrolling: touch;
         }}
         
         .nav-title {{
@@ -1639,6 +1665,7 @@ def create_app():
             display: flex;
             align-items: center;
             gap: 10px;
+            user-select: none;
         }}
         
         .nav-item:hover {{
@@ -1675,11 +1702,24 @@ def create_app():
             justify-content: center;
         }}
         
-        /* Область чата */
+        /* Область чата - скрыта по умолчанию на мобилке */
         .chat-area {{
             flex: 1;
             display: flex;
             flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg);
+            z-index: 900;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        
+        .chat-area.active {{
+            transform: translateX(0);
         }}
         
         .chat-header {{
@@ -1690,6 +1730,18 @@ def create_app():
             display: flex;
             align-items: center;
             gap: 10px;
+            position: relative;
+        }}
+        
+        .back-btn {{
+            background: none;
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 5px;
+            margin-right: 5px;
+            display: none;
         }}
         
         .channel-actions {{
@@ -1716,6 +1768,7 @@ def create_app():
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+            -webkit-overflow-scrolling: touch;
         }}
         
         /* Стили сообщений */
@@ -1754,7 +1807,7 @@ def create_app():
         }}
         
         .message-content {{
-            max-width: 70%;
+            max-width: 85%;
             background: var(--input);
             padding: 12px 16px;
             border-radius: 18px;
@@ -1789,7 +1842,7 @@ def create_app():
             margin-top: 8px;
             border-radius: 12px;
             overflow: hidden;
-            max-width: 300px;
+            max-width: 100%;
         }}
         
         .message-file img {{
@@ -1932,6 +1985,8 @@ def create_app():
             background: var(--input);
             border-bottom: 1px solid var(--border);
             flex-wrap: wrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }}
         
         .category-filter-btn {{
@@ -1942,6 +1997,7 @@ def create_app():
             cursor: pointer;
             font-size: 0.9rem;
             transition: all 0.2s ease;
+            white-space: nowrap;
         }}
         
         .category-filter-btn.active {{
@@ -1974,6 +2030,7 @@ def create_app():
             border: 1px solid var(--border);
             max-height: 300px;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }}
         
         .member-item {{
@@ -2149,16 +2206,18 @@ def create_app():
             z-index: 2000;
             align-items: center;
             justify-content: center;
+            padding: 20px;
         }}
         
         .modal-content {{
             background: var(--input);
             padding: 25px;
             border-radius: 15px;
-            width: 90%;
+            width: 100%;
             max-width: 500px;
             max-height: 90vh;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }}
         
         .form-group {{
@@ -2178,6 +2237,7 @@ def create_app():
             border-radius: 8px;
             background: var(--bg);
             color: var(--text);
+            font-size: 16px; /* Убирает масштабирование на iOS */
         }}
         
         .form-control:focus {{
@@ -2202,6 +2262,7 @@ def create_app():
             cursor: pointer;
             font-weight: 500;
             transition: all 0.2s ease;
+            user-select: none;
         }}
         
         .btn-primary {{
@@ -2262,7 +2323,7 @@ def create_app():
         
         /* Скроллбар */
         ::-webkit-scrollbar {{
-            width: 8px;
+            width: 6px;
         }}
         
         ::-webkit-scrollbar-track {{
@@ -2271,7 +2332,7 @@ def create_app():
         
         ::-webkit-scrollbar-thumb {{
             background: #ccc;
-            border-radius: 4px;
+            border-radius: 3px;
         }}
         
         [data-theme="dark"] ::-webkit-scrollbar-thumb {{
@@ -2301,13 +2362,118 @@ def create_app():
             margin-bottom: 20px;
             opacity: 0.3;
         }}
+        
+        /* Медиа запросы для мобильных устройств */
+        @media (max-width: 768px) {{
+            .menu-toggle {{
+                display: block;
+            }}
+            
+            .back-btn {{
+                display: block;
+            }}
+            
+            .sidebar-header {{
+                padding: 15px 20px;
+            }}
+            
+            .app-title {{
+                font-size: 1.5rem;
+            }}
+            
+            .logo-placeholder {{
+                width: 35px;
+                height: 35px;
+                font-size: 18px;
+            }}
+            
+            .user-info {{
+                padding: 15px;
+            }}
+            
+            .avatar {{
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }}
+            
+            .favorites-grid {{
+                grid-template-columns: 1fr;
+                gap: 10px;
+                padding: 15px;
+            }}
+            
+            .message-content {{
+                max-width: 90%;
+            }}
+            
+            .modal-content {{
+                padding: 20px;
+                margin: 10px;
+            }}
+            
+            .categories-filter {{
+                padding: 10px;
+                gap: 8px;
+            }}
+            
+            .category-filter-btn {{
+                padding: 5px 10px;
+                font-size: 0.8rem;
+            }}
+            
+            .input-area {{
+                padding: 10px 15px;
+            }}
+            
+            .msg-input {{
+                padding: 10px 14px;
+                font-size: 16px;
+            }}
+            
+            .attachment-btn, .send-btn {{
+                width: 40px;
+                height: 40px;
+            }}
+        }}
+        
+        @media (min-width: 769px) {{
+            .sidebar {{
+                width: var(--sidebar-width);
+                position: relative;
+                transform: none !important;
+            }}
+            
+            .chat-area {{
+                position: relative;
+                transform: none !important;
+            }}
+            
+            .menu-toggle {{
+                display: none;
+            }}
+            
+            .back-btn {{
+                display: none;
+            }}
+        }}
+        
+        /* Предотвращение выделения текста при касании */
+        .no-select {{
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }}
     </style>
 </head>
 <body>
     <div class="app-container">
         <!-- Сайдбар -->
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <div class="logo-placeholder">
                     <i class="fas fa-comments"></i>
                 </div>
@@ -2369,8 +2535,11 @@ def create_app():
         </div>
         
         <!-- Область чата -->
-        <div class="chat-area">
+        <div class="chat-area" id="chat-area">
             <div class="chat-header">
+                <button class="back-btn" onclick="goBack()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
                 <span id="chat-title">Избранное</span>
                 <div class="channel-actions" id="channel-actions" style="display: none;">
                     <button class="channel-btn" onclick="openChannelSettings()">
@@ -2519,9 +2688,35 @@ def create_app():
         let roomType = "favorites";
         let currentChannel = "";
         let currentCategory = "all";
+        let isMobile = window.innerWidth <= 768;
+
+        // Определение мобильного устройства
+        function checkMobile() {{
+            isMobile = window.innerWidth <= 768;
+            if (!isMobile) {{
+                // На десктопе всегда показываем оба блока
+                document.getElementById('sidebar').classList.remove('hidden');
+                document.getElementById('chat-area').classList.add('active');
+            }}
+        }}
+
+        // Переключение сайдбара
+        function toggleSidebar() {{
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('hidden');
+        }}
+
+        // Возврат к списку чатов
+        function goBack() {{
+            if (isMobile) {{
+                document.getElementById('sidebar').classList.remove('hidden');
+                document.getElementById('chat-area').classList.remove('active');
+            }}
+        }}
 
         // Инициализация при загрузке
         window.onload = function() {{
+            checkMobile();
             loadUserAvatar();
             loadUserChannels();
             loadUsers();
@@ -2529,8 +2724,16 @@ def create_app():
             loadFavoritesCategories();
             loadFavorites();
             
-            // Открываем избранное по умолчанию
-            openFavorites();
+            // На мобильных устройствах показываем только сайдбар
+            if (isMobile) {{
+                document.getElementById('chat-area').classList.remove('active');
+            }} else {{
+                // На десктопе открываем избранное по умолчанию
+                openFavorites();
+            }}
+            
+            // Слушаем изменения размера окна
+            window.addEventListener('resize', checkMobile);
         }};
 
         // Загрузка аватарки пользователя
@@ -2692,128 +2895,6 @@ def create_app():
             loadFavorites(category === 'all' ? null : category);
         }}
 
-        // Функции для работы с избранным
-        function openAddFavoriteModal() {{
-            document.getElementById('add-favorite-modal').style.display = 'flex';
-            document.getElementById('favorite-file').addEventListener('change', function(e) {{
-                const file = e.target.files[0];
-                const preview = document.getElementById('favorite-file-preview');
-                
-                if (file) {{
-                    if (file.type.startsWith('image/')) {{
-                        const reader = new FileReader();
-                        reader.onload = (e) => {{
-                            preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 100%; border-radius: 8px;">`;
-                        }};
-                        reader.readAsDataURL(file);
-                    }} else if (file.type.startsWith('video/')) {{
-                        const reader = new FileReader();
-                        reader.onload = (e) => {{
-                            preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
-                        }};
-                        reader.readAsDataURL(file);
-                    }} else {{
-                        preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                            <i class="fas fa-file"></i> ${{file.name}}
-                        </div>`;
-                    }}
-                }}
-            }});
-        }}
-
-        function closeAddFavoriteModal() {{
-            document.getElementById('add-favorite-modal').style.display = 'none';
-            document.getElementById('favorite-content').value = '';
-            document.getElementById('favorite-category').value = 'general';
-            document.getElementById('favorite-file').value = '';
-            document.getElementById('favorite-file-preview').innerHTML = '';
-        }}
-
-        function saveFavorite() {{
-            const content = document.getElementById('favorite-content').value.trim();
-            const category = document.getElementById('favorite-category').value.trim() || 'general';
-            const fileInput = document.getElementById('favorite-file');
-            const file = fileInput.files[0];
-            
-            if (!content && !file) {{
-                alert('Добавьте текст или файл');
-                return;
-            }}
-            
-            const formData = new FormData();
-            formData.append('content', content);
-            formData.append('category', category);
-            
-            if (file) {{
-                formData.append('file', file);
-            }}
-            
-            fetch('/add_to_favorites', {{
-                method: 'POST',
-                body: formData
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    closeAddFavoriteModal();
-                    loadFavoritesCategories();
-                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                    alert('Добавлено в избранное!');
-                }} else {{
-                    alert(data.error || 'Ошибка при сохранении');
-                }}
-            }});
-        }}
-
-        function deleteFavorite(favoriteId) {{
-            if (!confirm('Удалить эту заметку?')) return;
-            
-            fetch(`/delete_favorite/${{favoriteId}}`, {{
-                method: 'DELETE'
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    document.getElementById(`favorite-${{favoriteId}}`).remove();
-                    
-                    // Если удалили последний элемент, показываем пустой экран
-                    const grid = document.getElementById('favorites-grid');
-                    if (grid.children.length === 0) {{
-                        loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                    }}
-                }} else {{
-                    alert('Ошибка при удалении');
-                }}
-            }});
-        }}
-
-        function togglePinFavorite(favoriteId) {{
-            fetch(`/toggle_pin_favorite/${{favoriteId}}`, {{
-                method: 'POST'
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    const item = document.getElementById(`favorite-${{favoriteId}}`);
-                    if (data.pinned) {{
-                        item.classList.add('pinned');
-                    }} else {{
-                        item.classList.remove('pinned');
-                    }}
-                    
-                    // Перезагружаем чтобы обновить порядок
-                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                }}
-            }});
-        }}
-
-        function openFilePreview(filePath) {{
-            const win = window.open(filePath, '_blank');
-            if (win) {{
-                win.focus();
-            }}
-        }}
-
         // Открытие избранного
         function openFavorites() {{
             room = "favorites";
@@ -2826,6 +2907,12 @@ def create_app():
             document.getElementById('chat-messages').style.display = 'none';
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
+            
+            // На мобильных устройствах переключаемся в режим чата
+            if (isMobile) {{
+                document.getElementById('sidebar').classList.add('hidden');
+                document.getElementById('chat-area').classList.add('active');
+            }}
             
             // Обновляем активные элементы в навигации
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -3318,6 +3405,12 @@ function openRoom(r, t, title) {{
     document.getElementById('chat-messages').style.display = 'block';
     document.getElementById('input-area').style.display = 'flex';
     
+    // На мобильных устройствах переключаемся в режим чата
+    if (isMobile) {{
+        document.getElementById('sidebar').classList.add('hidden');
+        document.getElementById('chat-area').classList.add('active');
+    }}
+    
     // Обновляем активные элементы в навигации
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     event.currentTarget.classList.add('active');
@@ -3546,6 +3639,128 @@ socket.on('message', (data) => {{
         addMessageToChat(data);
     }}
 }});
+
+// Функции для работы с избранным (сохраняются для совместимости)
+function openAddFavoriteModal() {{
+    document.getElementById('add-favorite-modal').style.display = 'flex';
+    document.getElementById('favorite-file').addEventListener('change', function(e) {{
+        const file = e.target.files[0];
+        const preview = document.getElementById('favorite-file-preview');
+        
+        if (file) {{
+            if (file.type.startsWith('image/')) {{
+                const reader = new FileReader();
+                reader.onload = (e) => {{
+                    preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 100%; border-radius: 8px;">`;
+                }};
+                reader.readAsDataURL(file);
+            }} else if (file.type.startsWith('video/')) {{
+                const reader = new FileReader();
+                reader.onload = (e) => {{
+                    preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
+                }};
+                reader.readAsDataURL(file);
+            }} else {{
+                preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                    <i class="fas fa-file"></i> ${{file.name}}
+                </div>`;
+            }}
+        }}
+    }});
+}}
+
+function closeAddFavoriteModal() {{
+    document.getElementById('add-favorite-modal').style.display = 'none';
+    document.getElementById('favorite-content').value = '';
+    document.getElementById('favorite-category').value = 'general';
+    document.getElementById('favorite-file').value = '';
+    document.getElementById('favorite-file-preview').innerHTML = '';
+}}
+
+function saveFavorite() {{
+    const content = document.getElementById('favorite-content').value.trim();
+    const category = document.getElementById('favorite-category').value.trim() || 'general';
+    const fileInput = document.getElementById('favorite-file');
+    const file = fileInput.files[0];
+    
+    if (!content && !file) {{
+        alert('Добавьте текст или файл');
+        return;
+    }}
+    
+    const formData = new FormData();
+    formData.append('content', content);
+    formData.append('category', category);
+    
+    if (file) {{
+        formData.append('file', file);
+    }}
+    
+    fetch('/add_to_favorites', {{
+        method: 'POST',
+        body: formData
+    }})
+    .then(r => r.json())
+    .then(data => {{
+        if (data.success) {{
+            closeAddFavoriteModal();
+            loadFavoritesCategories();
+            loadFavorites(currentCategory === 'all' ? null : currentCategory);
+            alert('Добавлено в избранное!');
+        }} else {{
+            alert(data.error || 'Ошибка при сохранении');
+        }}
+    }});
+}}
+
+function deleteFavorite(favoriteId) {{
+    if (!confirm('Удалить эту заметку?')) return;
+    
+    fetch(`/delete_favorite/${{favoriteId}}`, {{
+        method: 'DELETE'
+    }})
+    .then(r => r.json())
+    .then(data => {{
+        if (data.success) {{
+            document.getElementById(`favorite-${{favoriteId}}`).remove();
+            
+            // Если удалили последний элемент, показываем пустой экран
+            const grid = document.getElementById('favorites-grid');
+            if (grid.children.length === 0) {{
+                loadFavorites(currentCategory === 'all' ? null : currentCategory);
+            }}
+        }} else {{
+            alert('Ошибка при удалении');
+        }}
+    }});
+}}
+
+function togglePinFavorite(favoriteId) {{
+    fetch(`/toggle_pin_favorite/${{favoriteId}}`, {{
+        method: 'POST'
+    }})
+    .then(r => r.json())
+    .then(data => {{
+        if (data.success) {{
+            const item = document.getElementById(`favorite-${{favoriteId}}`);
+            if (data.pinned) {{
+                item.classList.add('pinned');
+            }} else {{
+                item.classList.remove('pinned');
+            }}
+            
+            // Перезагружаем чтобы обновить порядок
+            loadFavorites(currentCategory === 'all' ? null : currentCategory);
+        }}
+    }});
+}}
+
+function openFilePreview(filePath) {{
+    const win = window.open(filePath, '_blank');
+    if (win) {{
+        win.focus();
+    }}
+}}
 </script>
 </body>
 </html>'''
