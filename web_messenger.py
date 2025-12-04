@@ -1120,7 +1120,6 @@ def create_app():
             <div class="container">
                 <div class="logo-section">
                     <div class="logo-container">
-                        <!-- ЗАМЕНИТЕ ЭТОТ БЛОК НА ВАШ ЛОГОТИП -->
                         <div class="logo-placeholder">
                             <i class="fas fa-comments"></i>
                         </div>
@@ -1483,6 +1482,9 @@ def create_app():
             --accent: #667eea;
             --sidebar-width: 300px;
             --favorite-color: #ffd700;
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
         }}
         
         [data-theme="dark"] {{
@@ -1524,15 +1526,39 @@ def create_app():
         
         .sidebar-header {{
             padding: 20px;
-            background: var(--accent);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             text-align: center;
             font-weight: 700;
             font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }}
+        
+        .logo-placeholder {{
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }}
+        
+        .app-title {{
+            color: white;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
         }}
         
         .user-info {{
-            padding: 15px;
+            padding: 20px 15px;
             display: flex;
             gap: 12px;
             align-items: center;
@@ -1554,6 +1580,7 @@ def create_app():
             background-size: cover;
             background-position: center;
             cursor: pointer;
+            border: 2px solid var(--accent);
         }}
         
         .user-details {{
@@ -1569,6 +1596,16 @@ def create_app():
         .user-status {{
             font-size: 0.85rem;
             opacity: 0.8;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+        
+        .status-dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
         }}
         
         .nav {{
@@ -1633,6 +1670,9 @@ def create_app():
             cursor: pointer;
             padding: 4px;
             border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }}
         
         /* Область чата */
@@ -1665,6 +1705,9 @@ def create_app():
             cursor: pointer;
             padding: 5px;
             border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }}
         
         .messages {{
@@ -1673,6 +1716,109 @@ def create_app():
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+        }}
+        
+        /* Стили сообщений */
+        .message-container {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+        
+        .message {{
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 8px 0;
+            animation: fadeIn 0.3s ease;
+        }}
+        
+        .message.own {{
+            flex-direction: row-reverse;
+        }}
+        
+        .message-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            background-size: cover;
+            background-position: center;
+        }}
+        
+        .message-content {{
+            max-width: 70%;
+            background: var(--input);
+            padding: 12px 16px;
+            border-radius: 18px;
+            border-top-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }}
+        
+        .message.own .message-content {{
+            background: var(--accent);
+            color: white;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 4px;
+        }}
+        
+        .message-sender {{
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+            color: var(--text);
+        }}
+        
+        .message.own .message-sender {{
+            color: white;
+        }}
+        
+        .message-text {{
+            word-break: break-word;
+            line-height: 1.4;
+        }}
+        
+        .message-file {{
+            margin-top: 8px;
+            border-radius: 12px;
+            overflow: hidden;
+            max-width: 300px;
+        }}
+        
+        .message-file img {{
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }}
+        
+        .message-file img:hover {{
+            transform: scale(1.02);
+        }}
+        
+        .message-file video {{
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+        }}
+        
+        .message-time {{
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 4px;
+            text-align: right;
+        }}
+        
+        .message.own .message-time {{
+            color: rgba(255,255,255,0.8);
         }}
         
         /* Стили для избранного */
@@ -1717,6 +1863,7 @@ def create_app():
             width: 100%;
             height: auto;
             display: block;
+            border-radius: 8px;
         }}
         
         .favorite-meta {{
@@ -1906,10 +2053,41 @@ def create_app():
             border-color: #dc3545;
         }}
         
+        /* Область ввода сообщения */
+        .input-area {{
+            padding: 15px 20px;
+            background: var(--input);
+            border-top: 1px solid var(--border);
+        }}
+        
         .input-row {{
             display: flex;
             gap: 10px;
             align-items: flex-end;
+        }}
+        
+        .attachment-btn {{
+            background: none;
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 10px;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }}
+        
+        .attachment-btn:hover {{
+            background: rgba(0,0,0,0.05);
+        }}
+        
+        [data-theme="dark"] .attachment-btn:hover {{
+            background: rgba(255,255,255,0.1);
         }}
         
         .msg-input {{
@@ -1923,6 +2101,7 @@ def create_app():
             resize: none;
             max-height: 120px;
             min-height: 44px;
+            line-height: 1.4;
         }}
         
         .send-btn {{
@@ -1937,6 +2116,25 @@ def create_app():
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            transition: background 0.2s;
+        }}
+        
+        .send-btn:hover {{
+            background: var(--primary-dark);
+        }}
+        
+        .file-preview {{
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--bg);
+            border-radius: 12px;
+            border: 1px dashed var(--border);
+        }}
+        
+        .file-preview img, .file-preview video {{
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 8px;
         }}
         
         /* Модальные окна */
@@ -2034,6 +2232,7 @@ def create_app():
             background-size: cover;
             background-position: center;
             cursor: pointer;
+            border: 3px solid var(--accent);
         }}
         
         .theme-btn {{
@@ -2055,6 +2254,10 @@ def create_app():
             border-radius: 10px;
             cursor: pointer;
             font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }}
         
         /* Скроллбар */
@@ -2074,6 +2277,30 @@ def create_app():
         [data-theme="dark"] ::-webkit-scrollbar-thumb {{
             background: #555;
         }}
+        
+        /* Анимации */
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        /* Пустой чат */
+        .empty-chat {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            text-align: center;
+            padding: 40px;
+        }}
+        
+        .empty-chat i {{
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }}
     </style>
 </head>
 <body>
@@ -2081,13 +2308,19 @@ def create_app():
         <!-- Сайдбар -->
         <div class="sidebar">
             <div class="sidebar-header">
-                💬 Tandau
+                <div class="logo-placeholder">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h1 class="app-title">Tandau</h1>
             </div>
             <div class="user-info">
                 <div class="avatar" id="user-avatar" onclick="openAvatarModal()"></div>
                 <div class="user-details">
                     <strong>{username}</strong>
-                    <div class="user-status">Online</div>
+                    <div class="user-status">
+                        <div class="status-dot"></div>
+                        Online
+                    </div>
                 </div>
                 <button class="channel-btn" onclick="openThemeModal()" title="Сменить тему">
                     <i class="fas fa-palette"></i>
@@ -2162,17 +2395,17 @@ def create_app():
                 <div id="channel-settings" style="display: none;"></div>
                 
                 <!-- Для чата показываем сообщения -->
-                <div id="chat-messages" style="display: none;"></div>
+                <div id="chat-messages" class="message-container" style="display: none;"></div>
             </div>
             
             <div class="input-area" id="input-area" style="display: none;">
                 <div class="input-row">
-                    <button onclick="document.getElementById('file-input').click()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text);">
+                    <button class="attachment-btn" onclick="document.getElementById('file-input').click()" title="Прикрепить файл">
                         <i class="fas fa-paperclip"></i>
                     </button>
                     <input type="file" id="file-input" accept="image/*,video/*,text/*,.pdf,.doc,.docx" style="display:none" onchange="handleFileSelect(this)">
                     <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1" onkeydown="handleKeydown(event)"></textarea>
-                    <button class="send-btn" onclick="sendMessage()">
+                    <button class="send-btn" onclick="sendMessage()" title="Отправить">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
@@ -3089,7 +3322,9 @@ function openRoom(r, t, title) {{
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     event.currentTarget.classList.add('active');
     
-    document.getElementById('chat-messages').innerHTML = '';
+    // Очищаем чат и показываем заглушку
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
     
     // Показываем/скрываем кнопки управления каналом
     const channelActions = document.getElementById('channel-actions');
@@ -3114,10 +3349,12 @@ function loadMessages(roomName) {{
             const messagesContainer = document.getElementById('chat-messages');
             messagesContainer.innerHTML = '';
             
-            if (messages && Array.isArray(messages)) {{
+            if (messages && Array.isArray(messages) && messages.length > 0) {{
                 messages.forEach(msg => {{
                     addMessageToChat(msg);
                 }});
+            }} else {{
+                messagesContainer.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
             }}
             
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -3128,35 +3365,77 @@ function loadMessages(roomName) {{
 // Добавление сообщения в чат
 function addMessageToChat(data) {{
     const messagesContainer = document.getElementById('chat-messages');
-    const msg = document.createElement('div');
-    msg.className = `msg ${{data.user === user ? 'own' : 'other'}}`;
     
-    let avatarHtml = '';
-    if (data.color) {{
-        avatarHtml = `<div class="msg-avatar" style="background-color: ${{data.color}}">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
-    }} else {{
-        avatarHtml = `<div class="msg-avatar">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+    // Удаляем пустой экран, если он есть
+    const emptyChat = messagesContainer.querySelector('.empty-chat');
+    if (emptyChat) {{
+        emptyChat.remove();
     }}
     
-    let content = `
-        <div class="msg-header">
-            ${{avatarHtml}}
-            <div class="msg-sender">${{data.user}}</div>
-        </div>
-        ${{data.message ? data.message.replace(/\\n/g, '<br>') : ''}}
-    `;
+    const message = document.createElement('div');
+    message.className = `message ${{data.user === user ? 'own' : 'other'}}`;
     
+    // Создаем аватарку
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.style.backgroundColor = data.color || '#6366F1';
+    if (data.user !== user) {{
+        avatar.textContent = data.user.slice(0, 2).toUpperCase();
+    }}
+    
+    // Создаем контент сообщения
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    
+    // Добавляем отправителя (только для чужих сообщений)
+    if (data.user !== user) {{
+        const sender = document.createElement('div');
+        sender.className = 'message-sender';
+        sender.textContent = data.user;
+        content.appendChild(sender);
+    }}
+    
+    // Добавляем текст сообщения
+    if (data.message) {{
+        const text = document.createElement('div');
+        text.className = 'message-text';
+        text.innerHTML = data.message.replace(/\\n/g, '<br>');
+        content.appendChild(text);
+    }}
+    
+    // Добавляем файл, если есть
     if (data.file) {{
+        const fileContainer = document.createElement('div');
+        fileContainer.className = 'message-file';
+        
         if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
-            content += `<div class="file-preview"><video src="${{data.file}}" controls></video></div>`;
+            const video = document.createElement('video');
+            video.src = data.file;
+            video.controls = true;
+            fileContainer.appendChild(video);
         }} else {{
-            content += `<div class="file-preview"><img src="${{data.file}}"></div>`;
+            const img = document.createElement('img');
+            img.src = data.file;
+            img.alt = data.file_name || 'Файл';
+            img.onclick = () => window.open(data.file, '_blank');
+            fileContainer.appendChild(img);
         }}
+        
+        content.appendChild(fileContainer);
     }}
     
-    content += `<div class="msg-time">${{data.timestamp || ''}}</div>`;
-    msg.innerHTML = content;
-    messagesContainer.appendChild(msg);
+    // Добавляем время
+    const time = document.createElement('div');
+    time.className = 'message-time';
+    time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
+    content.appendChild(time);
+    
+    // Собираем сообщение
+    message.appendChild(avatar);
+    message.appendChild(content);
+    messagesContainer.appendChild(message);
+    
+    // Прокручиваем к последнему сообщению
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }}
 
@@ -3194,6 +3473,7 @@ function resetInput() {{
     document.getElementById('msg-input').value = '';
     document.getElementById('file-input').value = '';
     document.getElementById('file-preview').innerHTML = '';
+    autoResizeTextarea();
 }}
 
 function handleKeydown(e) {{
@@ -3203,6 +3483,14 @@ function handleKeydown(e) {{
     }}
 }}
 
+function autoResizeTextarea() {{
+    const textarea = document.getElementById('msg-input');
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+}}
+
+document.getElementById('msg-input').addEventListener('input', autoResizeTextarea);
+
 function handleFileSelect(input) {{
     const file = input.files[0];
     if (file) {{
@@ -3210,13 +3498,42 @@ function handleFileSelect(input) {{
         reader.onload = (e) => {{
             const preview = document.getElementById('file-preview');
             if (file.type.startsWith('image/')) {{
-                preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 200px; border-radius: 8px;">`;
+                preview.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
+                        <div>
+                            <div style="font-weight: 500;">${{file.name}}</div>
+                            <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                `;
             }} else if (file.type.startsWith('video/')) {{
-                preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 200px; border-radius: 8px;"></video>`;
+                preview.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <video src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;"></video>
+                        <div>
+                            <div style="font-weight: 500;">${{file.name}}</div>
+                            <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                `;
             }} else {{
-                preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                    <i class="fas fa-file"></i> ${{file.name}}
-                </div>`;
+                preview.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg); border-radius: 8px;">
+                        <i class="fas fa-file" style="font-size: 2rem; color: var(--accent);"></i>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 500;">${{file.name}}</div>
+                            <div style="font-size: 0.8rem; color: #666;">${{(file.size / 1024).toFixed(1)}} KB</div>
+                        </div>
+                        <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
             }}
         }};
         reader.readAsDataURL(file);
