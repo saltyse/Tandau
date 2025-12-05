@@ -1,4 +1,4 @@
-# app.py - Tandau Messenger для Render
+# web_messenger.py - Tandau Messenger для Render
 from flask import Flask, request, jsonify, session, redirect, send_from_directory, render_template_string
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -25,7 +25,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['AVATAR_FOLDER'], exist_ok=True)
 os.makedirs(app.config['FAVORITE_FOLDER'], exist_ok=True)
 
-# Инициализация SocketIO - БЕЗ async_mode
+# Инициализация SocketIO - ИСПРАВЛЕНИЕ: убрали async_mode='eventlet'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # === Инициализация БД ===
@@ -434,7 +434,6 @@ INDEX_HTML = '''<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tandau Messenger</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -785,62 +784,6 @@ INDEX_HTML = '''<!DOCTYPE html>
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
-        /* Модальное окно условий использования */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(10px);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .glass-modal {
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(25px);
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            padding: 40px;
-            max-width: 500px;
-            width: 90%;
-            color: white;
-            text-align: center;
-        }
-        
-        .glass-modal h2 {
-            margin-bottom: 20px;
-            color: white;
-        }
-        
-        .glass-modal p {
-            margin-bottom: 30px;
-            line-height: 1.6;
-            color: rgba(255, 255, 255, 0.9);
-        }
-        
-        .download-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            color: white;
-            padding: 14px 28px;
-            border-radius: 14px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        
-        .download-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
     </style>
 </head>
 <body>
@@ -946,14 +889,16 @@ INDEX_HTML = '''<!DOCTYPE html>
     </div>
 
     <!-- Модальное окно условий использования -->
-    <div id="terms-modal" class="modal-overlay">
-        <div class="glass-modal">
-            <h2>Условия использования</h2>
-            <p>
+    <div id="terms-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); z-index:2000; align-items:center; justify-content:center;">
+        <div style="background:rgba(255,255,255,0.12); backdrop-filter:blur(25px); border-radius:24px; border:1px solid rgba(255,255,255,0.18); padding:40px; max-width:500px; width:90%; color:white; text-align:center;">
+            <h2 style="margin-bottom:20px;">Условия использования</h2>
+            <p style="margin-bottom:30px; line-height:1.6;">
                 Для подробного ознакомления с пользовательским соглашением мессенджера Tandau,
                 вы можете скачать полную версию документа.
             </p>
-            <a href="/static/terms.pdf" class="download-btn" download="Условия_использования_Tandau.pdf">
+            <a href="/static/terms.pdf" 
+               style="display:inline-flex; align-items:center; gap:12px; background:linear-gradient(90deg,#667eea,#764ba2); color:white; padding:14px 28px; border-radius:14px; text-decoration:none; font-weight:600;"
+               download="Условия_использования_Tandau.pdf">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M8.267 14.68c-.184 0-.308.018-.372.036v1.178c.076.018.171.023.302.023.479 0 .774-.242.774-.651 0-.366-.254-.586-.704-.586zm3.487.012c-.2 0-.33.018-.407.036v2.61c.077.018.201.018.313.018.817.006 1.349-.444 1.349-1.396.006-.83-.479-1.268-1.255-1.268z"/>
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1.8 18H6.4V4.5H13V9h4.9v11.5zm-4.6-3.14c0-1.28.96-2.34 2.34-2.34.86 0 1.56.36 2.03.92l.86-1.58c-.76-.74-1.86-1.22-3.09-1.22-2.38 0-4.31 1.92-4.31 4.31 0 2.39 1.93 4.31 4.31 4.31 1.23 0 2.33-.48 3.09-1.22l-.86-1.58c-.47.56-1.17.92-2.03.92-1.38 0-2.34-1.06-2.34-2.34z"/>
@@ -1166,21 +1111,19 @@ INDEX_HTML = '''<!DOCTYPE html>
                     this.parentElement.style.transform = "translateY(0)";
                 });
             });
-            
-            // Закрыть модальное окно при клике на фон
-            document.getElementById("terms-modal").addEventListener("click", function(e) {
-                if (e.target === this) {
-                    closeTermsModal();
-                }
-            });
-            
-            // Закрыть модальное окно клавишей Esc
-            document.addEventListener("keydown", function(e) {
-                if (e.key === "Escape" && document.getElementById("terms-modal").style.display === "flex") {
-                    closeTermsModal();
-                }
-            });
         });
+        
+        // Закрыть модальное окно при клике на фон
+        document.getElementById("terms-modal").addEventListener("click", function(e) {
+            if (e.target === this) {
+                closeTermsModal();
+            }
+        });
+        
+        // Загружаем Font Awesome
+        const faScript = document.createElement("script");
+        faScript.src = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js";
+        document.head.appendChild(faScript);
     </script>
 </body>
 </html>'''
@@ -1238,487 +1181,6 @@ def logout_handler():
         session.pop('username', None)
     return redirect('/')
 
-# Упрощенная страница чата
-CHAT_HTML = '''<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tandau Chat</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <style>
-        :root {
-            --primary: #6366f1;
-            --bg: #f8f9fa;
-            --text: #333;
-            --border: #ddd;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        
-        body {
-            background: var(--bg);
-            color: var(--text);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .header {
-            padding: 15px 20px;
-            background: white;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .logo {
-            font-weight: 700;
-            font-size: 1.2rem;
-            color: var(--primary);
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .username {
-            font-weight: 600;
-        }
-        
-        .logout-btn {
-            padding: 8px 16px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        
-        .container {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
-        }
-        
-        .sidebar {
-            width: 250px;
-            background: white;
-            border-right: 1px solid var(--border);
-            padding: 20px;
-            overflow-y: auto;
-        }
-        
-        .sidebar-title {
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #666;
-        }
-        
-        .channel-list, .user-list {
-            list-style: none;
-        }
-        
-        .channel-item, .user-item {
-            padding: 10px 12px;
-            margin: 5px 0;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .channel-item:hover, .user-item:hover {
-            background: #f0f0f0;
-        }
-        
-        .channel-item.active, .user-item.active {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .chat-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .chat-header {
-            padding: 15px 20px;
-            background: white;
-            border-bottom: 1px solid var(--border);
-            font-weight: 600;
-        }
-        
-        .messages {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        .message {
-            display: flex;
-            gap: 10px;
-            max-width: 70%;
-        }
-        
-        .message.own {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
-        
-        .message-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            flex-shrink: 0;
-        }
-        
-        .message-content {
-            background: white;
-            padding: 12px 16px;
-            border-radius: 18px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .message.own .message-content {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .message-sender {
-            font-weight: 600;
-            font-size: 0.9rem;
-            margin-bottom: 4px;
-        }
-        
-        .message-text {
-            line-height: 1.4;
-        }
-        
-        .message-time {
-            font-size: 0.75rem;
-            color: #666;
-            margin-top: 4px;
-            text-align: right;
-        }
-        
-        .message.own .message-time {
-            color: rgba(255,255,255,0.8);
-        }
-        
-        .input-area {
-            padding: 20px;
-            background: white;
-            border-top: 1px solid var(--border);
-        }
-        
-        .input-container {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .message-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: 25px;
-            font-size: 1rem;
-            resize: none;
-            min-height: 44px;
-            max-height: 120px;
-        }
-        
-        .message-input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        
-        .send-btn {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: white;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        @media (max-width: 768px) {
-            .sidebar {
-                display: none;
-            }
-            
-            .message {
-                max-width: 85%;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">Tandau Messenger</div>
-        <div class="user-info">
-            <span class="username" id="username"></span>
-            <button class="logout-btn" onclick="logout()">Выйти</button>
-        </div>
-    </div>
-    
-    <div class="container">
-        <div class="sidebar">
-            <div class="sidebar-title">Каналы</div>
-            <ul class="channel-list" id="channel-list">
-                <li class="channel-item active" onclick="joinRoom('general')"># General</li>
-            </ul>
-            
-            <div class="sidebar-title" style="margin-top: 20px;">Пользователи</div>
-            <ul class="user-list" id="user-list"></ul>
-        </div>
-        
-        <div class="chat-area">
-            <div class="chat-header" id="chat-title"># General</div>
-            
-            <div class="messages" id="messages">
-                <div class="message">
-                    <div class="message-avatar">TA</div>
-                    <div class="message-content">
-                        <div class="message-sender">System</div>
-                        <div class="message-text">Добро пожаловать в Tandau Messenger!</div>
-                        <div class="message-time" id="welcome-time"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="input-area">
-                <div class="input-container">
-                    <textarea class="message-input" id="message-input" placeholder="Написать сообщение..." rows="1"></textarea>
-                    <button class="send-btn" onclick="sendMessage()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const socket = io();
-        let currentUser = '';
-        let currentRoom = 'general';
-        
-        // Получаем имя пользователя из куки или сессии
-        function getUsername() {
-            // Простой способ - можно улучшить
-            const urlParams = new URLSearchParams(window.location.search);
-            const user = urlParams.get('user') || 'Гость';
-            return user;
-        }
-        
-        socket.on('connect', () => {
-            console.log('Connected to server');
-            currentUser = getUsername();
-            document.getElementById('username').textContent = currentUser;
-            joinRoom('general');
-            loadUsers();
-            document.getElementById('welcome-time').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        });
-        
-        socket.on('message', (data) => {
-            if (data.room === currentRoom) {
-                addMessage(data);
-            }
-        });
-        
-        socket.on('user_joined', (data) => {
-            console.log('User joined:', data.username);
-            addSystemMessage(`${data.username} присоединился к чату`);
-        });
-        
-        socket.on('user_left', (data) => {
-            console.log('User left:', data.username);
-            addSystemMessage(`${data.username} покинул чат`);
-        });
-        
-        function joinRoom(room) {
-            if (currentRoom) {
-                socket.emit('leave', { room: currentRoom });
-            }
-            
-            currentRoom = room;
-            socket.emit('join', { room: room, username: currentUser });
-            document.getElementById('chat-title').textContent = '# ' + (room === 'general' ? 'General' : room);
-            
-            // Обновляем активный элемент
-            document.querySelectorAll('.channel-item, .user-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            event.currentTarget.classList.add('active');
-            
-            // Загружаем историю сообщений
-            loadMessages(room);
-        }
-        
-        function loadMessages(room) {
-            fetch(`/messages/${room}`)
-                .then(response => response.json())
-                .then(messages => {
-                    const container = document.getElementById('messages');
-                    container.innerHTML = '';
-                    
-                    if (messages.length === 0) {
-                        addSystemMessage('Нет сообщений. Начните общение!');
-                    } else {
-                        messages.forEach(msg => addMessage(msg));
-                    }
-                    
-                    container.scrollTop = container.scrollHeight;
-                })
-                .catch(error => {
-                    console.error('Error loading messages:', error);
-                    addSystemMessage('Не удалось загрузить сообщения');
-                });
-        }
-        
-        function addMessage(data) {
-            const container = document.getElementById('messages');
-            const isOwn = data.user === currentUser;
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isOwn ? 'own' : ''}`;
-            
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = data.user.substring(0, 2).toUpperCase();
-            
-            const content = document.createElement('div');
-            content.className = 'message-content';
-            
-            if (!isOwn) {
-                const sender = document.createElement('div');
-                sender.className = 'message-sender';
-                sender.textContent = data.user;
-                content.appendChild(sender);
-            }
-            
-            const text = document.createElement('div');
-            text.className = 'message-text';
-            text.textContent = data.message;
-            
-            const time = document.createElement('div');
-            time.className = 'message-time';
-            time.textContent = data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            content.appendChild(text);
-            content.appendChild(time);
-            messageDiv.appendChild(avatar);
-            messageDiv.appendChild(content);
-            container.appendChild(messageDiv);
-            
-            container.scrollTop = container.scrollHeight;
-        }
-        
-        function addSystemMessage(text) {
-            const container = document.getElementById('messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.style.textAlign = 'center';
-            messageDiv.style.padding = '10px';
-            messageDiv.style.color = '#666';
-            messageDiv.style.fontStyle = 'italic';
-            messageDiv.textContent = text;
-            container.appendChild(messageDiv);
-            container.scrollTop = container.scrollHeight;
-        }
-        
-        function sendMessage() {
-            const input = document.getElementById('message-input');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            socket.emit('message', {
-                message: message,
-                room: currentRoom,
-                user: currentUser
-            });
-            
-            input.value = '';
-            input.focus();
-            autoResizeTextarea();
-        }
-        
-        function loadUsers() {
-            fetch('/users')
-                .then(response => response.json())
-                .then(users => {
-                    const container = document.getElementById('user-list');
-                    container.innerHTML = '';
-                    
-                    users.forEach(u => {
-                        if (u.username !== currentUser) {
-                            const item = document.createElement('li');
-                            item.className = 'user-item';
-                            item.textContent = u.username + (u.online ? ' 🟢' : ' ⚫');
-                            item.onclick = () => joinRoom(`private_${u.username}`);
-                            container.appendChild(item);
-                        }
-                    });
-                })
-                .catch(error => {
-                    console.error('Error loading users:', error);
-                });
-        }
-        
-        function logout() {
-            window.location.href = '/logout';
-        }
-        
-        // Инициализация
-        document.addEventListener('DOMContentLoaded', () => {
-            // Настройка поля ввода
-            const input = document.getElementById('message-input');
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            });
-            
-            // Авторазмер textarea
-            function autoResizeTextarea() {
-                input.style.height = 'auto';
-                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-            }
-            
-            input.addEventListener('input', autoResizeTextarea);
-            
-            // Обновляем пользователей каждые 30 секунд
-            setInterval(loadUsers, 30000);
-        });
-    </script>
-</body>
-</html>'''
-
 @app.route('/chat')
 def chat_handler():
     """Страница чата"""
@@ -1731,8 +1193,483 @@ def chat_handler():
         session.pop('username', None)
         return redirect('/')
     
-    # Возвращаем простую HTML страницу чата
-    return CHAT_HTML
+    # Более простая HTML страница чата
+    return f'''<!DOCTYPE html>
+<html lang="ru" data-theme="{user.get('theme', 'light')}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tandau Chat - {username}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        :root {{
+            --bg: #f8f9fa;
+            --text: #333;
+            --input: #fff;
+            --border: #ddd;
+            --accent: #667eea;
+            --primary: #6366f1;
+        }}
+        
+        [data-theme="dark"] {{
+            --bg: #1a1a1a;
+            --text: #eee;
+            --input: #2d2d2d;
+            --border: #444;
+            --accent: #8b5cf6;
+        }}
+        
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .header {{
+            padding: 15px 20px;
+            background: var(--input);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        
+        .logo {{
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--accent);
+        }}
+        
+        .user-info {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .avatar {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }}
+        
+        .logout-btn {{
+            padding: 8px 16px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }}
+        
+        .chat-container {{
+            flex: 1;
+            display: flex;
+        }}
+        
+        .sidebar {{
+            width: 250px;
+            background: var(--input);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .sidebar-section {{
+            padding: 15px;
+        }}
+        
+        .section-title {{
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #666;
+        }}
+        
+        .channel-list, .user-list {{
+            list-style: none;
+        }}
+        
+        .channel-item, .user-item {{
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        
+        .channel-item:hover, .user-item:hover {{
+            background: var(--bg);
+        }}
+        
+        .channel-item.active, .user-item.active {{
+            background: var(--accent);
+            color: white;
+        }}
+        
+        .chat-area {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .chat-header {{
+            padding: 15px 20px;
+            background: var(--input);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }}
+        
+        .messages {{
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }}
+        
+        .message {{
+            display: flex;
+            gap: 12px;
+            max-width: 70%;
+        }}
+        
+        .message.own {{
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }}
+        
+        .message-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }}
+        
+        .message-content {{
+            background: var(--input);
+            padding: 12px 16px;
+            border-radius: 18px;
+            border-top-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }}
+        
+        .message.own .message-content {{
+            background: var(--accent);
+            color: white;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 4px;
+        }}
+        
+        .message-text {{
+            word-break: break-word;
+            line-height: 1.4;
+        }}
+        
+        .message-sender {{
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+        }}
+        
+        .message-time {{
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 4px;
+            text-align: right;
+        }}
+        
+        .message.own .message-time {{
+            color: rgba(255,255,255,0.8);
+        }}
+        
+        .input-area {{
+            padding: 15px 20px;
+            background: var(--input);
+            border-top: 1px solid var(--border);
+        }}
+        
+        .input-row {{
+            display: flex;
+            gap: 10px;
+        }}
+        
+        .msg-input {{
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 25px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+        }}
+        
+        .msg-input:focus {{
+            outline: none;
+            border-color: var(--accent);
+        }}
+        
+        .send-btn {{
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }}
+        
+        @media (max-width: 768px) {{
+            .sidebar {{
+                display: none;
+            }}
+            
+            .message {{
+                max-width: 85%;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">Tandau Messenger</div>
+        <div class="user-info">
+            <div class="avatar" id="user-avatar">{username[:2].upper()}</div>
+            <button class="logout-btn" onclick="location.href='/logout'">Выйти</button>
+        </div>
+    </div>
+    
+    <div class="chat-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <div class="section-title">Каналы</div>
+                <ul class="channel-list" id="channel-list">
+                    <li class="channel-item active" onclick="joinRoom('general')"># General</li>
+                </ul>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="section-title">Пользователи</div>
+                <ul class="user-list" id="user-list">
+                    <!-- Пользователи загружаются динамически -->
+                </ul>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div class="chat-header" id="chat-title"># General</div>
+            
+            <div class="messages" id="messages">
+                <div class="message">
+                    <div class="message-avatar">TA</div>
+                    <div class="message-content">
+                        <div class="message-sender">System</div>
+                        <div class="message-text">Добро пожаловать в Tandau Messenger, {username}!</div>
+                        <div class="message-time">{datetime.now().strftime("%H:%M")}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <div class="input-row">
+                    <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1"></textarea>
+                    <button class="send-btn" onclick="sendMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const user = "{username}";
+        let currentRoom = "general";
+        
+        socket.on("connect", () => {{
+            console.log("Connected to server");
+            joinRoom("general");
+            loadUsers();
+        }});
+        
+        socket.on("message", (data) => {{
+            if (data.room === currentRoom) {{
+                addMessage(data);
+            }}
+        }});
+        
+        socket.on("user_joined", (data) => {{
+            console.log("User joined:", data.username);
+        }});
+        
+        socket.on("user_left", (data) => {{
+            console.log("User left:", data.username);
+        }});
+        
+        function joinRoom(room) {{
+            if (currentRoom) {{
+                socket.emit("leave", {{ room: currentRoom }});
+            }}
+            
+            currentRoom = room;
+            socket.emit("join", {{ room: room }});
+            document.getElementById("chat-title").textContent = "# " + (room === "general" ? "General" : room);
+            
+            // Обновляем активный элемент
+            document.querySelectorAll(".channel-item, .user-item").forEach(item => {{
+                item.classList.remove("active");
+            }});
+            event.currentTarget.classList.add("active");
+            
+            // Загружаем историю сообщений
+            loadMessages(room);
+        }}
+        
+        function loadMessages(room) {{
+            fetch(`/messages/${{room}}`)
+                .then(response => response.json())
+                .then(messages => {{
+                    const container = document.getElementById("messages");
+                    container.innerHTML = "";
+                    
+                    if (messages.length === 0) {{
+                        container.innerHTML = '<div style="text-align:center; padding:40px; color:#666;">Нет сообщений</div>';
+                    }} else {{
+                        messages.forEach(msg => addMessage(msg));
+                    }}
+                    
+                    container.scrollTop = container.scrollHeight;
+                }});
+        }}
+        
+        function addMessage(data) {{
+            const container = document.getElementById("messages");
+            const isOwn = data.user === user;
+            
+            const messageDiv = document.createElement("div");
+            messageDiv.className = `message ${{isOwn ? "own" : ""}}`;
+            
+            const avatar = document.createElement("div");
+            avatar.className = "message-avatar";
+            avatar.textContent = data.user.substring(0, 2).toUpperCase();
+            avatar.style.backgroundColor = data.color || "#667eea";
+            
+            const content = document.createElement("div");
+            content.className = "message-content";
+            
+            if (!isOwn) {{
+                const sender = document.createElement("div");
+                sender.className = "message-sender";
+                sender.textContent = data.user;
+                content.appendChild(sender);
+            }}
+            
+            const text = document.createElement("div");
+            text.className = "message-text";
+            text.textContent = data.message;
+            
+            const time = document.createElement("div");
+            time.className = "message-time";
+            time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: "2-digit", minute: "2-digit" }});
+            
+            content.appendChild(text);
+            content.appendChild(time);
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(content);
+            container.appendChild(messageDiv);
+            
+            container.scrollTop = container.scrollHeight;
+        }}
+        
+        function sendMessage() {{
+            const input = document.getElementById("msg-input");
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            socket.emit("message", {{
+                message: message,
+                room: currentRoom,
+                user: user
+            }});
+            
+            input.value = "";
+            input.focus();
+            autoResizeTextarea();
+        }}
+        
+        function loadUsers() {{
+            fetch("/users")
+                .then(response => response.json())
+                .then(users => {{
+                    const container = document.getElementById("user-list");
+                    container.innerHTML = "";
+                    
+                    users.forEach(u => {{
+                        if (u.username !== user) {{
+                            const item = document.createElement("li");
+                            item.className = "user-item";
+                            item.textContent = u.username;
+                            item.onclick = () => joinRoom(`private_${{u.username}}`);
+                            container.appendChild(item);
+                        }}
+                    }});
+                }});
+        }}
+        
+        // Инициализация
+        document.addEventListener("DOMContentLoaded", () => {{
+            // Настройка поля ввода
+            const input = document.getElementById("msg-input");
+            input.addEventListener("keypress", (e) => {{
+                if (e.key === "Enter" && !e.shiftKey) {{
+                    e.preventDefault();
+                    sendMessage();
+                }}
+            }});
+            
+            // Авторазмер textarea
+            function autoResizeTextarea() {{
+                input.style.height = "auto";
+                input.style.height = Math.min(input.scrollHeight, 120) + "px";
+            }}
+            
+            input.addEventListener("input", autoResizeTextarea);
+        }});
+    </script>
+</body>
+</html>'''
 
 @app.route('/users')
 def users_handler():
@@ -1766,23 +1703,36 @@ def user_info_handler(username):
         })
     return jsonify({'success': False, 'error': 'Пользователь не найден'})
 
-# Простые API эндпоинты
+# API для избранного
 @app.route('/add_to_favorites', methods=['POST'])
 def add_to_favorites_handler():
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Не авторизован'})
     
-    data = request.json
-    if not data:
-        return jsonify({'success': False, 'error': 'Нет данных'})
+    content = request.form.get('content', '').strip()
+    category = request.form.get('category', 'general').strip()
+    
+    file_path = None
+    file_name = None
+    file_type = 'text'
+    
+    if 'file' in request.files:
+        file = request.files['file']
+        if file and file.filename:
+            path, filename = save_uploaded_file(file, app.config['FAVORITE_FOLDER'])
+            if path:
+                file_path = path
+                file_name = filename
+                file_type = 'file'
+                content = content or f"Файл: {filename}"
     
     favorite_id = add_to_favorites(
         session['username'],
-        data.get('content'),
-        data.get('file_path'),
-        data.get('file_name'),
-        data.get('file_type', 'text'),
-        data.get('category', 'general')
+        content,
+        file_path,
+        file_name,
+        file_type,
+        category
     )
     
     if favorite_id:
@@ -1798,27 +1748,109 @@ def get_favorites_handler():
     favorites = get_favorites(session['username'], category)
     return jsonify({'success': True, 'favorites': favorites})
 
+@app.route('/get_favorite_categories')
+def get_favorite_categories_handler():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    
+    categories = get_favorite_categories(session['username'])
+    return jsonify({'success': True, 'categories': categories})
+
+@app.route('/delete_favorite/<int:favorite_id>', methods=['DELETE'])
+def delete_favorite_handler(favorite_id):
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    
+    if delete_favorite(favorite_id, session['username']):
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Не удалось удалить'})
+
+@app.route('/toggle_pin_favorite/<int:favorite_id>', methods=['POST'])
+def toggle_pin_favorite_handler(favorite_id):
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    
+    new_state = toggle_pin_favorite(favorite_id, session['username'])
+    if new_state is not None:
+        return jsonify({'success': True, 'pinned': new_state})
+    return jsonify({'success': False, 'error': 'Не удалось закрепить/открепить'})
+
+# API для каналов
 @app.route('/create_channel', methods=['POST'])
 def create_channel_handler():
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Не авторизован'})
     
-    data = request.json
-    if not data:
-        return jsonify({'success': False, 'error': 'Нет данных'})
-    
-    name = data.get('name', '').strip()
-    display_name = data.get('display_name', name.capitalize())
-    description = data.get('description', '')
-    is_private = data.get('is_private', False)
+    name = request.json.get('name', '').strip()
+    display_name = request.json.get('display_name', '').strip()
+    description = request.json.get('description', '').strip()
+    is_private = request.json.get('is_private', False)
     
     if not name or len(name) < 2:
         return jsonify({'success': False, 'error': 'Название канала должно быть не менее 2 символов'})
+    
+    if not display_name:
+        display_name = name.capitalize()
     
     channel_id = create_channel(name, display_name, description, session['username'], is_private)
     if channel_id:
         return jsonify({'success': True, 'channel_name': name, 'display_name': display_name})
     return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
+
+@app.route('/user_channels')
+def user_channels_handler():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    return jsonify({'success': True, 'channels': get_user_channels(session['username'])})
+
+@app.route('/personal_chats')
+def personal_chats_handler():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    return jsonify({'success': True, 'chats': get_user_personal_chats(session['username'])})
+
+# API для аватарок и тем
+@app.route('/upload_avatar', methods=['POST'])
+def upload_avatar_handler():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    
+    if 'avatar' in request.files:
+        file = request.files['avatar']
+        path, filename = save_uploaded_file(file, app.config['AVATAR_FOLDER'])
+    else:
+        return jsonify({'success': False, 'error': 'Файл не найден'})
+    
+    if path:
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('UPDATE users SET avatar_path = ? WHERE username = ?', (path, session['username']))
+            conn.commit()
+        return jsonify({'success': True, 'path': path})
+    return jsonify({'success': False, 'error': 'Неверный формат файла'})
+
+@app.route('/delete_avatar', methods=['POST'])
+def delete_avatar_handler():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    with sqlite3.connect('messenger.db') as conn:
+        c = conn.cursor()
+        c.execute('UPDATE users SET avatar_path = NULL WHERE username = ?', (session['username'],))
+        conn.commit()
+    return jsonify({'success': True})
+
+@app.route('/set_theme', methods=['POST'])
+def set_theme_handler():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Не авторизован'})
+    theme = request.json.get('theme', 'light')
+    if theme not in ['light', 'dark', 'auto']:
+        return jsonify({'success': False, 'error': 'Неверная тема'})
+    with sqlite3.connect('messenger.db') as conn:
+        c = conn.cursor()
+        c.execute('UPDATE users SET theme = ? WHERE username = ?', (theme, session['username']))
+        conn.commit()
+    return jsonify({'success': True})
 
 # Статические файлы
 @app.route('/static/<path:filename>')
@@ -1838,7 +1870,6 @@ def not_found(e):
 # === SocketIO события ===
 @socketio.on('connect')
 def on_connect():
-    print('Client connected')
     if 'username' in session:
         update_online(session['username'], True)
         join_room('general')
@@ -1846,7 +1877,6 @@ def on_connect():
 
 @socketio.on('disconnect')
 def on_disconnect():
-    print('Client disconnected')
     if 'username' in session:
         update_online(session['username'], False)
         emit('user_left', {'username': session['username']}, room='general')
@@ -1888,16 +1918,7 @@ def on_message(data):
         'color': user_color,
         'timestamp': datetime.now().strftime('%H:%M'),
         'room': room
-    }, room=room, include_self=False)
-    
-    # Отправляем себе тоже
-    emit('message', {
-        'user': session['username'],
-        'message': msg,
-        'color': user_color,
-        'timestamp': datetime.now().strftime('%H:%M'),
-        'room': room
-    })
+    }, room=room)
 
 # Запуск приложения
 if __name__ == '__main__':
