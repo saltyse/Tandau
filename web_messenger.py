@@ -1713,7 +1713,7 @@ def create_app():
             left: 0;
             right: 0;
             bottom: 0;
-            background: var(--bg);
+            background: #cfe7ff; /* ИЗМЕНЕН ЦВЕТ ФОНА ЧАТА */
             z-index: 900;
             transform: translateX(100%);
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2111,11 +2111,19 @@ def create_app():
             border-color: #dc3545;
         }}
         
-        /* ИСПРАВЛЕНИЕ: Область ввода сообщения - фиксированное позиционирование для мобильных */
+        /* ИЗМЕНЕНЫ СТИЛИ ОБЛАСТИ ВВОДА СООБЩЕНИЙ - ЖИДКОЕ СТЕКЛО */
         .input-area {{
-            background: var(--input);
-            border-top: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
             padding: 15px 20px;
+            box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.1);
+        }}
+        
+        [data-theme="dark"] .input-area {{
+            background: rgba(45, 45, 45, 0.85);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }}
         
         .input-row {{
@@ -2125,8 +2133,8 @@ def create_app():
         }}
         
         .attachment-btn {{
-            background: none;
-            border: none;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             color: var(--text);
             cursor: pointer;
             font-size: 1.2rem;
@@ -2138,28 +2146,60 @@ def create_app():
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            transition: all 0.2s ease;
         }}
         
         .attachment-btn:hover {{
-            background: rgba(0,0,0,0.05);
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }}
+        
+        [data-theme="dark"] .attachment-btn {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }}
         
         [data-theme="dark"] .attachment-btn:hover {{
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.2);
         }}
         
         .msg-input {{
             flex: 1;
             padding: 12px 16px;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 25px;
-            background: var(--bg);
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
             color: var(--text);
             font-size: 1rem;
             resize: none;
             max-height: 120px;
             min-height: 44px;
             line-height: 1.4;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }}
+        
+        .msg-input:focus {{
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }}
+        
+        [data-theme="dark"] .msg-input {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }}
+        
+        [data-theme="dark"] .msg-input:focus {{
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--accent);
         }}
         
         .send-btn {{
@@ -2174,19 +2214,27 @@ def create_app():
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            transition: background 0.2s;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }}
         
         .send-btn:hover {{
             background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }}
+        
+        .send-btn:active {{
+            transform: translateY(0);
         }}
         
         .file-preview {{
             margin-top: 10px;
             padding: 10px;
-            background: var(--bg);
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(5px);
             border-radius: 12px;
-            border: 1px dashed var(--border);
+            border: 1px dashed rgba(255, 255, 255, 0.4);
         }}
         
         .file-preview img, .file-preview video {{
@@ -2431,16 +2479,28 @@ def create_app():
                 left: 0;
                 right: 0;
                 padding: 12px 15px;
-                background: var(--input);
-                border-top: 1px solid var(--border);
+                background: rgba(255, 255, 255, 0.9);
+                backdrop-filter: blur(15px);
+                -webkit-backdrop-filter: blur(15px);
+                border-top: 1px solid rgba(255, 255, 255, 0.3);
                 z-index: 1000;
-                box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+                box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.15);
+            }}
+            
+            [data-theme="dark"] .input-area {{
+                background: rgba(45, 45, 45, 0.9);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
             }}
             
             .msg-input {{
                 padding: 12px 14px;
                 font-size: 16px;
                 min-height: 44px;
+                background: rgba(255, 255, 255, 0.8);
+            }}
+            
+            [data-theme="dark"] .msg-input {{
+                background: rgba(255, 255, 255, 0.15);
             }}
             
             .attachment-btn, .send-btn {{
@@ -2474,7 +2534,7 @@ def create_app():
                 right: 0;
                 bottom: 0;
                 z-index: 1000;
-                background: var(--bg);
+                background: #cfe7ff; /* ИЗМЕНЕН ЦВЕТ ФОНА ЧАТА */
             }}
             
             /* ИСПРАВЛЕНИЕ: Кнопка выхода поднята еще выше в мобильной версии */
