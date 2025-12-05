@@ -896,7 +896,7 @@ INDEX_HTML = '''<!DOCTYPE html>
                 Для подробного ознакомления с пользовательским соглашением мессенджера Tandau,
                 вы можете скачать полную версию документа.
             </p>
-            <a href="/static/terms.pdf" 
+            <a href="Tandau/Условия использования сервиса Tandau.pdf" 
                style="display:inline-flex; align-items:center; gap:12px; background:linear-gradient(90deg,#667eea,#764ba2); color:white; padding:14px 28px; border-radius:14px; text-decoration:none; font-weight:600;"
                download="Условия_использования_Tandau.pdf">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -1924,3 +1924,4 @@ def on_message(data):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+
