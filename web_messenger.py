@@ -296,7 +296,8 @@ def create_app():
                     'file': row[3],
                     'file_name': row[4],
                     'timestamp': row[5][11:16] if row[5] else '',
-                    'color': user_info['avatar_color'] if user_info else '#6366F1'
+                    'color': user_info['avatar_color'] if user_info else '#6366F1',
+                    'avatar_path': user_info['avatar_path'] if user_info else None
                 })
             return messages
 
@@ -2306,8 +2307,9 @@ def create_app():
             cursor: pointer;
         }}
         
+        /* ИСПРАВЛЕНИЕ: Кнопка выхода поднята выше */
         .logout-btn {{
-            margin: 10px;
+            margin: 20px 10px 10px 10px;
             padding: 12px;
             background: #dc3545;
             color: white;
@@ -2474,6 +2476,12 @@ def create_app():
                 z-index: 1000;
                 background: var(--bg);
             }}
+            
+            /* ИСПРАВЛЕНИЕ: Кнопка выхода поднята еще выше в мобильной версии */
+            .logout-btn {{
+                margin-top: 30px;
+                margin-bottom: 20px;
+            }}
         }}
         
         @media (min-width: 769px) {{
@@ -2495,6 +2503,12 @@ def create_app():
             .back-btn {{
                 display: none;
             }}
+            
+            /* ИСПРАВЛЕНИЕ: Кнопка выхода поднята и на десктопе */
+            .logout-btn {{
+                margin-top: 30px;
+                margin-bottom: 20px;
+            }}
         }}
         
         /* Предотвращение выделения текста при касании */
@@ -2502,6 +2516,38 @@ def create_app():
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+        }}
+        
+        /* Стили для аватарок в списке пользователей */
+        .user-avatar {{
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+            color: white;
+        }}
+        
+        .user-avatar.online {{
+            position: relative;
+        }}
+        
+        .user-avatar.online::after {{
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            border: 2px solid var(--input);
         }}
     </style>
 </head>
@@ -3402,7 +3448,7 @@ function loadUserChannels() {{
         }});
 }}
 
-// Загрузка пользователей
+// Загрузка пользователей с аватарками
 function loadUsers() {{
     fetch('/users')
         .then(r => r.json())
@@ -3415,10 +3461,24 @@ function loadUsers() {{
                     if (u.username !== user) {{
                         const el = document.createElement('div');
                         el.className = 'nav-item';
-                        el.innerHTML = `
-                            <i class="fas fa-user${{u.online ? '-check' : ''}}"></i>
-                            <span>${{u.username}}</span>
-                        `;
+                        
+                        // Создаем аватарку вместо иконки
+                        const avatarDiv = document.createElement('div');
+                        avatarDiv.className = `user-avatar ${{u.online ? 'online' : ''}}`;
+                        avatarDiv.style.backgroundColor = u.color || '#6366F1';
+                        
+                        if (u.avatar) {{
+                            avatarDiv.style.backgroundImage = `url(${{u.avatar}})`;
+                        }} else {{
+                            avatarDiv.textContent = u.username.slice(0, 2).toUpperCase();
+                        }}
+                        
+                        el.appendChild(avatarDiv);
+                        
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = u.username;
+                        el.appendChild(nameSpan);
+                        
                         el.onclick = () => openRoom(
                             'private_' + [user, u.username].sort().join('_'),
                             'private',
@@ -3431,7 +3491,7 @@ function loadUsers() {{
         }});
 }}
 
-// Загрузка личных чатов
+// Загрузка личных чатов с аватарками
 function loadPersonalChats() {{
     fetch('/personal_chats')
         .then(r => r.json())
@@ -3443,10 +3503,30 @@ function loadPersonalChats() {{
                 data.chats.forEach(chatUser => {{
                     const el = document.createElement('div');
                     el.className = 'nav-item';
-                    el.innerHTML = `
-                        <i class="fas fa-user"></i>
-                        <span>${{chatUser}}</span>
-                    `;
+                    
+                    // Получаем информацию о пользователе для аватарки
+                    fetch('/user_info/' + chatUser)
+                        .then(r => r.json())
+                        .then(userInfo => {{
+                            if (userInfo.success) {{
+                                const avatarDiv = document.createElement('div');
+                                avatarDiv.className = 'user-avatar';
+                                avatarDiv.style.backgroundColor = userInfo.avatar_color || '#6366F1';
+                                
+                                if (userInfo.avatar_path) {{
+                                    avatarDiv.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                                }} else {{
+                                    avatarDiv.textContent = chatUser.slice(0, 2).toUpperCase();
+                                }}
+                                
+                                el.insertBefore(avatarDiv, el.firstChild);
+                            }}
+                        }});
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = chatUser;
+                    el.appendChild(nameSpan);
+                    
                     el.onclick = () => openRoom(
                         'private_' + [user, chatUser].sort().join('_'),
                         'private',
@@ -3523,7 +3603,7 @@ function loadMessages(roomName) {{
             
             if (messages && Array.isArray(messages) && messages.length > 0) {{
                 messages.forEach(msg => {{
-                    addMessageToChat(msg);
+                    addMessageToChat(msg, roomName);
                 }});
             }} else {{
                 messagesContainer.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
@@ -3534,8 +3614,8 @@ function loadMessages(roomName) {{
         .catch(error => console.error('Error loading messages:', error));
 }}
 
-// Добавление сообщения в чат
-function addMessageToChat(data) {{
+// Добавление сообщения в чат (с поддержкой аватарок в личных чатах)
+function addMessageToChat(data, roomName = '') {{
     const messagesContainer = document.getElementById('chat-messages');
     
     // Удаляем пустой экран, если он есть
@@ -3550,9 +3630,27 @@ function addMessageToChat(data) {{
     // Создаем аватарку
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    avatar.style.backgroundColor = data.color || '#6366F1';
-    if (data.user !== user) {{
-        avatar.textContent = data.user.slice(0, 2).toUpperCase();
+    
+    // Для личных чатов загружаем аватарку пользователя
+    if (data.user !== user && roomName.startsWith('private_')) {{
+        fetch('/user_info/' + data.user)
+            .then(r => r.json())
+            .then(userInfo => {{
+                if (userInfo.success) {{
+                    if (userInfo.avatar_path) {{
+                        avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                        avatar.textContent = '';
+                    }} else {{
+                        avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#6366F1';
+                        avatar.textContent = data.user.slice(0, 2).toUpperCase();
+                    }}
+                }}
+            }});
+    }} else {{
+        avatar.style.backgroundColor = data.color || '#6366F1';
+        if (data.user !== user) {{
+            avatar.textContent = data.user.slice(0, 2).toUpperCase();
+        }}
     }}
     
     // Создаем контент сообщения
@@ -3715,11 +3813,11 @@ function handleFileSelect(input) {{
 // Socket events
 socket.on('message', (data) => {{
     if (data.room === room) {{
-        addMessageToChat(data);
+        addMessageToChat(data, room);
     }}
 }});
 
-// Функции для работы с избранным (сохраняются для совместимости)
+// Функции для работы с избранным
 function openAddFavoriteModal() {{
     document.getElementById('add-favorite-modal').style.display = 'flex';
     document.getElementById('favorite-file').addEventListener('change', function(e) {{
@@ -3922,6 +4020,7 @@ function openFilePreview(filePath) {{
         # Получаем информацию об отправителе для аватарки
         user_info = get_user(session['username'])
         user_color = user_info['avatar_color'] if user_info else '#6366F1'
+        user_avatar_path = user_info['avatar_path'] if user_info else None
         
         # Отправляем сообщение
         emit('message', {
@@ -3931,6 +4030,7 @@ function openFilePreview(filePath) {{
             'fileType': file_type,
             'fileName': file_name or saved_file_name,
             'color': user_color,
+            'avatar_path': user_avatar_path,
             'timestamp': datetime.now().strftime('%H:%M'),
             'room': room
         }, room=room)
