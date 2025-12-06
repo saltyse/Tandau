@@ -1096,9 +1096,9 @@ def create_app():
                     background: white;
                     border-radius: var(--radius);
                     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                    max-width: 500px;
+                    max-width: 800px;
                     width: 100%;
-                    max-height: 80vh;
+                    max-height: 85vh;
                     overflow: hidden;
                     animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
                 }
@@ -1140,86 +1140,412 @@ def create_app():
                 .modal-content {
                     padding: 30px;
                     overflow-y: auto;
-                    max-height: calc(80vh - 100px);
+                    max-height: calc(85vh - 100px);
                 }
                 
-                .modal-content p {
-                    margin-bottom: 20px;
-                    line-height: 1.6;
-                    color: var(--text);
+                /* Стили для блока "жидкое стекло" - Условия использования */
+                .glass-terms-container {
+                    background: rgba(255, 255, 255, 0.1);
+                    backdrop-filter: blur(20px);
+                    -webkit-backdrop-filter: blur(20px);
+                    border-radius: 24px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    padding: 40px;
+                    margin: 20px 0;
+                    box-shadow: 
+                        0 20px 60px rgba(0, 0, 0, 0.15),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+                    position: relative;
+                    overflow: hidden;
                 }
                 
-                .modal-content h3 {
-                    color: var(--primary);
-                    margin: 25px 0 15px 0;
-                    font-size: 1.2rem;
+                .glass-terms-container::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 1px;
+                    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
                 }
                 
-                .modal-content ul {
-                    margin-left: 20px;
-                    margin-bottom: 20px;
-                }
-                
-                .modal-content li {
-                    margin-bottom: 8px;
-                    line-height: 1.5;
-                }
-                
-                .download-section {
-                    margin-top: 30px;
-                    padding: 20px;
-                    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-                    border-radius: var(--radius-sm);
+                .glass-header {
                     text-align: center;
-                    border: 2px dashed rgba(99, 102, 241, 0.3);
+                    margin-bottom: 40px;
+                    position: relative;
+                    padding-bottom: 30px;
                 }
                 
-                .download-section p {
-                    margin-bottom: 15px;
-                    color: var(--text);
+                .glass-header::after {
+                    content: '';
+                    position: absolute;
+                    bottom: 0;
+                    left: 25%;
+                    right: 25%;
+                    height: 2px;
+                    background: linear-gradient(90deg, transparent, #667eea, #764ba2, transparent);
+                    border-radius: 2px;
+                }
+                
+                .glass-icon {
+                    width: 80px;
+                    height: 80px;
+                    margin: 0 auto 25px;
+                    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+                    backdrop-filter: blur(10px);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+                }
+                
+                .glass-icon i {
+                    font-size: 36px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                }
+                
+                .glass-title {
+                    font-size: 2.2rem;
+                    font-weight: 800;
+                    margin-bottom: 10px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                    letter-spacing: -0.5px;
+                }
+                
+                .glass-subtitle {
+                    color: rgba(0, 0, 0, 0.7);
+                    font-size: 1.1rem;
                     font-weight: 500;
                 }
                 
-                .download-btn {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 12px;
-                    padding: 14px 28px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    border: none;
-                    border-radius: var(--radius-sm);
-                    font-weight: 600;
-                    font-size: 1rem;
-                    cursor: pointer;
+                .glass-content {
+                    margin-bottom: 40px;
+                }
+                
+                .glass-section {
+                    background: rgba(255, 255, 255, 0.05);
+                    backdrop-filter: blur(10px);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 25px;
+                    border: 1px solid rgba(0, 0, 0, 0.1);
                     transition: all 0.3s ease;
-                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-                    text-decoration: none;
+                    position: relative;
+                    overflow: hidden;
                 }
                 
-                .download-btn:hover {
+                .glass-section:hover {
+                    background: rgba(255, 255, 255, 0.08);
+                    border-color: rgba(102, 126, 234, 0.3);
                     transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
                 }
                 
-                .download-btn:active {
-                    transform: translateY(0);
+                .section-title {
+                    font-size: 1.4rem;
+                    margin-bottom: 20px;
+                    color: #333;
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    font-weight: 700;
                 }
                 
-                .download-btn i:first-child {
+                .section-title i {
+                    color: #667eea;
                     font-size: 1.3rem;
                 }
                 
-                .download-btn i:last-child {
+                .section-content {
+                    color: rgba(0, 0, 0, 0.9);
+                    line-height: 1.7;
+                }
+                
+                .section-content p {
+                    margin-bottom: 20px;
+                }
+                
+                .glass-list {
+                    margin: 25px 0;
+                }
+                
+                .glass-list.negative .list-icon {
+                    background: linear-gradient(135deg, rgba(220, 53, 69, 0.2), rgba(220, 53, 69, 0.1));
+                    border-color: rgba(220, 53, 69, 0.3);
+                }
+                
+                .glass-list.negative .list-icon i {
+                    background: linear-gradient(135deg, #dc3545, #e35d6a);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                }
+                
+                .list-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    margin-bottom: 18px;
+                    padding: 15px 20px;
+                    background: rgba(255, 255, 255, 0.03);
+                    border-radius: 16px;
+                    border: 1px solid rgba(0, 0, 0, 0.05);
+                    transition: all 0.3s ease;
+                }
+                
+                .list-item:hover {
+                    background: rgba(255, 255, 255, 0.06);
+                    border-color: rgba(0, 0, 0, 0.1);
+                    transform: translateX(5px);
+                }
+                
+                .list-icon {
+                    width: 50px;
+                    height: 50px;
+                    min-width: 50px;
+                    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+                    backdrop-filter: blur(5px);
+                    border-radius: 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid rgba(0, 0, 0, 0.1);
+                }
+                
+                .list-icon i {
+                    font-size: 22px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                }
+                
+                .list-text {
+                    flex: 1;
+                    font-size: 1.05rem;
+                    color: rgba(0, 0, 0, 0.9);
+                    line-height: 1.5;
+                }
+                
+                .highlight {
+                    background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.3));
+                    color: white;
+                    padding: 2px 8px;
+                    border-radius: 8px;
+                    font-weight: 700;
+                    border: 1px solid rgba(0, 0, 0, 0.2);
+                }
+                
+                .glass-link {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 16px 28px;
+                    background: rgba(255, 255, 255, 0.1);
+                    backdrop-filter: blur(10px);
+                    border-radius: 16px;
+                    color: #333;
+                    text-decoration: none;
+                    font-weight: 600;
+                    border: 1px solid rgba(0, 0, 0, 0.2);
+                    transition: all 0.3s ease;
+                    margin: 15px 0;
+                }
+                
+                .glass-link:hover {
+                    background: rgba(255, 255, 255, 0.15);
+                    border-color: rgba(102, 126, 234, 0.4);
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                }
+                
+                .glass-link i {
+                    font-size: 1.3rem;
+                    color: #667eea;
+                }
+                
+                .contact-link {
+                    background: linear-gradient(135deg, rgba(0, 119, 255, 0.2), rgba(0, 91, 187, 0.2));
+                    border-color: rgba(0, 119, 255, 0.3);
+                }
+                
+                .contact-link i {
+                    color: #0077ff;
+                }
+                
+                .contact-note {
+                    font-size: 0.95rem;
+                    color: rgba(0, 0, 0, 0.7);
+                    margin-top: 15px;
+                    padding-left: 20px;
+                    border-left: 3px solid rgba(102, 126, 234, 0.5);
+                }
+                
+                .version-info {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 24px;
+                    background: rgba(102, 126, 234, 0.1);
+                    border-radius: 12px;
+                    border: 1px solid rgba(102, 126, 234, 0.3);
+                    margin-top: 20px;
+                }
+                
+                .version-info i {
+                    color: #667eea;
+                    font-size: 1.2rem;
+                }
+                
+                .version-info span {
+                    color: #333;
+                    font-weight: 500;
+                }
+                
+                .glass-footer {
+                    padding-top: 40px;
+                    border-top: 1px solid rgba(0, 0, 0, 0.1);
+                }
+                
+                .accept-terms {
+                    margin-bottom: 40px;
+                }
+                
+                .checkbox-container {
+                    display: flex;
+                    align-items: center;
+                    cursor: pointer;
                     font-size: 1.1rem;
+                    color: #333;
+                    user-select: none;
+                    padding: 20px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border-radius: 16px;
+                    border: 2px solid rgba(0, 0, 0, 0.1);
+                    transition: all 0.3s ease;
+                }
+                
+                .checkbox-container:hover {
+                    background: rgba(255, 255, 255, 0.08);
+                    border-color: rgba(102, 126, 234, 0.4);
+                }
+                
+                .checkbox-container input {
+                    position: absolute;
+                    opacity: 0;
+                    cursor: pointer;
+                    height: 0;
+                    width: 0;
+                }
+                
+                .checkmark {
+                    position: relative;
+                    height: 28px;
+                    width: 28px;
+                    min-width: 28px;
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 8px;
+                    margin-right: 20px;
+                    border: 2px solid rgba(0, 0, 0, 0.3);
+                    transition: all 0.3s ease;
+                }
+                
+                .checkbox-container:hover .checkmark {
+                    background: rgba(102, 126, 234, 0.2);
+                    border-color: rgba(102, 126, 234, 0.5);
+                }
+                
+                .checkbox-container input:checked ~ .checkmark {
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    border-color: transparent;
+                }
+                
+                .checkmark::after {
+                    content: '';
+                    position: absolute;
+                    display: none;
+                    left: 9px;
+                    top: 4px;
+                    width: 8px;
+                    height: 14px;
+                    border: solid white;
+                    border-width: 0 3px 3px 0;
+                    transform: rotate(45deg);
+                }
+                
+                .checkbox-container input:checked ~ .checkmark::after {
+                    display: block;
+                }
+                
+                .checkbox-text {
+                    flex: 1;
+                    font-weight: 500;
+                }
+                
+                .glass-download {
+                    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+                    backdrop-filter: blur(10px);
+                    border: 2px dashed rgba(102, 126, 234, 0.4);
+                    padding: 30px;
+                    border-radius: 20px;
+                    text-align: center;
+                }
+                
+                .glass-download p {
+                    color: #333;
+                    font-size: 1.1rem;
+                    margin-bottom: 20px;
+                    font-weight: 500;
+                }
+                
+                .glass-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 15px;
+                    padding: 18px 40px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 16px;
+                    font-weight: 700;
+                    font-size: 1.1rem;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+                    border: none;
+                    cursor: pointer;
+                }
+                
+                .glass-btn:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+                }
+                
+                .glass-btn:active {
+                    transform: translateY(-1px);
+                }
+                
+                .glass-btn i:first-child {
+                    font-size: 1.5rem;
+                }
+                
+                .glass-btn i:last-child {
+                    font-size: 1.2rem;
                     opacity: 0.9;
                 }
                 
+                /* Анимации */
                 @keyframes fadeInUp {
                     from {
                         opacity: 0;
-                        transform: translateY(20px);
+                        transform: translateY(30px);
                     }
                     to {
                         opacity: 1;
@@ -1265,7 +1591,12 @@ def create_app():
                     }
                 }
                 
-                @media (max-width: 480px) {
+                .glass-terms-container {
+                    animation: fadeInUp 0.8s ease-out;
+                }
+                
+                /* Адаптивность */
+                @media (max-width: 768px) {
                     .container {
                         max-width: 100%;
                     }
@@ -1291,7 +1622,60 @@ def create_app():
                     }
                     
                     .terms-modal {
-                        max-height: 85vh;
+                        max-height: 90vh;
+                    }
+                    
+                    .glass-terms-container {
+                        padding: 25px 20px;
+                        margin: 20px 0;
+                        border-radius: 20px;
+                    }
+                    
+                    .glass-title {
+                        font-size: 1.8rem;
+                    }
+                    
+                    .glass-icon {
+                        width: 60px;
+                        height: 60px;
+                    }
+                    
+                    .glass-icon i {
+                        font-size: 28px;
+                    }
+                    
+                    .glass-section {
+                        padding: 20px;
+                    }
+                    
+                    .section-title {
+                        font-size: 1.2rem;
+                    }
+                    
+                    .list-item {
+                        flex-direction: column;
+                        text-align: center;
+                        gap: 15px;
+                        padding: 20px;
+                    }
+                    
+                    .list-icon {
+                        width: 60px;
+                        height: 60px;
+                    }
+                    
+                    .glass-link {
+                        padding: 14px 20px;
+                        font-size: 0.95rem;
+                    }
+                    
+                    .glass-btn {
+                        padding: 16px 30px;
+                        font-size: 1rem;
+                    }
+                    
+                    .checkbox-text {
+                        font-size: 1rem;
                     }
                 }
                 
@@ -1419,64 +1803,114 @@ def create_app():
                         </button>
                     </div>
                     <div class="modal-content">
-                        <p><strong>Дата вступления в силу:</strong> 1 января 2024 г.</p>
-                        
-                        <h3>1. Принятие условий</h3>
-                        <p>Используя Tandau Messenger, вы соглашаетесь соблюдать настоящие Условия использования. Если вы не согласны с этими условиями, пожалуйста, не используйте наш сервис.</p>
-                        
-                        <h3>2. Описание сервиса</h3>
-                        <p>Tandau Messenger — это платформа для обмена сообщениями, файлами и голосового общения. Сервис предоставляется "как есть" и может изменяться без предварительного уведомления.</p>
-                        
-                        <h3>3. Регистрация и учетная запись</h3>
-                        <ul>
-                            <li>Вы должны быть не моложе 13 лет для использования сервиса</li>
-                            <li>Вы несете ответственность за сохранность своих учетных данных</li>
-                            <li>Вы соглашаетесь предоставлять точную и актуальную информацию</li>
-                            <li>Один пользователь может иметь только одну учетную запись</li>
-                        </ul>
-                        
-                        <h3>4. Правила использования</h3>
-                        <p>Запрещается:</p>
-                        <ul>
-                            <li>Распространять спам, вирусы или вредоносное ПО</li>
-                            <li>Нарушать права других пользователей</li>
-                            <li>Использовать сервис для незаконной деятельности</li>
-                            <li>Создавать фишинговые или мошеннические аккаунты</li>
-                            <li>Публиковать контент, нарушающий авторские права</li>
-                        </ul>
-                        
-                        <h3>5. Конфиденциальность</h3>
-                        <p>Мы ценим вашу конфиденциальность. Пожалуйста, ознакомьтесь с нашей <a href="#" onclick="openPrivacyModal(); return false;">Политикой конфиденциальности</a> для получения подробной информации о сборе и использовании данных.</p>
-                        
-                        <h3>6. Интеллектуальная собственность</h3>
-                        <p>Tandau Messenger и его логотипы являются товарными знаками. Весь контент на платформе защищен законами об авторском праве.</p>
-                        
-                        <h3>7. Ограничение ответственности</h3>
-                        <p>Мы не несем ответственности за:</p>
-                        <ul>
-                            <li>Любые прямые или косвенные убытки</li>
-                            <li>Потерю данных или информации</li>
-                            <li>Прерывание работы сервиса</li>
-                            <li>Действия третьих лиц</li>
-                        </ul>
-                        
-                        <h3>8. Изменения условий</h3>
-                        <p>Мы оставляем за собой право изменять эти условия в любое время. Изменения вступают в силу с момента публикации на сайте.</p>
-                        
-                        <h3>9. Прекращение использования</h3>
-                        <p>Мы можем приостановить или прекратить ваш доступ к сервису в случае нарушения условий использования.</p>
-                        
-                        <h3>10. Контактная информация</h3>
-                        <p>По вопросам, связанным с условиями использования, обращайтесь: <a href="mailto:legal@tandau.com">legal@tandau.com</a></p>
-                        
-                        <div class="download-section">
-                            <p>Скачать полную версию Условий использования в формате PDF:</p>
-                            <a href="/static/docs/terms_of_use.pdf" class="download-btn" download="Tandau_Условия_использования.pdf">
-                                <i class="fas fa-file-pdf"></i>
-                                Скачать PDF документ
-                                <i class="fas fa-download"></i>
-                            </a>
-                            <p style="margin-top: 10px; font-size: 0.8rem; color: #666;">Размер файла: 156 KB</p>
+                        <!-- Блок "Условия использования" в стиле жидкое стекло -->
+                        <div class="glass-terms-container">
+                            <div class="glass-header">
+                                <div class="glass-icon">
+                                    <i class="fas fa-file-contract"></i>
+                                </div>
+                                <h2 class="glass-title">Условия использования Tandau Messenger</h2>
+                                <div class="glass-subtitle">Дата вступления в силу: 6 декабря 2025 г.</div>
+                            </div>
+                            
+                            <div class="glass-content">
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-user-check"></i> Регистрация и учетная запись</h3>
+                                    <div class="section-content">
+                                        <p>Регистрируясь в Tandau Messenger, вы подтверждаете что:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-birthday-cake"></i></div>
+                                                <div class="list-text">Вы достигли возраста <span class="highlight">14 лет</span> на момент регистрации</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-user-shield"></i></div>
+                                                <div class="list-text">Предоставленная информация является точной и достоверной</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-key"></i></div>
+                                                <div class="list-text">Вы несете ответственность за сохранность учетных данных</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-comments"></i> Правила общения</h3>
+                                    <div class="section-content">
+                                        <p>В Tandau Messenger запрещается:</p>
+                                        <div class="glass-list negative">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                                <div class="list-text">Распространение спама и вредоносного контента</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                                <div class="list-text">Нарушение прав других пользователей</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                                <div class="list-text">Использование для противоправной деятельности</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                                <div class="list-text">Создание фишинговых или мошеннических аккаунтов</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-lock"></i> Конфиденциальность</h3>
+                                    <div class="section-content">
+                                        <p>Ваша конфиденциальность важна для нас. Подробная информация о защите данных:</p>
+                                        <a href="#" class="glass-link" onclick="openPrivacyModal(); closeTermsModal(); return false;">
+                                            <i class="fas fa-shield-alt"></i> Политика конфиденциальности
+                                        </a>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-headset"></i> Контактная информация</h3>
+                                    <div class="section-content">
+                                        <p>По всем вопросам, связанным с условиями использования:</p>
+                                        <a href="https://vk.com/rsaltyyt" target="_blank" class="glass-link contact-link">
+                                            <i class="fab fa-vk"></i> https://vk.com/rsaltyyt
+                                        </a>
+                                        <p class="contact-note">Обращайтесь по указанной ссылке для получения поддержки и ответов на вопросы</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-sync-alt"></i> Изменения условий</h3>
+                                    <div class="section-content">
+                                        <p>Мы оставляем за собой право вносить изменения в Условия использования. Актуальная версия всегда доступна на этой странице.</p>
+                                        <div class="version-info">
+                                            <i class="fas fa-history"></i>
+                                            <span>Последнее обновление: 6 декабря 2025 года</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="glass-footer">
+                                <div class="accept-terms">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="accept-terms-checkbox">
+                                        <span class="checkmark"></span>
+                                        <span class="checkbox-text">Я прочитал(а) и принимаю Условия использования</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="download-section glass-download">
+                                    <p>Полная версия документа:</p>
+                                    <a href="/static/docs/terms_of_use.pdf" class="download-btn glass-btn" download="Tandau_Условия_использования.pdf">
+                                        <i class="fas fa-file-pdf"></i>
+                                        Скачать PDF (156 KB)
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1789,6 +2223,26 @@ def create_app():
                                 console.log('Documents folder created');
                             }
                         });
+                    
+                    // Инициализация чекбокса принятия условий
+                    const termsCheckbox = document.getElementById('accept-terms-checkbox');
+                    if (termsCheckbox) {
+                        termsCheckbox.addEventListener('change', function() {
+                            const registerBtn = document.getElementById('register-btn');
+                            const loginBtn = document.getElementById('login-btn');
+                            
+                            if (registerBtn) {
+                                registerBtn.disabled = !this.checked;
+                            }
+                            if (loginBtn) {
+                                loginBtn.disabled = !this.checked;
+                            }
+                        });
+                        
+                        // По умолчанию активируем кнопки
+                        termsCheckbox.checked = true;
+                        termsCheckbox.dispatchEvent(new Event('change'));
+                    }
                 });
             </script>
         </body>
@@ -2097,7 +2551,7 @@ def create_app():
             left: 0;
             right: 0;
             bottom: 0;
-            background: #cfe7ff; /* ИЗМЕНЕН ЦВЕТ ФОНА ЧАТА */
+            background: #cfe7ff;
             z-index: 900;
             transform: translateX(100%);
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2495,7 +2949,7 @@ def create_app():
             border-color: #dc3545;
         }}
         
-        /* ИЗМЕНЕНЫ СТИЛИ ОБЛАСТИ ВВОДА СООБЩЕНИЙ - ЖИДКОЕ СТЕКЛО */
+        /* Стили области ввода сообщений - жидкое стекло */
         .input-area {{
             background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(10px);
@@ -2670,7 +3124,7 @@ def create_app():
             border-radius: 8px;
             background: var(--bg);
             color: var(--text);
-            font-size: 16px; /* Убирает масштабирование на iOS */
+            font-size: 16px;
         }}
         
         .form-control:focus {{
@@ -2739,7 +3193,6 @@ def create_app():
             cursor: pointer;
         }}
         
-        /* ИСПРАВЛЕНИЕ: Кнопка выхода поднята выше */
         .logout-btn {{
             margin: 20px 10px 10px 10px;
             padding: 12px;
@@ -2856,7 +3309,6 @@ def create_app():
                 font-size: 0.8rem;
             }}
             
-            /* ИСПРАВЛЕНИЕ: Фиксированное позиционирование для input-area в мобильной версии */
             .input-area {{
                 position: fixed;
                 bottom: 0;
@@ -2893,24 +3345,20 @@ def create_app():
                 flex-shrink: 0;
             }}
             
-            /* Корректировка области сообщений, чтобы не перекрывалось полем ввода */
             .messages {{
                 padding-bottom: 80px !important;
                 height: calc(100vh - 140px) !important;
             }}
             
-            /* Корректировка для избранного */
             .favorites-grid {{
                 padding-bottom: 80px;
             }}
             
-            /* Уменьшаем высоту header */
             .chat-header {{
                 padding: 12px 15px;
                 min-height: 56px;
             }}
             
-            /* Фиксированная область чата для мобильных */
             .chat-area.active {{
                 position: fixed;
                 top: 0;
@@ -2918,10 +3366,9 @@ def create_app():
                 right: 0;
                 bottom: 0;
                 z-index: 1000;
-                background: #cfe7ff; /* ИЗМЕНЕН ЦВЕТ ФОНА ЧАТА */
+                background: #cfe7ff;
             }}
             
-            /* ИСПРАВЛЕНИЕ: Кнопка выхода поднята еще выше в мобильной версии */
             .logout-btn {{
                 margin-top: 30px;
                 margin-bottom: 20px;
@@ -2948,21 +3395,18 @@ def create_app():
                 display: none;
             }}
             
-            /* ИСПРАВЛЕНИЕ: Кнопка выхода поднята и на десктопе */
             .logout-btn {{
                 margin-top: 30px;
                 margin-bottom: 20px;
             }}
         }}
         
-        /* Предотвращение выделения текста при касании */
         .no-select {{
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
         }}
         
-        /* Стили для аватарок в списке пользователей */
         .user-avatar {{
             width: 30px;
             height: 30px;
