@@ -1926,58 +1926,211 @@ def create_app():
                         </button>
                     </div>
                     <div class="modal-content">
-                        <p><strong>Дата вступления в силу:</strong> 1 января 2024 г.</p>
-                        
-                        <h3>1. Сбор информации</h3>
-                        <p>Мы собираем следующую информацию:</p>
-                        <ul>
-                            <li>Имя пользователя и контактные данные</li>
-                            <li>Информацию об использовании сервиса</li>
-                            <li>Технические данные (IP-адрес, тип устройства)</li>
-                            <li>Содержание сообщений (хранится только для обеспечения работы сервиса)</li>
-                        </ul>
-                        
-                        <h3>2. Использование информации</h3>
-                        <p>Собранная информация используется для:</p>
-                        <ul>
-                            <li>Предоставления и улучшения сервиса</li>
-                            <li>Обеспечения безопасности</li>
-                            <li>Поддержки пользователей</li>
-                            <li>Анализа использования сервиса</li>
-                        </ul>
-                        
-                        <h3>3. Защита данных</h3>
-                        <p>Мы используем современные технологии шифрования для защиты ваших данных. Все сообщения шифруются при передаче.</p>
-                        
-                        <h3>4. Права пользователей</h3>
-                        <p>Вы имеете право:</p>
-                        <ul>
-                            <li>Получить доступ к своим данным</li>
-                            <li>Исправить неточную информацию</li>
-                            <li>Удалить свою учетную запись</li>
-                            <li>Отозвать согласие на обработку данных</li>
-                        </ul>
-                        
-                        <h3>5. Файлы cookie</h3>
-                        <p>Мы используем файлы cookie для улучшения работы сервиса. Вы можете отключить их в настройках браузера.</p>
-                        
-                        <h3>6. Третьи стороны</h3>
-                        <p>Мы не передаем ваши данные третьим лицам без вашего согласия, за исключением случаев, предусмотренных законом.</p>
-                        
-                        <h3>7. Изменения политики</h3>
-                        <p>Мы будем уведомлять пользователей о значительных изменениях в политике конфиденциальности.</p>
-                        
-                        <h3>8. Контакты</h3>
-                        <p>По вопросам конфиденциальности: <a href="mailto:privacy@tandau.com">privacy@tandau.com</a></p>
-                        
-                        <div class="download-section">
-                            <p>Скачать полную версию Политики конфиденциальности в формате PDF:</p>
-                            <a href="/static/docs/privacy_policy.pdf" class="download-btn" download="Tandau_Политика_конфиденциальности.pdf">
-                                <i class="fas fa-file-pdf"></i>
-                                Скачать PDF документ
-                                <i class="fas fa-download"></i>
-                            </a>
-                            <p style="margin-top: 10px; font-size: 0.8rem; color: #666;">Размер файла: 142 KB</p>
+                        <!-- Блок "Политика конфиденциальности" в стиле жидкое стекло -->
+                        <div class="glass-terms-container">
+                            <div class="glass-header">
+                                <div class="glass-icon">
+                                    <i class="fas fa-shield-alt"></i>
+                                </div>
+                                <h2 class="glass-title">Политика конфиденциальности Tandau Messenger</h2>
+                                <div class="glass-subtitle">Дата вступления в силу: 6 декабря 2025 г.</div>
+                            </div>
+                            
+                            <div class="glass-content">
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-database"></i> 1. Сбор информации</h3>
+                                    <div class="section-content">
+                                        <p>Мы собираем ограниченную информацию для обеспечения работы сервиса:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-user-circle"></i></div>
+                                                <div class="list-text"><span class="highlight">Учетные данные</span>: имя пользователя и хэш пароля</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-comment-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Контент сообщений</span>: текст, медиафайлы и файлы</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-network-wired"></i></div>
+                                                <div class="list-text"><span class="highlight">Технические данные</span>: IP-адрес, тип устройства, версия браузера</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-history"></i></div>
+                                                <div class="list-text"><span class="highlight">Активность</span>: время входа, активные сессии, использование функций</div>
+                                            </div>
+                                        </div>
+                                        <p class="contact-note">Мы не собираем избыточные персональные данные. Вся информация используется строго для работы сервиса.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-cogs"></i> 2. Использование информации</h3>
+                                    <div class="section-content">
+                                        <p>Собранная информация используется исключительно для:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-rocket"></i></div>
+                                                <div class="list-text"><span class="highlight">Работа сервиса</span>: доставка сообщений, синхронизация чатов</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-shield"></i></div>
+                                                <div class="list-text"><span class="highlight">Безопасность</span>: защита от злоупотреблений и мошенничества</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-wrench"></i></div>
+                                                <div class="list-text"><span class="highlight">Техподдержка</span>: решение технических проблем пользователей</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-chart-line"></i></div>
+                                                <div class="list-text"><span class="highlight">Аналитика</span>: улучшение пользовательского опыта (анонимно)</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-lock"></i> 3. Защита данных</h3>
+                                    <div class="section-content">
+                                        <p>Мы применяем многоуровневую защиту ваших данных:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-key"></i></div>
+                                                <div class="list-text"><span class="highlight">Шифрование</span>: все сообщения шифруются при передаче</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-server"></i></div>
+                                                <div class="list-text"><span class="highlight">Безопасное хранение</span>: данные хранятся на защищенных серверах</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-user-shield"></i></div>
+                                                <div class="list-text"><span class="highlight">Контроль доступа</span>: строгий доступ к данным только для технического персонала</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-sync-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Регулярные аудиты</span>: периодическая проверка систем безопасности</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-user-check"></i> 4. Права пользователей</h3>
+                                    <div class="section-content">
+                                        <p>Вы имеете полный контроль над своими данными:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-eye"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на доступ</span>: запрос информации о хранящихся данных</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-edit"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на исправление</span>: обновление неточной информации</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-trash-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на удаление</span>: полное удаление учетной записи и данных</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на отзыв согласия</span>: прекращение обработки данных</div>
+                                            </div>
+                                        </div>
+                                        <p class="contact-note">Для реализации этих прав обратитесь в поддержку через контактные данные ниже.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-cookie-bite"></i> 5. Файлы cookie и технологии отслеживания</h3>
+                                    <div class="section-content">
+                                        <p>Мы используем минимальные технологии для улучшения опыта:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-cookie"></i></div>
+                                                <div class="list-text"><span class="highlight">Сессионные куки</span>: только для поддержания входа в систему</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-tachometer-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Аналитические куки</span>: анонимная статистика использования</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-sliders-h"></i></div>
+                                                <div class="list-text"><span class="highlight">Настройки</span>: сохранение предпочтений пользователя</div>
+                                            </div>
+                                        </div>
+                                        <p>Вы можете отключить cookies в настройках браузера, но это может ограничить функциональность.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-users"></i> 6. Третьи стороны</h3>
+                                    <div class="section-content">
+                                        <p>Мы не продаем и не передаем ваши данные третьим лицам.</p>
+                                        <div class="glass-list negative">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-handshake-slash"></i></div>
+                                                <div class="list-text"><span class="highlight">Нет продажи данных</span>: мы никогда не продаем пользовательские данные</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-user-friends"></i></div>
+                                                <div class="list-text"><span class="highlight">Ограниченный доступ</span>: данные доступны только необходимым техническим службам</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-gavel"></i></div>
+                                                <div class="list-text"><span class="highlight">Исключения по закону</span>: передача данных только по официальным запросам правоохранительных органов</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-sync-alt"></i> 7. Изменения политики</h3>
+                                    <div class="section-content">
+                                        <p>Мы уведомляем пользователей о всех значительных изменениях:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-bell"></i></div>
+                                                <div class="list-text"><span class="highlight">Уведомление в приложении</span>: сообщение о важных изменениях</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-envelope"></i></div>
+                                                <div class="list-text"><span class="highlight">Электронная почта</span>: рассылка при серьезных изменениях</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-calendar-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Дата вступления в силу</span>: четкое указание времени изменений</div>
+                                            </div>
+                                        </div>
+                                        <p>Продолжая использовать сервис после изменений, вы соглашаетесь с новой версией политики.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-headset"></i> 8. Контактная информация</h3>
+                                    <div class="section-content">
+                                        <p>По вопросам конфиденциальности и защиты данных:</p>
+                                        <a href="https://vk.com/rsaltyyt" target="_blank" class="glass-link contact-link">
+                                            <i class="fab fa-vk"></i> https://vk.com/rsaltyyt
+                                        </a>
+                                        <p class="contact-note">Мы отвечаем на запросы в течение 7 рабочих дней. Для срочных вопросов используйте вышеуказанную ссылку.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="glass-footer">
+                                <div class="version-info">
+                                    <i class="fas fa-history"></i>
+                                    <span>Актуальная версия: 2.1 (6 декабря 2025 г.)</span>
+                                </div>
+                                
+                                <div class="download-section glass-download">
+                                    <p>Полная версия документа для сохранения:</p>
+                                    <a href="/static/docs/privacy_policy.pdf" class="download-btn glass-btn" download="Tandau_Политика_конфиденциальности.pdf">
+                                        <i class="fas fa-file-pdf"></i>
+                                        Скачать PDF (198 KB)
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
