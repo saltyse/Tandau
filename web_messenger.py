@@ -750,6 +750,33 @@ def create_app():
     def static_files(filename):
         return send_from_directory('static', filename)
 
+    @app.route('/create_docs_folder', methods=['POST'])
+    def create_docs_folder():
+        try:
+            # Создаем папку для документов
+            docs_folder = 'static/docs'
+            os.makedirs(docs_folder, exist_ok=True)
+            
+            # Создаем пример PDF файла Условий использования
+            terms_file = os.path.join(docs_folder, 'terms_of_use.pdf')
+            if not os.path.exists(terms_file):
+                # Создаем простой текстовый файл (в реальном приложении здесь был бы PDF)
+                with open(terms_file, 'w', encoding='utf-8') as f:
+                    f.write('Tandau Messenger - Условия использования\n\n')
+                    f.write('Это демонстрационный файл. В реальном приложении здесь был бы PDF документ.\n')
+                
+            # Создаем пример PDF файла Политики конфиденциальности
+            privacy_file = os.path.join(docs_folder, 'privacy_policy.pdf')
+            if not os.path.exists(privacy_file):
+                # Создаем простой текстовый файл
+                with open(privacy_file, 'w', encoding='utf-8') as f:
+                    f.write('Tandau Messenger - Политика конфиденциальности\n\n')
+                    f.write('Это демонстрационный файл. В реальном приложении здесь был бы PDF документ.\n')
+            
+            return jsonify({'success': True, 'message': 'Documents folder created'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+
     # === Основные маршруты ===
     @app.route('/')
     def index():
@@ -1040,10 +1067,153 @@ def create_app():
                 .terms a {
                     color: var(--primary);
                     text-decoration: none;
+                    cursor: pointer;
                 }
                 
                 .terms a:hover {
                     text-decoration: underline;
+                }
+                
+                /* Стили для модального окна */
+                .modal-overlay {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.7);
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    z-index: 1000;
+                    animation: fadeIn 0.3s ease-out;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }
+                
+                .terms-modal {
+                    background: white;
+                    border-radius: var(--radius);
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    max-width: 500px;
+                    width: 100%;
+                    max-height: 80vh;
+                    overflow: hidden;
+                    animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                
+                .modal-header {
+                    padding: 24px 30px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                .modal-header h2 {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    margin: 0;
+                }
+                
+                .close-modal {
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    color: white;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                
+                .close-modal:hover {
+                    background: rgba(255, 255, 255, 0.3);
+                    transform: rotate(90deg);
+                }
+                
+                .modal-content {
+                    padding: 30px;
+                    overflow-y: auto;
+                    max-height: calc(80vh - 100px);
+                }
+                
+                .modal-content p {
+                    margin-bottom: 20px;
+                    line-height: 1.6;
+                    color: var(--text);
+                }
+                
+                .modal-content h3 {
+                    color: var(--primary);
+                    margin: 25px 0 15px 0;
+                    font-size: 1.2rem;
+                }
+                
+                .modal-content ul {
+                    margin-left: 20px;
+                    margin-bottom: 20px;
+                }
+                
+                .modal-content li {
+                    margin-bottom: 8px;
+                    line-height: 1.5;
+                }
+                
+                .download-section {
+                    margin-top: 30px;
+                    padding: 20px;
+                    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+                    border-radius: var(--radius-sm);
+                    text-align: center;
+                    border: 2px dashed rgba(99, 102, 241, 0.3);
+                }
+                
+                .download-section p {
+                    margin-bottom: 15px;
+                    color: var(--text);
+                    font-weight: 500;
+                }
+                
+                .download-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 12px;
+                    padding: 14px 28px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    border-radius: var(--radius-sm);
+                    font-weight: 600;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                    text-decoration: none;
+                }
+                
+                .download-btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+                }
+                
+                .download-btn:active {
+                    transform: translateY(0);
+                }
+                
+                .download-btn i:first-child {
+                    font-size: 1.3rem;
+                }
+                
+                .download-btn i:last-child {
+                    font-size: 1.1rem;
+                    opacity: 0.9;
                 }
                 
                 @keyframes fadeInUp {
@@ -1084,6 +1254,17 @@ def create_app():
                     }
                 }
                 
+                @keyframes slideUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(30px) scale(0.95);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0) scale(1);
+                    }
+                }
+                
                 @media (max-width: 480px) {
                     .container {
                         max-width: 100%;
@@ -1099,6 +1280,18 @@ def create_app():
                     
                     .logo-container {
                         padding: 15px 30px;
+                    }
+                    
+                    .modal-content {
+                        padding: 20px;
+                    }
+                    
+                    .modal-header {
+                        padding: 20px;
+                    }
+                    
+                    .terms-modal {
+                        max-height: 85vh;
                     }
                 }
                 
@@ -1168,7 +1361,7 @@ def create_app():
                             </button>
                             
                             <div class="terms">
-                                Входя в систему, вы соглашаетесь с нашими <a href="#">Условиями использования</a>
+                                Входя в систему, вы соглашаетесь с нашими <a href="#" onclick="openTermsModal(); return false;">Условиями использования</a>
                             </div>
                         </form>
                         
@@ -1209,9 +1402,149 @@ def create_app():
                             </button>
                             
                             <div class="terms">
-                                Регистрируясь, вы соглашаетесь с нашими <a href="#">Условиями использования</a> и <a href="#">Политикой конфиденциальности</a>
+                                Регистрируясь, вы соглашаетесь с нашими <a href="#" onclick="openTermsModal(); return false;">Условиями использования</a> и <a href="#" onclick="openPrivacyModal(); return false;">Политикой конфиденциальности</a>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно Условий использования -->
+            <div class="modal-overlay" id="terms-modal">
+                <div class="terms-modal">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-file-contract"></i> Условия использования</h2>
+                        <button class="close-modal" onclick="closeTermsModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-content">
+                        <p><strong>Дата вступления в силу:</strong> 1 января 2024 г.</p>
+                        
+                        <h3>1. Принятие условий</h3>
+                        <p>Используя Tandau Messenger, вы соглашаетесь соблюдать настоящие Условия использования. Если вы не согласны с этими условиями, пожалуйста, не используйте наш сервис.</p>
+                        
+                        <h3>2. Описание сервиса</h3>
+                        <p>Tandau Messenger — это платформа для обмена сообщениями, файлами и голосового общения. Сервис предоставляется "как есть" и может изменяться без предварительного уведомления.</p>
+                        
+                        <h3>3. Регистрация и учетная запись</h3>
+                        <ul>
+                            <li>Вы должны быть не моложе 13 лет для использования сервиса</li>
+                            <li>Вы несете ответственность за сохранность своих учетных данных</li>
+                            <li>Вы соглашаетесь предоставлять точную и актуальную информацию</li>
+                            <li>Один пользователь может иметь только одну учетную запись</li>
+                        </ul>
+                        
+                        <h3>4. Правила использования</h3>
+                        <p>Запрещается:</p>
+                        <ul>
+                            <li>Распространять спам, вирусы или вредоносное ПО</li>
+                            <li>Нарушать права других пользователей</li>
+                            <li>Использовать сервис для незаконной деятельности</li>
+                            <li>Создавать фишинговые или мошеннические аккаунты</li>
+                            <li>Публиковать контент, нарушающий авторские права</li>
+                        </ul>
+                        
+                        <h3>5. Конфиденциальность</h3>
+                        <p>Мы ценим вашу конфиденциальность. Пожалуйста, ознакомьтесь с нашей <a href="#" onclick="openPrivacyModal(); return false;">Политикой конфиденциальности</a> для получения подробной информации о сборе и использовании данных.</p>
+                        
+                        <h3>6. Интеллектуальная собственность</h3>
+                        <p>Tandau Messenger и его логотипы являются товарными знаками. Весь контент на платформе защищен законами об авторском праве.</p>
+                        
+                        <h3>7. Ограничение ответственности</h3>
+                        <p>Мы не несем ответственности за:</p>
+                        <ul>
+                            <li>Любые прямые или косвенные убытки</li>
+                            <li>Потерю данных или информации</li>
+                            <li>Прерывание работы сервиса</li>
+                            <li>Действия третьих лиц</li>
+                        </ul>
+                        
+                        <h3>8. Изменения условий</h3>
+                        <p>Мы оставляем за собой право изменять эти условия в любое время. Изменения вступают в силу с момента публикации на сайте.</p>
+                        
+                        <h3>9. Прекращение использования</h3>
+                        <p>Мы можем приостановить или прекратить ваш доступ к сервису в случае нарушения условий использования.</p>
+                        
+                        <h3>10. Контактная информация</h3>
+                        <p>По вопросам, связанным с условиями использования, обращайтесь: <a href="mailto:legal@tandau.com">legal@tandau.com</a></p>
+                        
+                        <div class="download-section">
+                            <p>Скачать полную версию Условий использования в формате PDF:</p>
+                            <a href="/static/docs/terms_of_use.pdf" class="download-btn" download="Tandau_Условия_использования.pdf">
+                                <i class="fas fa-file-pdf"></i>
+                                Скачать PDF документ
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <p style="margin-top: 10px; font-size: 0.8rem; color: #666;">Размер файла: 156 KB</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно Политики конфиденциальности -->
+            <div class="modal-overlay" id="privacy-modal">
+                <div class="terms-modal">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-shield-alt"></i> Политика конфиденциальности</h2>
+                        <button class="close-modal" onclick="closePrivacyModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-content">
+                        <p><strong>Дата вступления в силу:</strong> 1 января 2024 г.</p>
+                        
+                        <h3>1. Сбор информации</h3>
+                        <p>Мы собираем следующую информацию:</p>
+                        <ul>
+                            <li>Имя пользователя и контактные данные</li>
+                            <li>Информацию об использовании сервиса</li>
+                            <li>Технические данные (IP-адрес, тип устройства)</li>
+                            <li>Содержание сообщений (хранится только для обеспечения работы сервиса)</li>
+                        </ul>
+                        
+                        <h3>2. Использование информации</h3>
+                        <p>Собранная информация используется для:</p>
+                        <ul>
+                            <li>Предоставления и улучшения сервиса</li>
+                            <li>Обеспечения безопасности</li>
+                            <li>Поддержки пользователей</li>
+                            <li>Анализа использования сервиса</li>
+                        </ul>
+                        
+                        <h3>3. Защита данных</h3>
+                        <p>Мы используем современные технологии шифрования для защиты ваших данных. Все сообщения шифруются при передаче.</p>
+                        
+                        <h3>4. Права пользователей</h3>
+                        <p>Вы имеете право:</p>
+                        <ul>
+                            <li>Получить доступ к своим данным</li>
+                            <li>Исправить неточную информацию</li>
+                            <li>Удалить свою учетную запись</li>
+                            <li>Отозвать согласие на обработку данных</li>
+                        </ul>
+                        
+                        <h3>5. Файлы cookie</h3>
+                        <p>Мы используем файлы cookie для улучшения работы сервиса. Вы можете отключить их в настройках браузера.</p>
+                        
+                        <h3>6. Третьи стороны</h3>
+                        <p>Мы не передаем ваши данные третьим лицам без вашего согласия, за исключением случаев, предусмотренных законом.</p>
+                        
+                        <h3>7. Изменения политики</h3>
+                        <p>Мы будем уведомлять пользователей о значительных изменениях в политике конфиденциальности.</p>
+                        
+                        <h3>8. Контакты</h3>
+                        <p>По вопросам конфиденциальности: <a href="mailto:privacy@tandau.com">privacy@tandau.com</a></p>
+                        
+                        <div class="download-section">
+                            <p>Скачать полную версию Политики конфиденциальности в формате PDF:</p>
+                            <a href="/static/docs/privacy_policy.pdf" class="download-btn" download="Tandau_Политика_конфиденциальности.pdf">
+                                <i class="fas fa-file-pdf"></i>
+                                Скачать PDF документ
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <p style="margin-top: 10px; font-size: 0.8rem; color: #666;">Размер файла: 142 KB</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1386,6 +1719,48 @@ def create_app():
                     }
                 }
                 
+                // Функции для модальных окон
+                function openTermsModal() {
+                    document.getElementById('terms-modal').style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                }
+                
+                function closeTermsModal() {
+                    document.getElementById('terms-modal').style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+                
+                function openPrivacyModal() {
+                    document.getElementById('privacy-modal').style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                }
+                
+                function closePrivacyModal() {
+                    document.getElementById('privacy-modal').style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+                
+                // Закрытие модальных окон при клике вне их
+                document.addEventListener('click', function(event) {
+                    const termsModal = document.getElementById('terms-modal');
+                    const privacyModal = document.getElementById('privacy-modal');
+                    
+                    if (event.target === termsModal) {
+                        closeTermsModal();
+                    }
+                    if (event.target === privacyModal) {
+                        closePrivacyModal();
+                    }
+                });
+                
+                // Закрытие модальных окон по клавише ESC
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'Escape') {
+                        closeTermsModal();
+                        closePrivacyModal();
+                    }
+                });
+                
                 document.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         const activeForm = document.querySelector('.auth-form.active');
@@ -1405,6 +1780,15 @@ def create_app():
                             this.parentElement.style.transform = 'translateY(0)';
                         });
                     });
+                    
+                    // Создаем папку для документов и пример PDF файлов
+                    fetch('/create_docs_folder', { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                console.log('Documents folder created');
+                            }
+                        });
                 });
             </script>
         </body>
