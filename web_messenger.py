@@ -889,7 +889,7 @@ INDEX_HTML = '''<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- Модальное окно условий использования (перенесенный блок из оригинального кода) -->
+    <!-- Модальное окно условий использования -->
     <div id="terms-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); z-index:2000; align-items:center; justify-content:center;">
         <div style="background:rgba(255,255,255,0.12); backdrop-filter:blur(25px); border-radius:24px; border:1px solid rgba(255,255,255,0.18); padding:40px; max-width:500px; width:90%; color:white; text-align:center;">
             <h2 style="margin-bottom:20px;">Условия использования</h2>
@@ -1026,7 +1026,7 @@ INDEX_HTML = '''<!DOCTYPE html>
             }
             
             if (username.length > 20) {
-                return showAlert("Логин должен быть не более 20 символов");
+                return showAlert("Логин должен быть не менее 3 символов и не более 20");
             }
             
             if (password.length < 4) {
@@ -1112,13 +1112,20 @@ INDEX_HTML = '''<!DOCTYPE html>
                     this.parentElement.style.transform = "translateY(0)";
                 });
             });
-        });
-        
-        // Закрыть модальное окно при клике на фон
-        document.getElementById("terms-modal").addEventListener("click", function(e) {
-            if (e.target === this) {
-                closeTermsModal();
-            }
+            
+            // Закрыть модальное окно при клике на фон
+            document.getElementById("terms-modal").addEventListener("click", function(e) {
+                if (e.target === this) {
+                    closeTermsModal();
+                }
+            });
+            
+            // Закрыть модальное окно клавишей Esc
+            document.addEventListener("keydown", function(e) {
+                if (e.key === "Escape" && document.getElementById("terms-modal").style.display === "flex") {
+                    closeTermsModal();
+                }
+            });
         });
     </script>
 </body>
@@ -1466,17 +1473,18 @@ CHAT_HTML = '''<!DOCTYPE html>
         let currentUser = '';
         let currentRoom = 'general';
         
-        // Получаем имя пользователя из куки или сессии
+        // Получаем имя пользователя из сессии
         function getUsername() {
-            // Простой способ - можно улучшить
-            const urlParams = new URLSearchParams(window.location.search);
-            const user = urlParams.get('user') || 'Гость';
-            return user;
+            // Используем fetch для получения имени пользователя
+            return fetch('/get_current_user')
+                .then(response => response.json())
+                .then(data => data.username || 'Гость')
+                .catch(() => 'Гость');
         }
         
-        socket.on('connect', () => {
+        socket.on('connect', async () => {
             console.log('Connected to server');
-            currentUser = getUsername();
+            currentUser = await getUsername();
             document.getElementById('username').textContent = currentUser;
             joinRoom('general');
             loadUsers();
@@ -1512,7 +1520,9 @@ CHAT_HTML = '''<!DOCTYPE html>
             document.querySelectorAll('.channel-item, .user-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.currentTarget.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            }
             
             // Загружаем историю сообщений
             loadMessages(room);
@@ -1549,6 +1559,9 @@ CHAT_HTML = '''<!DOCTYPE html>
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
             avatar.textContent = data.user.substring(0, 2).toUpperCase();
+            if (data.color) {
+                avatar.style.backgroundColor = data.color;
+            }
             
             const content = document.createElement('div');
             content.className = 'message-content';
@@ -1657,6 +1670,13 @@ CHAT_HTML = '''<!DOCTYPE html>
     </script>
 </body>
 </html>'''
+
+@app.route('/get_current_user')
+def get_current_user():
+    """Получение текущего пользователя"""
+    if 'username' in session:
+        return jsonify({'username': session['username']})
+    return jsonify({'username': 'Гость'})
 
 @app.route('/chat')
 def chat_handler():
