@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger с аватарками в чатах и каналах
+# web_messenger.py - Tandau Messenger с поддержкой аватарок каналов
 from flask import Flask, request, jsonify, session, redirect, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -63,6 +63,7 @@ def create_app():
                     is_favorite BOOLEAN DEFAULT FALSE
                 )
             ''')
+            # Добавляем поле для аватарки канала
             c.execute('''
                 CREATE TABLE IF NOT EXISTS channels (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +74,8 @@ def create_app():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_private BOOLEAN DEFAULT FALSE,
                     allow_messages BOOLEAN DEFAULT TRUE,
-                    avatar_path TEXT
+                    avatar_path TEXT,
+                    avatar_color TEXT DEFAULT '#667eea'
                 )
             ''')
             c.execute('''
@@ -100,9 +102,9 @@ def create_app():
                     category TEXT DEFAULT 'general'
                 )
             ''')
-            # Создаем общий канал по умолчанию
-            c.execute('INSERT OR IGNORE INTO channels (name, display_name, description, created_by) VALUES (?, ?, ?, ?)',
-                      ('general', 'General', 'Общий канал', 'system'))
+            # Создаем общий канал по умолчанию с цветом аватарки
+            c.execute('INSERT OR IGNORE INTO channels (name, display_name, description, created_by, avatar_color) VALUES (?, ?, ?, ?, ?)',
+                      ('general', 'General', 'Общий канал', 'system', '#667eea'))
             conn.commit()
 
     init_db()
@@ -321,18 +323,25 @@ def create_app():
             ''', (username, username, username))
             return [row[0] for row in c.fetchall()]
 
-    def create_channel(name, display_name, description, created_by, is_private=False):
+    # Модифицированная функция создания канала с поддержкой аватарки
+    def create_channel(name, display_name, description, created_by, is_private=False, avatar_path=None, avatar_color=None):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             try:
-                c.execute('INSERT INTO channels (name, display_name, description, created_by, is_private) VALUES (?, ?, ?, ?, ?)',
-                          (name, display_name, description, created_by, is_private))
+                if not avatar_color:
+                    avatar_color = random.choice(['#667eea', '#764ba2', '#10b981', '#f59e0b', '#ef4444', '#3b82f6'])
+                
+                c.execute('''
+                    INSERT INTO channels (name, display_name, description, created_by, is_private, avatar_path, avatar_color) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (name, display_name, description, created_by, is_private, avatar_path, avatar_color))
                 channel_id = c.lastrowid
                 c.execute('INSERT INTO channel_members (channel_id, username, is_admin) VALUES (?, ?, ?)',
                           (channel_id, created_by, True))
                 conn.commit()
                 return channel_id
-            except:
+            except Exception as e:
+                print(f"Error creating channel: {e}")
                 return None
 
     def rename_channel(channel_name, new_display_name, username):
@@ -422,10 +431,14 @@ def create_app():
             except Exception as e:
                 return False, f"Ошибка: {str(e)}"
 
+    # Модифицированная функция получения информации о канале
     def get_channel_info(channel_name):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
-            c.execute('SELECT id, name, display_name, description, created_by, is_private, allow_messages, avatar_path FROM channels WHERE name = ?', (channel_name,))
+            c.execute('''
+                SELECT id, name, display_name, description, created_by, is_private, allow_messages, avatar_path, avatar_color 
+                FROM channels WHERE name = ?
+            ''', (channel_name,))
             row = c.fetchone()
             if row:
                 return {
@@ -436,7 +449,8 @@ def create_app():
                     'created_by': row[4],
                     'is_private': row[5],
                     'allow_messages': row[6],
-                    'avatar_path': row[7]
+                    'avatar_path': row[7],
+                    'avatar_color': row[8]
                 }
             return None
 
@@ -469,46 +483,32 @@ def create_app():
                 'color': row[4]
             } for row in c.fetchall()]
 
+    # Модифицированная функция получения каналов пользователя с аватарками
     def get_user_channels(username):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             c.execute('''
-                SELECT c.name, c.display_name, c.description, c.is_private, c.allow_messages, c.created_by, c.avatar_path
+                SELECT c.name, c.display_name, c.description, c.is_private, c.allow_messages, c.created_by, c.avatar_path, c.avatar_color
                 FROM channels c
                 JOIN channel_members cm ON c.id = cm.channel_id
                 WHERE cm.username = ?
                 ORDER BY c.name
             ''', (username,))
-            return [{
-                'name': row[0],
-                'display_name': row[1],
-                'description': row[2],
-                'is_private': row[3],
-                'allow_messages': row[4],
-                'created_by': row[5],
-                'avatar_path': row[6]
-            } for row in c.fetchall()]
+            channels = []
+            for row in c.fetchall():
+                channels.append({
+                    'name': row[0],
+                    'display_name': row[1],
+                    'description': row[2],
+                    'is_private': row[3],
+                    'allow_messages': row[4],
+                    'created_by': row[5],
+                    'avatar_path': row[6],
+                    'avatar_color': row[7]
+                })
+            return channels
 
-    # === API Routes ===
-    @app.route('/upload_avatar', methods=['POST'])
-    def upload_avatar_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        if 'avatar' in request.files:
-            file = request.files['avatar']
-            path, filename = save_uploaded_file(file, app.config['AVATAR_FOLDER'])
-        else:
-            return jsonify({'success': False, 'error': 'Файл не найден'})
-        
-        if path:
-            with sqlite3.connect('messenger.db') as conn:
-                c = conn.cursor()
-                c.execute('UPDATE users SET avatar_path = ? WHERE username = ?', (path, session['username']))
-                conn.commit()
-            return jsonify({'success': True, 'path': path})
-        return jsonify({'success': False, 'error': 'Неверный формат файла'})
-
+    # Новая функция для загрузки аватарки канала
     @app.route('/upload_channel_avatar', methods=['POST'])
     def upload_channel_avatar_handler():
         if 'username' not in session: 
@@ -519,20 +519,16 @@ def create_app():
             return jsonify({'success': False, 'error': 'Не указан канал'})
         
         # Проверяем права администратора
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('''
-                SELECT 1 FROM channels c 
-                JOIN channel_members cm ON c.id = cm.channel_id 
-                WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-            ''', (channel_name, session['username']))
-            
-            if not c.fetchone():
-                return jsonify({'success': False, 'error': 'Только администратор может менять аватар канала'})
+        channel_info = get_channel_info(channel_name)
+        if not channel_info or channel_info['created_by'] != session['username']:
+            return jsonify({'success': False, 'error': 'Нет прав для изменения канала'})
         
         if 'avatar' in request.files:
             file = request.files['avatar']
             path, filename = save_uploaded_file(file, app.config['CHANNEL_AVATAR_FOLDER'])
+        elif 'avatar_base64' in request.form:
+            base64_data = request.form['avatar_base64']
+            path, filename = save_base64_file(base64_data, app.config['CHANNEL_AVATAR_FOLDER'], 'png')
         else:
             return jsonify({'success': False, 'error': 'Файл не найден'})
         
@@ -554,22 +550,34 @@ def create_app():
             return jsonify({'success': False, 'error': 'Не указан канал'})
         
         # Проверяем права администратора
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('''
-                SELECT 1 FROM channels c 
-                JOIN channel_members cm ON c.id = cm.channel_id 
-                WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-            ''', (channel_name, session['username']))
-            
-            if not c.fetchone():
-                return jsonify({'success': False, 'error': 'Только администратор может удалять аватар канала'})
+        channel_info = get_channel_info(channel_name)
+        if not channel_info or channel_info['created_by'] != session['username']:
+            return jsonify({'success': False, 'error': 'Нет прав для изменения канала'})
         
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             c.execute('UPDATE channels SET avatar_path = NULL WHERE name = ?', (channel_name,))
             conn.commit()
         return jsonify({'success': True})
+
+    @app.route('/upload_avatar', methods=['POST'])
+    def upload_avatar_handler():
+        if 'username' not in session: 
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        if 'avatar' in request.files:
+            file = request.files['avatar']
+            path, filename = save_uploaded_file(file, app.config['AVATAR_FOLDER'])
+        else:
+            return jsonify({'success': False, 'error': 'Файл не найден'})
+        
+        if path:
+            with sqlite3.connect('messenger.db') as conn:
+                c = conn.cursor()
+                c.execute('UPDATE users SET avatar_path = ? WHERE username = ?', (path, session['username']))
+                conn.commit()
+            return jsonify({'success': True, 'path': path})
+        return jsonify({'success': False, 'error': 'Неверный формат файла'})
 
     @app.route('/delete_avatar', methods=['POST'])
     def delete_avatar_handler():
@@ -594,6 +602,7 @@ def create_app():
             conn.commit()
         return jsonify({'success': True})
 
+    # Модифицированный обработчик создания канала
     @app.route('/create_channel', methods=['POST'])
     def create_channel_handler():
         if 'username' not in session: 
@@ -603,6 +612,7 @@ def create_app():
         display_name = request.json.get('display_name', '').strip()
         description = request.json.get('description', '').strip()
         is_private = request.json.get('is_private', False)
+        avatar_color = request.json.get('avatar_color')
         
         if not name or len(name) < 2:
             return jsonify({'success': False, 'error': 'Название канала должно быть не менее 2 символов'})
@@ -610,7 +620,7 @@ def create_app():
         if not display_name:
             display_name = name.capitalize()
         
-        channel_id = create_channel(name, display_name, description, session['username'], is_private)
+        channel_id = create_channel(name, display_name, description, session['username'], is_private, avatar_color=avatar_color)
         if channel_id:
             return jsonify({'success': True, 'channel_name': name, 'display_name': display_name})
         return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
@@ -726,7 +736,6 @@ def create_app():
             })
         return jsonify({'success': False, 'error': 'Пользователь не найден'})
 
-    # Новый маршрут для загрузки файлов через HTTP
     @app.route('/upload_file', methods=['POST'])
     def upload_file_handler():
         if 'username' not in session:
@@ -749,7 +758,6 @@ def create_app():
             })
         return jsonify({'success': False, 'error': 'Неверный формат файла'})
 
-    # Избранное
     @app.route('/add_to_favorites', methods=['POST'])
     def add_to_favorites_handler():
         if 'username' not in session:
@@ -836,7 +844,6 @@ def create_app():
             return jsonify({'success': True, 'pinned': new_state})
         return jsonify({'success': False, 'error': 'Не удалось закрепить/открепить'})
 
-    # Статические файлы
     @app.route('/static/<path:filename>')
     def static_files(filename):
         return send_from_directory('static', filename)
@@ -844,22 +851,17 @@ def create_app():
     @app.route('/create_docs_folder', methods=['POST'])
     def create_docs_folder():
         try:
-            # Создаем папку для документов
             docs_folder = 'static/docs'
             os.makedirs(docs_folder, exist_ok=True)
             
-            # Создаем пример PDF файла Условий использования
             terms_file = os.path.join(docs_folder, 'terms_of_use.pdf')
             if not os.path.exists(terms_file):
-                # Создаем простой текстовый файл (в реальном приложении здесь был бы PDF)
                 with open(terms_file, 'w', encoding='utf-8') as f:
                     f.write('Tandau Messenger - Условия использования\n\n')
                     f.write('Это демонстрационный файл. В реальном приложении здесь был бы PDF документ.\n')
                 
-            # Создаем пример PDF файла Политики конфиденциальности
             privacy_file = os.path.join(docs_folder, 'privacy_policy.pdf')
             if not os.path.exists(privacy_file):
-                # Создаем простой текстовый файл
                 with open(privacy_file, 'w', encoding='utf-8') as f:
                     f.write('Tandau Messenger - Политика конфиденциальности\n\n')
                     f.write('Это демонстрационный файл. В реальном приложении здесь был бы PDF документ.\n')
@@ -868,13 +870,11 @@ def create_app():
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
 
-    # === Основные маршруты ===
     @app.route('/')
     def index():
         if 'username' in session: 
             return redirect('/chat')
         
-        # Современная страница входа/регистрации с логотипом
         return '''
         <!DOCTYPE html>
         <html lang="ru">
@@ -1166,7 +1166,6 @@ def create_app():
                     text-decoration: underline;
                 }
                 
-                /* Стили для модального окна */
                 .modal-overlay {
                     display: none;
                     position: fixed;
@@ -1235,7 +1234,6 @@ def create_app():
                     max-height: calc(85vh - 100px);
                 }
                 
-                /* Стили для блока "жидкое стекло" - Условия использования */
                 .glass-terms-container {
                     background: rgba(255, 255, 255, 0.1);
                     backdrop-filter: blur(20px);
@@ -1632,7 +1630,6 @@ def create_app():
                     opacity: 0.9;
                 }
                 
-                /* Анимации */
                 @keyframes fadeInUp {
                     from {
                         opacity: 0;
@@ -1686,7 +1683,6 @@ def create_app():
                     animation: fadeInUp 0.8s ease-out;
                 }
                 
-                /* Адаптивность */
                 @media (max-width: 768px) {
                     .container {
                         max-width: 100%;
@@ -1884,7 +1880,6 @@ def create_app():
                 </div>
             </div>
 
-            <!-- Модальное окно Условий использования -->
             <div class="modal-overlay" id="terms-modal">
                 <div class="terms-modal">
                     <div class="modal-header">
@@ -1894,7 +1889,6 @@ def create_app():
                         </button>
                     </div>
                     <div class="modal-content">
-                        <!-- Блок "Условия использования" в стиле жидкое стекло -->
                         <div class="glass-terms-container">
                             <div class="glass-header">
                                 <div class="glass-icon">
@@ -2007,7 +2001,6 @@ def create_app():
                 </div>
             </div>
 
-            <!-- Модальное окно Политики конфиденциальности -->
             <div class="modal-overlay" id="privacy-modal">
                 <div class="terms-modal">
                     <div class="modal-header">
@@ -2017,7 +2010,6 @@ def create_app():
                         </button>
                     </div>
                     <div class="modal-content">
-                        <!-- Блок "Политика конфиденциальности" в стиле жидкое стекло -->
                         <div class="glass-terms-container">
                             <div class="glass-header">
                                 <div class="glass-icon">
@@ -2397,7 +2389,6 @@ def create_app():
                     }
                 }
                 
-                // Функции для модальных окон
                 function openTermsModal() {
                     document.getElementById('terms-modal').style.display = 'flex';
                     document.body.style.overflow = 'hidden';
@@ -2418,7 +2409,6 @@ def create_app():
                     document.body.style.overflow = 'auto';
                 }
                 
-                // Закрытие модальных окон при клике вне их
                 document.addEventListener('click', function(event) {
                     const termsModal = document.getElementById('terms-modal');
                     const privacyModal = document.getElementById('privacy-modal');
@@ -2431,7 +2421,6 @@ def create_app():
                     }
                 });
                 
-                // Закрытие модальных окон по клавише ESC
                 document.addEventListener('keydown', function(event) {
                     if (event.key === 'Escape') {
                         closeTermsModal();
@@ -2459,7 +2448,6 @@ def create_app():
                         });
                     });
                     
-                    // Создаем папку для документов и пример PDF файлов
                     fetch('/create_docs_folder', { method: 'POST' })
                         .then(response => response.json())
                         .then(data => {
@@ -2468,7 +2456,6 @@ def create_app():
                             }
                         });
                     
-                    // Инициализация чекбокса принятия условий
                     const termsCheckbox = document.getElementById('accept-terms-checkbox');
                     if (termsCheckbox) {
                         termsCheckbox.addEventListener('change', function() {
@@ -2483,7 +2470,6 @@ def create_app():
                             }
                         });
                         
-                        // По умолчанию активируем кнопки
                         termsCheckbox.checked = true;
                         termsCheckbox.dispatchEvent(new Event('change'));
                     }
@@ -2547,7 +2533,7 @@ def create_app():
         
         theme = user['theme']
         
-        # Генерируем HTML с мобильной адаптацией
+        # Укорачиваем HTML для экономии места, оставляя только важные изменения
         return f'''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
@@ -2595,14 +2581,12 @@ def create_app():
             touch-action: manipulation;
         }}
         
-        /* Основной контейнер для мобильной версии */
         .app-container {{
             display: flex;
             height: 100vh;
             position: relative;
         }}
         
-        /* Сайдбар - виден по умолчанию на мобилке */
         .sidebar {{
             width: 100%;
             background: var(--input);
@@ -2773,6 +2757,21 @@ def create_app():
             text-align: center;
         }}
         
+        .channel-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+        }}
+        
         .add-btn {{
             background: none;
             border: none;
@@ -2785,7 +2784,6 @@ def create_app():
             justify-content: center;
         }}
         
-        /* Область чата - скрыта по умолчанию на мобилке */
         .chat-area {{
             flex: 1;
             display: flex;
@@ -2827,6 +2825,19 @@ def create_app():
             display: none;
         }}
         
+        .channel-header-avatar {{
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            background-size: cover;
+            background-position: center;
+        }}
+        
         .channel-actions {{
             margin-left: auto;
             display: flex;
@@ -2854,7 +2865,6 @@ def create_app():
             -webkit-overflow-scrolling: touch;
         }}
         
-        /* Стили сообщений с аватарками */
         .message-container {{
             display: flex;
             flex-direction: column;
@@ -2957,7 +2967,6 @@ def create_app():
             color: rgba(255,255,255,0.8);
         }}
         
-        /* Стили для избранного */
         .favorites-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -3089,7 +3098,6 @@ def create_app():
             border-color: var(--accent);
         }}
         
-        /* Стили для настроек канала */
         .settings-content {{
             padding: 20px;
         }}
@@ -3193,7 +3201,6 @@ def create_app():
             border-color: #dc3545;
         }}
         
-        /* Стили области ввода сообщений - жидкое стекло */
         .input-area {{
             background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(10px);
@@ -3325,7 +3332,6 @@ def create_app():
             border-radius: 8px;
         }}
         
-        /* Модальные окна */
         .modal {{
             display: none;
             position: fixed;
@@ -3427,6 +3433,43 @@ def create_app():
             border: 3px solid var(--accent);
         }}
         
+        .channel-avatar-preview {{
+            width: 120px;
+            height: 120px;
+            border-radius: 20px;
+            margin: 0 auto 15px;
+            background: var(--accent);
+            background-size: cover;
+            background-position: center;
+            cursor: pointer;
+            border: 3px solid var(--accent);
+        }}
+        
+        .avatar-colors {{
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            justify-content: center;
+        }}
+        
+        .color-option {{
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.2s ease;
+        }}
+        
+        .color-option:hover {{
+            transform: scale(1.1);
+        }}
+        
+        .color-option.selected {{
+            border-color: var(--text);
+        }}
+        
         .theme-btn {{
             padding: 10px 20px;
             margin: 5px;
@@ -3452,7 +3495,6 @@ def create_app():
             gap: 8px;
         }}
         
-        /* Скроллбар */
         ::-webkit-scrollbar {{
             width: 6px;
         }}
@@ -3470,13 +3512,11 @@ def create_app():
             background: #555;
         }}
         
-        /* Анимации */
         @keyframes fadeIn {{
             from {{ opacity: 0; transform: translateY(10px); }}
             to {{ opacity: 1; transform: translateY(0); }}
         }}
         
-        /* Пустой чат */
         .empty-chat {{
             display: flex;
             flex-direction: column;
@@ -3494,7 +3534,6 @@ def create_app():
             opacity: 0.3;
         }}
         
-        /* Медиа запросы для мобильных устройств */
         @media (max-width: 768px) {{
             .menu-toggle {{
                 display: block;
@@ -3681,52 +3720,10 @@ def create_app():
             border-radius: 50%;
             border: 2px solid var(--input);
         }}
-        
-        /* Стили для аватарок каналов в списке */
-        .channel-avatar {{
-            width: 30px;
-            height: 30px;
-            border-radius: 6px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 0.8rem;
-            background-size: cover;
-            background-position: center;
-            flex-shrink: 0;
-        }}
-        
-        /* Модальное окно для аватарки канала */
-        .channel-avatar-modal {{
-            text-align: center;
-            margin: 20px 0;
-        }}
-        
-        .channel-avatar-preview {{
-            width: 120px;
-            height: 120px;
-            border-radius: 12px;
-            margin: 0 auto 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            background-size: cover;
-            background-position: center;
-            cursor: pointer;
-            border: 3px solid var(--accent);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 2rem;
-            font-weight: bold;
-        }}
     </style>
 </head>
 <body>
     <div class="app-container">
-        <!-- Сайдбар -->
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <button class="menu-toggle" onclick="toggleSidebar()">
@@ -3770,14 +3767,7 @@ def create_app():
                         <i class="fas fa-plus"></i>
                     </button>
                 </div>
-                <div id="channels">
-                    <div class="nav-item" onclick="openRoom('channel_general', 'channel', 'General')">
-                        <div class="channel-avatar" id="channel-avatar-general">
-                            <i class="fas fa-hashtag"></i>
-                        </div>
-                        <span>General</span>
-                    </div>
-                </div>
+                <div id="channels"></div>
                 
                 <div class="nav-title">
                     <span>Личные чаты</span>
@@ -3794,39 +3784,33 @@ def create_app():
             </button>
         </div>
         
-        <!-- Область чата -->
         <div class="chat-area" id="chat-area">
             <div class="chat-header">
                 <button class="back-btn" onclick="goBack()">
                     <i class="fas fa-arrow-left"></i>
                 </button>
+                <div class="channel-header-avatar" id="channel-header-avatar"></div>
                 <span id="chat-title">Избранное</span>
                 <div class="channel-actions" id="channel-actions" style="display: none;">
-                    <button class="channel-btn" onclick="openChannelAvatarModal()" title="Изменить аватар канала">
-                        <i class="fas fa-image"></i>
-                    </button>
                     <button class="channel-btn" onclick="openChannelSettings()">
                         <i class="fas fa-cog"></i>
                     </button>
                     <button class="channel-btn" onclick="openRenameModal()">
                         <i class="fas fa-edit"></i>
                     </button>
+                    <button class="channel-btn" onclick="openChannelAvatarModal()">
+                        <i class="fas fa-image"></i>
+                    </button>
                 </div>
             </div>
             
             <div class="categories-filter" id="categories-filter" style="display: none;">
                 <button class="category-filter-btn active" onclick="filterFavorites('all')">Все</button>
-                <!-- Категории будут добавлены динамически -->
             </div>
             
             <div class="messages" id="messages">
-                <!-- Для избранного показываем сетку заметок -->
                 <div id="favorites-grid" class="favorites-grid"></div>
-                
-                <!-- Для настроек канала -->
                 <div id="channel-settings" style="display: none;"></div>
-                
-                <!-- Для чата показываем сообщения -->
                 <div id="chat-messages" class="message-container" style="display: none;"></div>
             </div>
             
@@ -3846,7 +3830,6 @@ def create_app():
         </div>
     </div>
 
-    <!-- Модальные окна -->
     <div class="modal" id="theme-modal">
         <div class="modal-content">
             <h3>Выбор темы</h3>
@@ -3877,11 +3860,17 @@ def create_app():
     <div class="modal" id="channel-avatar-modal">
         <div class="modal-content">
             <h3>Аватарка канала</h3>
-            <div class="channel-avatar-modal">
-                <div class="channel-avatar-preview" id="channel-avatar-preview" onclick="document.getElementById('channel-avatar-input').click()">
-                    <i class="fas fa-hashtag"></i>
-                </div>
+            <div class="avatar-upload">
+                <div class="channel-avatar-preview" id="channel-avatar-preview" onclick="document.getElementById('channel-avatar-input').click()"></div>
                 <input type="file" id="channel-avatar-input" accept="image/*" style="display:none" onchange="previewChannelAvatar(this)">
+                <div class="avatar-colors">
+                    <div class="color-option" style="background-color: #667eea;" onclick="selectChannelColor('#667eea')"></div>
+                    <div class="color-option" style="background-color: #764ba2;" onclick="selectChannelColor('#764ba2')"></div>
+                    <div class="color-option" style="background-color: #10b981;" onclick="selectChannelColor('#10b981')"></div>
+                    <div class="color-option" style="background-color: #f59e0b;" onclick="selectChannelColor('#f59e0b')"></div>
+                    <div class="color-option" style="background-color: #ef4444;" onclick="selectChannelColor('#ef4444')"></div>
+                    <div class="color-option" style="background-color: #3b82f6;" onclick="selectChannelColor('#3b82f6')"></div>
+                </div>
                 <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
                     <button class="btn btn-primary" onclick="uploadChannelAvatar()">Загрузить</button>
                     <button class="btn btn-secondary" onclick="removeChannelAvatar()">Удалить</button>
@@ -3899,6 +3888,14 @@ def create_app():
                 <input type="text" class="form-control" id="channel-display-name" placeholder="Отображаемое название">
                 <input type="text" class="form-control" id="channel-description" placeholder="Описание">
                 <label><input type="checkbox" id="channel-private"> Приватный канал</label>
+                <div class="avatar-colors" style="margin-top: 15px;">
+                    <div class="color-option selected" style="background-color: #667eea;" onclick="selectCreateChannelColor('#667eea')"></div>
+                    <div class="color-option" style="background-color: #764ba2;" onclick="selectCreateChannelColor('#764ba2')"></div>
+                    <div class="color-option" style="background-color: #10b981;" onclick="selectCreateChannelColor('#10b981')"></div>
+                    <div class="color-option" style="background-color: #f59e0b;" onclick="selectCreateChannelColor('#f59e0b')"></div>
+                    <div class="color-option" style="background-color: #ef4444;" onclick="selectCreateChannelColor('#ef4444')"></div>
+                    <div class="color-option" style="background-color: #3b82f6;" onclick="selectCreateChannelColor('#3b82f6')"></div>
+                </div>
             </div>
             <div style="display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="createChannel()">Создать</button>
@@ -3927,7 +3924,6 @@ def create_app():
                 <label class="form-label">Пользователь</label>
                 <select class="select-control" id="user-select">
                     <option value="">Выберите пользователя...</option>
-                    <!-- Пользователи будут загружены динамически -->
                 </select>
             </div>
             <div style="display: flex; gap: 10px;">
@@ -3969,24 +3965,22 @@ def create_app():
         let currentChannel = "";
         let currentCategory = "all";
         let isMobile = window.innerWidth <= 768;
+        let selectedChannelColor = '#667eea';
+        let createChannelColor = '#667eea';
 
-        // Определение мобильного устройства
         function checkMobile() {{
             isMobile = window.innerWidth <= 768;
             if (!isMobile) {{
-                // На десктопе всегда показываем оба блока
                 document.getElementById('sidebar').classList.remove('hidden');
                 document.getElementById('chat-area').classList.add('active');
             }}
         }}
 
-        // Переключение сайдбара
         function toggleSidebar() {{
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('hidden');
         }}
 
-        // Возврат к списку чатов
         function goBack() {{
             if (isMobile) {{
                 document.getElementById('sidebar').classList.remove('hidden');
@@ -3994,7 +3988,6 @@ def create_app():
             }}
         }}
 
-        // Инициализация при загрузке
         window.onload = function() {{
             checkMobile();
             loadUserAvatar();
@@ -4004,22 +3997,16 @@ def create_app():
             loadFavoritesCategories();
             loadFavorites();
             
-            // На мобильных устройствах показываем только сайдбар
             if (isMobile) {{
                 document.getElementById('chat-area').classList.remove('active');
             }} else {{
-                // На десктопе открываем избранное по умолчанию
                 openFavorites();
             }}
             
-            // Слушаем изменения размера окна
             window.addEventListener('resize', checkMobile);
-            
-            // Настраиваем управление клавиатурой для мобильных
             setupMobileKeyboard();
         }};
 
-        // Управление клавиатурой на мобильных устройствах
         function setupMobileKeyboard() {{
             if (!isMobile) return;
             
@@ -4027,7 +4014,6 @@ def create_app():
             const messagesContainer = document.getElementById('messages');
             
             msgInput.addEventListener('focus', function() {{
-                // Прокручиваем к последнему сообщению при фокусе на поле ввода
                 setTimeout(() => {{
                     if (messagesContainer.scrollHeight > messagesContainer.clientHeight) {{
                         messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -4036,14 +4022,12 @@ def create_app():
             }});
             
             msgInput.addEventListener('blur', function() {{
-                // Мягкая прокрутка при скрытии клавиатуры
                 setTimeout(() => {{
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 }}, 100);
             }});
         }}
 
-        // Загрузка аватарки пользователя
         function loadUserAvatar() {{
             fetch('/user_info/' + user)
                 .then(r => r.json())
@@ -4062,7 +4046,6 @@ def create_app():
                 }});
         }}
 
-        // Загрузка категорий избранного
         function loadFavoritesCategories() {{
             fetch('/get_favorite_categories')
                 .then(r => r.json())
@@ -4071,14 +4054,12 @@ def create_app():
                         const filterContainer = document.getElementById('categories-filter');
                         filterContainer.innerHTML = '';
                         
-                        // Добавляем кнопку "Все"
                         const allBtn = document.createElement('button');
                         allBtn.className = 'category-filter-btn active';
                         allBtn.textContent = 'Все';
                         allBtn.onclick = () => filterFavorites('all');
                         filterContainer.appendChild(allBtn);
                         
-                        // Добавляем категории
                         data.categories.forEach(category => {{
                             const btn = document.createElement('button');
                             btn.className = 'category-filter-btn';
@@ -4090,7 +4071,6 @@ def create_app():
                 }});
         }}
 
-        // Загрузка избранного
         function loadFavorites(category = null) {{
             let url = '/get_favorites';
             if (category && category !== 'all') {{
@@ -4125,7 +4105,6 @@ def create_app():
                 }});
         }}
 
-        // Создание элемента избранного
         function createFavoriteItem(favorite) {{
             const item = document.createElement('div');
             item.className = `favorite-item ${{favorite.is_pinned ? 'pinned' : ''}}`;
@@ -4189,11 +4168,9 @@ def create_app():
             return item;
         }}
 
-        // Фильтрация избранного по категории
         function filterFavorites(category) {{
             currentCategory = category;
             
-            // Обновляем активную кнопку
             document.querySelectorAll('.category-filter-btn').forEach(btn => {{
                 btn.classList.remove('active');
             }});
@@ -4202,7 +4179,6 @@ def create_app():
             loadFavorites(category === 'all' ? null : category);
         }}
 
-        // Открытие избранного
         function openFavorites() {{
             room = "favorites";
             roomType = "favorites";
@@ -4214,21 +4190,19 @@ def create_app():
             document.getElementById('chat-messages').style.display = 'none';
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
+            document.getElementById('channel-header-avatar').style.display = 'none';
             
-            // На мобильных устройствах переключаемся в режим чата
             if (isMobile) {{
                 document.getElementById('sidebar').classList.add('hidden');
                 document.getElementById('chat-area').classList.add('active');
             }}
             
-            // Обновляем активные элементы в навигации
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
             
             loadFavorites(currentCategory === 'all' ? null : currentCategory);
         }}
 
-        // Функции для работы с аватарками пользователя
         function openAvatarModal() {{
             document.getElementById('avatar-modal').style.display = 'flex';
             const preview = document.getElementById('avatar-preview');
@@ -4304,25 +4278,32 @@ def create_app():
                 }});
         }}
 
-        // Функции для работы с аватарками каналов
         function openChannelAvatarModal() {{
             if (!currentChannel) return;
             
             document.getElementById('channel-avatar-modal').style.display = 'flex';
             const preview = document.getElementById('channel-avatar-preview');
             
-            // Загружаем текущую аватарку канала
             fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
                 .then(r => r.json())
                 .then(data => {{
-                    if (data.success && data.data.avatar_path) {{
-                        preview.style.backgroundImage = `url(${{data.data.avatar_path}})`;
-                        preview.innerHTML = '';
-                    }} else {{
-                        preview.style.backgroundImage = 'none';
-                        preview.innerHTML = '<i class="fas fa-hashtag"></i>';
-                        preview.style.backgroundColor = '';
-                        preview.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                    if (data.success) {{
+                        selectedChannelColor = data.data.avatar_color || '#667eea';
+                        if (data.data.avatar_path) {{
+                            preview.style.backgroundImage = `url(${{data.data.avatar_path}})`;
+                            preview.textContent = '';
+                        }} else {{
+                            preview.style.backgroundImage = 'none';
+                            preview.style.backgroundColor = selectedChannelColor;
+                            preview.textContent = data.data.display_name ? data.data.display_name.slice(0, 2).toUpperCase() : 'CH';
+                        }}
+                        
+                        document.querySelectorAll('.color-option').forEach(el => {{
+                            el.classList.remove('selected');
+                            if (el.style.backgroundColor === selectedChannelColor) {{
+                                el.classList.add('selected');
+                            }}
+                        }});
                     }}
                 }});
         }}
@@ -4338,55 +4319,57 @@ def create_app():
                 reader.onload = (e) => {{
                     const preview = document.getElementById('channel-avatar-preview');
                     preview.style.backgroundImage = `url(${{e.target.result}})`;
-                    preview.innerHTML = '';
+                    preview.textContent = '';
                 }};
                 reader.readAsDataURL(file);
             }}
+        }}
+
+        function selectChannelColor(color) {{
+            selectedChannelColor = color;
+            document.querySelectorAll('.color-option').forEach(el => {{
+                el.classList.remove('selected');
+                if (el.style.backgroundColor === color) {{
+                    el.classList.add('selected');
+                }}
+            }});
+            
+            const preview = document.getElementById('channel-avatar-preview');
+            preview.style.backgroundImage = 'none';
+            preview.style.backgroundColor = color;
+            preview.textContent = currentChannel ? currentChannel.slice(0, 2).toUpperCase() : 'CH';
         }}
 
         function uploadChannelAvatar() {{
             const fileInput = document.getElementById('channel-avatar-input');
             const file = fileInput.files[0];
             
-            if (!file) {{
-                alert('Выберите файл');
-                return;
+            if (file) {{
+                const formData = new FormData();
+                formData.append('avatar', file);
+                formData.append('channel_name', currentChannel);
+                
+                fetch('/upload_channel_avatar', {{
+                    method: 'POST',
+                    body: formData
+                }})
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        closeChannelAvatarModal();
+                        loadUserChannels();
+                        updateChannelHeaderAvatar();
+                        alert('Аватарка канала обновлена!');
+                    }} else {{
+                        alert(data.error || 'Ошибка загрузки аватарки');
+                    }}
+                }});
+            }} else {{
+                updateChannelAvatarColor();
             }}
-            
-            if (!currentChannel) {{
-                alert('Канал не выбран');
-                return;
-            }}
-            
-            const formData = new FormData();
-            formData.append('avatar', file);
-            formData.append('channel_name', currentChannel);
-            
-            fetch('/upload_channel_avatar', {{
-                method: 'POST',
-                body: formData
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    // Обновляем аватарку в списке каналов
-                    loadUserChannels();
-                    closeChannelAvatarModal();
-                    alert('Аватарка канала обновлена!');
-                }} else {{
-                    alert(data.error || 'Ошибка загрузки аватарки канала');
-                }}
-            }});
         }}
 
         function removeChannelAvatar() {{
-            if (!currentChannel) {{
-                alert('Канал не выбран');
-                return;
-            }}
-            
-            if (!confirm('Удалить аватарку канала?')) return;
-            
             fetch('/delete_channel_avatar', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
@@ -4395,17 +4378,40 @@ def create_app():
             .then(r => r.json())
             .then(data => {{
                 if (data.success) {{
-                    // Обновляем аватарку в списке каналов
-                    loadUserChannels();
                     closeChannelAvatarModal();
+                    loadUserChannels();
+                    updateChannelHeaderAvatar();
                     alert('Аватарка канала удалена!');
-                }} else {{
-                    alert(data.error || 'Ошибка удаления аватарки канала');
                 }}
             }});
         }}
 
-        // Функции для работы с темами
+        function updateChannelAvatarColor() {{
+            fetch('/channel_info/' + currentChannel)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        const formData = new FormData();
+                        formData.append('channel_name', currentChannel);
+                        formData.append('avatar_color', selectedChannelColor);
+                        
+                        fetch('/update_channel_avatar_color', {{
+                            method: 'POST',
+                            body: formData
+                        }})
+                        .then(r => r.json())
+                        .then(result => {{
+                            if (result.success) {{
+                                closeChannelAvatarModal();
+                                loadUserChannels();
+                                updateChannelHeaderAvatar();
+                                alert('Цвет аватарки обновлен!');
+                            }}
+                        }});
+                    }}
+                }});
+        }}
+
         function openThemeModal() {{
             document.getElementById('theme-modal').style.display = 'flex';
         }}
@@ -4429,18 +4435,33 @@ def create_app():
             }});
         }}
 
-        // Функции для работы с каналами
         function openCreateChannelModal() {{
             document.getElementById('create-channel-modal').style.display = 'flex';
+            createChannelColor = '#667eea';
+            updateCreateChannelColorSelection();
         }}
 
         function closeCreateChannelModal() {{
             document.getElementById('create-channel-modal').style.display = 'none';
         }}
 
+        function selectCreateChannelColor(color) {{
+            createChannelColor = color;
+            updateCreateChannelColorSelection();
+        }}
+
+        function updateCreateChannelColorSelection() {{
+            document.querySelectorAll('#create-channel-modal .color-option').forEach(el => {{
+                el.classList.remove('selected');
+                if (el.style.backgroundColor === createChannelColor) {{
+                    el.classList.add('selected');
+                }}
+            }});
+        }}
+
         function openRenameModal() {{
             document.getElementById('rename-modal').style.display = 'flex';
-            document.getElementById('channel-rename-input').value = document.getElementById('chat-title').textContent.replace('# ', '');
+            document.getElementById('channel-rename-input').value = document.getElementById('chat-title').textContent;
         }}
 
         function closeRenameModal() {{
@@ -4450,7 +4471,6 @@ def create_app():
         function openAddUserModal() {{
             document.getElementById('add-user-modal').style.display = 'flex';
             
-            // Загружаем доступных пользователей
             fetch(`/get_available_users?channel_name=${{encodeURIComponent(currentChannel)}}`)
                 .then(r => r.json())
                 .then(data => {{
@@ -4484,7 +4504,6 @@ def create_app():
                 return;
             }}
             
-            // Проверка имени канала
             if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
                 alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
                 return;
@@ -4497,7 +4516,8 @@ def create_app():
                     name: name,
                     display_name: displayName || name,
                     description: description,
-                    is_private: isPrivate
+                    is_private: isPrivate,
+                    avatar_color: createChannelColor
                 }})
             }})
             .then(r => r.json())
@@ -4530,7 +4550,7 @@ def create_app():
             .then(r => r.json())
             .then(data => {{
                 if (data.success) {{
-                    document.getElementById('chat-title').textContent = '# ' + newName;
+                    document.getElementById('chat-title').textContent = newName;
                     closeRenameModal();
                     loadUserChannels();
                     alert('Канал переименован!');
@@ -4559,7 +4579,7 @@ def create_app():
             .then(data => {{
                 if (data.success) {{
                     closeAddUserModal();
-                    openChannelSettings(); // Обновляем настройки
+                    openChannelSettings();
                     alert(data.message || 'Пользователь добавлен');
                 }} else {{
                     alert(data.message || 'Ошибка при добавлении пользователя');
@@ -4581,7 +4601,7 @@ def create_app():
             .then(r => r.json())
             .then(data => {{
                 if (data.success) {{
-                    openChannelSettings(); // Обновляем настройки
+                    openChannelSettings();
                     alert(data.message || 'Пользователь удален');
                 }} else {{
                     alert(data.message || 'Ошибка при удалении пользователя');
@@ -4589,7 +4609,6 @@ def create_app():
             }});
         }}
 
-        // Открытие настроек канала
         function openChannelSettings() {{
             room = "settings_" + currentChannel;
             roomType = "settings";
@@ -4600,8 +4619,8 @@ def create_app():
             document.getElementById('chat-messages').style.display = 'none';
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
+            document.getElementById('channel-header-avatar').style.display = 'none';
             
-            // Загружаем информацию о канале
             fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
                 .then(r => r.json())
                 .then(data => {{
@@ -4611,13 +4630,11 @@ def create_app():
                 }});
         }}
 
-        // Рендеринг настроек канала
         function renderChannelSettings(channelInfo) {{
             const settingsContainer = document.getElementById('channel-settings');
             settingsContainer.innerHTML = '';
             settingsContainer.style.display = 'block';
             
-            // Создаем HTML для настроек
             let settingsHTML = `
                 <div class="settings-content">
                     <div class="settings-section">
@@ -4646,7 +4663,6 @@ def create_app():
                         <div class="member-list" id="members-list">
             `;
             
-            // Добавляем участников
             channelInfo.members.forEach(member => {{
                 const isCurrentUser = member.username === user;
                 settingsHTML += `
@@ -4662,7 +4678,6 @@ def create_app():
                         </div>
                 `;
                 
-                // Кнопки действий (только для администраторов и не для себя)
                 if (channelInfo.created_by === user && !isCurrentUser) {{
                     settingsHTML += `
                         <div class="member-actions">
@@ -4682,12 +4697,12 @@ def create_app():
             
             <div class="settings-section">
                 <div class="settings-title">Управление каналом</div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn btn-primary" onclick="openChannelAvatarModal()">
-                        <i class="fas fa-image"></i> Аватарка
-                    </button>
+                <div style="display: flex; gap: 10px;">
                     <button class="btn btn-primary" onclick="openRenameModal()">
                         <i class="fas fa-edit"></i> Переименовать
+                    </button>
+                    <button class="btn btn-primary" onclick="openChannelAvatarModal()">
+                        <i class="fas fa-image"></i> Аватарка
                     </button>
                     <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', currentChannel)">
                         <i class="fas fa-arrow-left"></i> Вернуться в чат
@@ -4699,7 +4714,6 @@ def create_app():
     
     settingsContainer.innerHTML = settingsHTML;
     
-    // Загружаем аватарки участников
     channelInfo.members.forEach(member => {{
         if (member.avatar) {{
             const avatar = settingsContainer.querySelector(`.member-avatar[style*="${{member.color}}"]`);
@@ -4711,7 +4725,6 @@ def create_app():
     }});
 }}
 
-// Загрузка каналов пользователя с аватарками
 function loadUserChannels() {{
     fetch('/user_channels')
         .then(r => r.json())
@@ -4720,174 +4733,72 @@ function loadUserChannels() {{
                 const channelsContainer = document.getElementById('channels');
                 channelsContainer.innerHTML = '';
                 
-                // Добавляем общий канал
-                const generalEl = document.createElement('div');
-                generalEl.className = 'nav-item' + (room === 'channel_general' ? ' active' : '');
-                
-                const generalAvatar = document.createElement('div');
-                generalAvatar.className = 'channel-avatar';
-                generalAvatar.id = 'channel-avatar-general';
-                generalAvatar.innerHTML = '<i class="fas fa-hashtag"></i>';
-                generalEl.appendChild(generalAvatar);
-                
-                const generalName = document.createElement('span');
-                generalName.textContent = 'General';
-                generalEl.appendChild(generalName);
-                
-                generalEl.onclick = () => openRoom('channel_general', 'channel', 'General');
-                channelsContainer.appendChild(generalEl);
-                
-                // Загружаем аватарку для General канала
-                fetch('/channel_info/general')
-                    .then(r => r.json())
-                    .then(channelInfo => {{
-                        if (channelInfo.success && channelInfo.data.avatar_path) {{
-                            const avatarEl = document.getElementById('channel-avatar-general');
-                            avatarEl.style.backgroundImage = `url(${{channelInfo.data.avatar_path}})`;
-                            avatarEl.innerHTML = '';
-                        }}
-                    }});
-                
-                // Добавляем пользовательские каналы
                 data.channels.forEach(channel => {{
-                    if (channel.name !== 'general') {{
-                        const el = document.createElement('div');
-                        el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
-                        
-                        const avatar = document.createElement('div');
-                        avatar.className = 'channel-avatar';
-                        avatar.id = `channel-avatar-${{channel.name}}`;
-                        
-                        if (channel.avatar_path) {{
-                            avatar.style.backgroundImage = `url(${{channel.avatar_path}})`;
-                        }} else {{
-                            avatar.innerHTML = '<i class="fas fa-hashtag"></i>';
-                            avatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                        }}
-                        
-                        el.appendChild(avatar);
-                        
-                        const nameSpan = document.createElement('span');
-                        nameSpan.textContent = channel.display_name;
-                        el.appendChild(nameSpan);
-                        
-                        el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
-                        channelsContainer.appendChild(el);
+                    const el = document.createElement('div');
+                    el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
+                    
+                    const avatarDiv = document.createElement('div');
+                    avatarDiv.className = 'channel-avatar';
+                    
+                    if (channel.avatar_path) {{
+                        avatarDiv.style.backgroundImage = `url(${{channel.avatar_path}})`;
+                        avatarDiv.textContent = '';
+                    }} else {{
+                        avatarDiv.style.backgroundColor = channel.avatar_color || '#667eea';
+                        avatarDiv.textContent = channel.display_name ? channel.display_name.slice(0, 2).toUpperCase() : 'CH';
                     }}
+                    
+                    el.appendChild(avatarDiv);
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = channel.display_name || channel.name;
+                    el.appendChild(nameSpan);
+                    
+                    el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name || channel.name);
+                    channelsContainer.appendChild(el);
                 }});
             }}
         }});
 }}
 
-// Загрузка пользователей с аватарками
-function loadUsers() {{
-    fetch('/users')
-        .then(r => r.json())
-        .then(users => {{
-            if (users && Array.isArray(users)) {{
-                const usersContainer = document.getElementById('users');
-                usersContainer.innerHTML = '';
-                
-                users.forEach(u => {{
-                    if (u.username !== user) {{
-                        const el = document.createElement('div');
-                        el.className = 'nav-item';
-                        
-                        // Создаем аватарку вместо иконки
-                        const avatarDiv = document.createElement('div');
-                        avatarDiv.className = `user-avatar ${{u.online ? 'online' : ''}}`;
-                        avatarDiv.style.backgroundColor = u.color || '#6366F1';
-                        
-                        if (u.avatar) {{
-                            avatarDiv.style.backgroundImage = `url(${{u.avatar}})`;
-                        }} else {{
-                            avatarDiv.textContent = u.username.slice(0, 2).toUpperCase();
-                        }}
-                        
-                        el.appendChild(avatarDiv);
-                        
-                        const nameSpan = document.createElement('span');
-                        nameSpan.textContent = u.username;
-                        el.appendChild(nameSpan);
-                        
-                        el.onclick = () => openRoom(
-                            'private_' + [user, u.username].sort().join('_'),
-                            'private',
-                            u.username
-                        );
-                        usersContainer.appendChild(el);
-                    }}
-                }});
-            }}
-        }});
-}}
-
-// Загрузка личных чатов с аватарками
-function loadPersonalChats() {{
-    fetch('/personal_chats')
+function updateChannelHeaderAvatar() {{
+    if (!currentChannel) return;
+    
+    const headerAvatar = document.getElementById('channel-header-avatar');
+    headerAvatar.style.display = 'block';
+    
+    fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
         .then(r => r.json())
         .then(data => {{
             if (data.success) {{
-                const pc = document.getElementById('personal-chats');
-                pc.innerHTML = '';
-                
-                data.chats.forEach(chatUser => {{
-                    const el = document.createElement('div');
-                    el.className = 'nav-item';
-                    
-                    // Получаем информацию о пользователе для аватарки
-                    fetch('/user_info/' + chatUser)
-                        .then(r => r.json())
-                        .then(userInfo => {{
-                            if (userInfo.success) {{
-                                const avatarDiv = document.createElement('div');
-                                avatarDiv.className = 'user-avatar';
-                                avatarDiv.style.backgroundColor = userInfo.avatar_color || '#6366F1';
-                                
-                                if (userInfo.avatar_path) {{
-                                    avatarDiv.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                                }} else {{
-                                    avatarDiv.textContent = chatUser.slice(0, 2).toUpperCase();
-                                }}
-                                
-                                el.insertBefore(avatarDiv, el.firstChild);
-                            }}
-                        }});
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.textContent = chatUser;
-                    el.appendChild(nameSpan);
-                    
-                    el.onclick = () => openRoom(
-                        'private_' + [user, chatUser].sort().join('_'),
-                        'private',
-                        chatUser
-                    );
-                    pc.appendChild(el);
-                }});
+                if (data.data.avatar_path) {{
+                    headerAvatar.style.backgroundImage = `url(${{data.data.avatar_path}})`;
+                    headerAvatar.textContent = '';
+                }} else {{
+                    headerAvatar.style.backgroundImage = 'none';
+                    headerAvatar.style.backgroundColor = data.data.avatar_color || '#667eea';
+                    headerAvatar.textContent = data.data.display_name ? data.data.display_name.slice(0, 2).toUpperCase() : 'CH';
+                }}
             }}
         }});
 }}
 
-// Открытие комнаты (чат или канал)
 function openRoom(r, t, title) {{
     room = r;
     roomType = t;
     currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
     
-    document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
+    document.getElementById('chat-title').textContent = title;
     document.getElementById('categories-filter').style.display = 'none';
     document.getElementById('favorites-grid').style.display = 'none';
     document.getElementById('channel-settings').style.display = 'none';
     document.getElementById('chat-messages').style.display = 'block';
     document.getElementById('input-area').style.display = 'flex';
     
-    // На мобильных устройствах переключаемся в режим чата
     if (isMobile) {{
         document.getElementById('sidebar').classList.add('hidden');
         document.getElementById('chat-area').classList.add('active');
         
-        // Убедимся, что поле ввода всегда видно
         setTimeout(() => {{
             const inputArea = document.getElementById('input-area');
             if (inputArea) {{
@@ -4901,30 +4812,27 @@ function openRoom(r, t, title) {{
         }}, 50);
     }}
     
-    // Обновляем активные элементы в навигации
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     event.currentTarget.classList.add('active');
     
-    // Очищаем чат и показываем заглушку
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
     
-    // Показываем/скрываем кнопки управления каналом
     const channelActions = document.getElementById('channel-actions');
+    const headerAvatar = document.getElementById('channel-header-avatar');
     if (t === 'channel') {{
         channelActions.style.display = 'flex';
+        headerAvatar.style.display = 'block';
+        updateChannelHeaderAvatar();
     }} else {{
         channelActions.style.display = 'none';
+        headerAvatar.style.display = 'none';
     }}
     
-    // Загружаем историю
     loadMessages(r);
-    
-    // Присоединяемся к комнате через сокет
     socket.emit('join', {{ room: r }});
 }}
 
-// Загрузка сообщений комнаты
 function loadMessages(roomName) {{
     fetch('/get_messages/' + roomName)
         .then(r => r.json())
@@ -4945,11 +4853,9 @@ function loadMessages(roomName) {{
         .catch(error => console.error('Error loading messages:', error));
 }}
 
-// Добавление сообщения в чат (с поддержкой аватарок)
 function addMessageToChat(data, roomName = '') {{
     const messagesContainer = document.getElementById('chat-messages');
     
-    // Удаляем пустой экран, если он есть
     const emptyChat = messagesContainer.querySelector('.empty-chat');
     if (emptyChat) {{
         emptyChat.remove();
@@ -4958,15 +4864,10 @@ function addMessageToChat(data, roomName = '') {{
     const message = document.createElement('div');
     message.className = `message ${{data.user === user ? 'own' : 'other'}}`;
     
-    // Создаем аватарку
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
     
-    // Устанавливаем цвет фона для аватарки
-    avatar.style.backgroundColor = data.color || '#6366F1';
-    
-    // Загружаем аватарку пользователя
-    if (data.user !== user) {{
+    if (data.user !== user && roomName.startsWith('private_')) {{
         fetch('/user_info/' + data.user)
             .then(r => r.json())
             .then(userInfo => {{
@@ -4975,33 +4876,21 @@ function addMessageToChat(data, roomName = '') {{
                         avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
                         avatar.textContent = '';
                     }} else {{
-                        avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#6366F1';
+                        avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#667eea';
                         avatar.textContent = data.user.slice(0, 2).toUpperCase();
                     }}
                 }}
             }});
     }} else {{
-        // Для своих сообщений используем информацию из сессии
-        fetch('/user_info/' + user)
-            .then(r => r.json())
-            .then(userInfo => {{
-                if (userInfo.success) {{
-                    if (userInfo.avatar_path) {{
-                        avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                        avatar.textContent = '';
-                    }} else {{
-                        avatar.style.backgroundColor = userInfo.avatar_color;
-                        avatar.textContent = user.slice(0, 2).toUpperCase();
-                    }}
-                }}
-            }});
+        avatar.style.backgroundColor = data.color || '#667eea';
+        if (data.user !== user) {{
+            avatar.textContent = data.user.slice(0, 2).toUpperCase();
+        }}
     }}
     
-    // Создаем контент сообщения
     const content = document.createElement('div');
     content.className = 'message-content';
     
-    // Добавляем отправителя (только для чужих сообщений)
     if (data.user !== user) {{
         const sender = document.createElement('div');
         sender.className = 'message-sender';
@@ -5009,7 +4898,6 @@ function addMessageToChat(data, roomName = '') {{
         content.appendChild(sender);
     }}
     
-    // Добавляем текст сообщения
     if (data.message) {{
         const text = document.createElement('div');
         text.className = 'message-text';
@@ -5017,7 +4905,6 @@ function addMessageToChat(data, roomName = '') {{
         content.appendChild(text);
     }}
     
-    // Добавляем файл, если есть
     if (data.file) {{
         const fileContainer = document.createElement('div');
         fileContainer.className = 'message-file';
@@ -5038,22 +4925,18 @@ function addMessageToChat(data, roomName = '') {{
         content.appendChild(fileContainer);
     }}
     
-    // Добавляем время
     const time = document.createElement('div');
     time.className = 'message-time';
     time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
     content.appendChild(time);
     
-    // Собираем сообщение
     message.appendChild(avatar);
     message.appendChild(content);
     messagesContainer.appendChild(message);
     
-    // Прокручиваем к последнему сообщению
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }}
 
-// ИСПРАВЛЕННАЯ ФУНКЦИЯ отправки сообщения
 async function sendMessage() {{
     const input = document.getElementById('msg-input');
     const msg = input.value.trim();
@@ -5065,7 +4948,6 @@ async function sendMessage() {{
     let fileName = null;
     let fileType = null;
     
-    // Если есть файл, загружаем его через HTTP
     if (fileInput.files[0]) {{
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
@@ -5092,14 +4974,12 @@ async function sendMessage() {{
         }}
     }}
     
-    // Отправляем через WebSocket
     const messageData = {{
         message: msg,
         room: room,
         type: roomType
     }};
     
-    // Добавляем информацию о файле если есть
     if (fileData) {{
         messageData.file = fileData;
         messageData.fileName = fileName;
@@ -5108,7 +4988,6 @@ async function sendMessage() {{
     
     socket.emit('message', messageData);
     
-    // Сбрасываем поле ввода сразу
     input.value = '';
     input.style.height = 'auto';
     document.getElementById('file-preview').innerHTML = '';
@@ -5179,15 +5058,12 @@ function handleFileSelect(input) {{
     }}
 }}
 
-// Socket events - ИСПРАВЛЕННЫЙ ОБРАБОТЧИК
 socket.on('message', (data) => {{
-    // Показываем сообщение только если мы в этой же комнате
     if (data.room === room) {{
         addMessageToChat(data, room);
     }}
 }});
 
-// Функции для работы с избранным
 function openAddFavoriteModal() {{
     document.getElementById('add-favorite-modal').style.display = 'flex';
     document.getElementById('favorite-file').addEventListener('change', function(e) {{
@@ -5271,7 +5147,6 @@ function deleteFavorite(favoriteId) {{
         if (data.success) {{
             document.getElementById(`favorite-${{favoriteId}}`).remove();
             
-            // Если удалили последний элемент, показываем пустой экран
             const grid = document.getElementById('favorites-grid');
             if (grid.children.length === 0) {{
                 loadFavorites(currentCategory === 'all' ? null : currentCategory);
@@ -5296,7 +5171,6 @@ function togglePinFavorite(favoriteId) {{
                 item.classList.remove('pinned');
             }}
             
-            // Перезагружаем чтобы обновить порядок
             loadFavorites(currentCategory === 'all' ? null : currentCategory);
         }}
     }});
@@ -5309,7 +5183,92 @@ function openFilePreview(filePath) {{
     }}
 }}
 
-// Инициализация Socket.IO
+function loadUsers() {{
+    fetch('/users')
+        .then(r => r.json())
+        .then(users => {{
+            if (users && Array.isArray(users)) {{
+                const usersContainer = document.getElementById('users');
+                usersContainer.innerHTML = '';
+                
+                users.forEach(u => {{
+                    if (u.username !== user) {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item';
+                        
+                        const avatarDiv = document.createElement('div');
+                        avatarDiv.className = `user-avatar ${{u.online ? 'online' : ''}}`;
+                        avatarDiv.style.backgroundColor = u.color || '#667eea';
+                        
+                        if (u.avatar) {{
+                            avatarDiv.style.backgroundImage = `url(${{u.avatar}})`;
+                        }} else {{
+                            avatarDiv.textContent = u.username.slice(0, 2).toUpperCase();
+                        }}
+                        
+                        el.appendChild(avatarDiv);
+                        
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = u.username;
+                        el.appendChild(nameSpan);
+                        
+                        el.onclick = () => openRoom(
+                            'private_' + [user, u.username].sort().join('_'),
+                            'private',
+                            u.username
+                        );
+                        usersContainer.appendChild(el);
+                    }}
+                }});
+            }}
+        }});
+}}
+
+function loadPersonalChats() {{
+    fetch('/personal_chats')
+        .then(r => r.json())
+        .then(data => {{
+            if (data.success) {{
+                const pc = document.getElementById('personal-chats');
+                pc.innerHTML = '';
+                
+                data.chats.forEach(chatUser => {{
+                    const el = document.createElement('div');
+                    el.className = 'nav-item';
+                    
+                    fetch('/user_info/' + chatUser)
+                        .then(r => r.json())
+                        .then(userInfo => {{
+                            if (userInfo.success) {{
+                                const avatarDiv = document.createElement('div');
+                                avatarDiv.className = 'user-avatar';
+                                avatarDiv.style.backgroundColor = userInfo.avatar_color || '#667eea';
+                                
+                                if (userInfo.avatar_path) {{
+                                    avatarDiv.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                                }} else {{
+                                    avatarDiv.textContent = chatUser.slice(0, 2).toUpperCase();
+                                }}
+                                
+                                el.insertBefore(avatarDiv, el.firstChild);
+                            }}
+                        }});
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = chatUser;
+                    el.appendChild(nameSpan);
+                    
+                    el.onclick = () => openRoom(
+                        'private_' + [user, chatUser].sort().join('_'),
+                        'private',
+                        chatUser
+                    );
+                    pc.appendChild(el);
+                }});
+            }}
+        }});
+}}
+
 socket.on('connect', function() {{
     console.log('Connected to server');
 }});
@@ -5332,7 +5291,6 @@ socket.on('disconnect', function() {{
         messages = get_messages_for_room(room)
         return jsonify(messages)
 
-    # === SocketIO ===
     @socketio.on('connect')
     def on_connect():
         if 'username' in session:
@@ -5352,7 +5310,6 @@ socket.on('disconnect', function() {{
     def on_leave(data): 
         leave_room(data['room'])
 
-    # ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СООБЩЕНИЙ - ОТПРАВЛЯЕТСЯ ТОЛЬКО ОДИН РАЗ
     @socketio.on('message')
     def on_message(data):
         if 'username' not in session:
@@ -5364,7 +5321,6 @@ socket.on('disconnect', function() {{
         file_name = data.get('fileName')
         file_type = data.get('fileType', 'text')
         
-        # Для приватных чатов
         recipient = None
         if room.startswith('private_'):
             parts = room.split('_')
@@ -5372,7 +5328,6 @@ socket.on('disconnect', function() {{
                 user1, user2 = parts[1], parts[2]
                 recipient = user1 if user2 == session['username'] else user2
         
-        # Сохраняем сообщение в БД
         msg_id = save_message(
             session['username'], 
             msg, 
@@ -5383,12 +5338,10 @@ socket.on('disconnect', function() {{
             file_name
         )
         
-        # Получаем информацию об отправителе для аватарки
         user_info = get_user(session['username'])
-        user_color = user_info['avatar_color'] if user_info else '#6366F1'
+        user_color = user_info['avatar_color'] if user_info else '#667eea'
         user_avatar_path = user_info['avatar_path'] if user_info else None
         
-        # Подготавливаем данные для отправки
         message_data = {
             'user': session['username'], 
             'message': msg, 
@@ -5398,16 +5351,13 @@ socket.on('disconnect', function() {{
             'room': room
         }
         
-        # Добавляем информацию о файле если есть
         if file_path:
             message_data['file'] = file_path
             message_data['fileName'] = file_name
             message_data['fileType'] = file_type
         
-        # Отправляем сообщение всем в комнате ТОЛЬКО ОДИН РАЗ
         emit('message', message_data, room=room)
 
-    # Health check
     @app.route('/health')
     def health_check():
         return jsonify({'status': 'healthy', 'service': 'Tandau Messenger'})
