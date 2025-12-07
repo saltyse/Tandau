@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger с жидким стеклом
+# web_messenger.py - Tandau Messenger
 from flask import Flask, request, jsonify, session, redirect, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -783,7 +783,7 @@ def create_app():
         if 'username' in session: 
             return redirect('/chat')
         
-        # Современная страница входа/регистрации с логотипом (НЕ ИЗМЕНЯЕМ)
+        # Современная страница входа/регистрации с логотипом
         return '''
         <!DOCTYPE html>
         <html lang="ru">
@@ -1926,58 +1926,211 @@ def create_app():
                         </button>
                     </div>
                     <div class="modal-content">
-                        <p><strong>Дата вступления в силу:</strong> 6 декабря 2025 г.</p>
-                        
-                        <h3>1. Сбор информации</h3>
-                        <p>Мы собираем следующую информацию:</p>
-                        <ul>
-                            <li>Имя пользователя и контактные данные</li>
-                            <li>Информацию об использовании сервиса</li>
-                            <li>Технические данные (IP-адрес, тип устройства)</li>
-                            <li>Содержание сообщений (хранится только для обеспечения работы сервиса)</li>
-                        </ul>
-                        
-                        <h3>2. Использование информации</h3>
-                        <p>Собранная информация используется для:</p>
-                        <ul>
-                            <li>Предоставления и улучшения сервиса</li>
-                            <li>Обеспечения безопасности</li>
-                            <li>Поддержки пользователей</li>
-                            <li>Анализа использования сервиса</li>
-                        </ul>
-                        
-                        <h3>3. Защита данных</h3>
-                        <p>Мы используем современные технологии шифрования для защиты ваших данных. Все сообщения шифруются при передаче.</p>
-                        
-                        <h3>4. Права пользователей</h3>
-                        <p>Вы имеете право:</p>
-                        <ul>
-                            <li>Получить доступ к своим данным</li>
-                            <li>Исправить неточную информацию</li>
-                            <li>Удалить свою учетную запись</li>
-                            <li>Отозвать согласие на обработку данных</li>
-                        </ul>
-                        
-                        <h3>5. Файлы cookie</h3>
-                        <p>Мы используем файлы cookie для улучшения работы сервиса. Вы можете отключить их в настройках браузера.</p>
-                        
-                        <h3>6. Третьи стороны</h3>
-                        <p>Мы не передаем ваши данные третьим лицам без вашего согласия, за исключением случаев, предусмотренных законом.</p>
-                        
-                        <h3>7. Изменения политики</h3>
-                        <p>Мы будем уведомлять пользователей о значительных изменениях в политике конфиденциальности.</p>
-                        
-                        <h3>8. Контакты</h3>
-                        <p>По вопросам конфиденциальности: <a href="mailto:privacy@tandau.com">privacy@tandau.com</a></p>
-                        
-                        <div class="download-section">
-                            <p>Скачать полную версию Политики конфиденциальности в формате PDF:</p>
-                            <a href="https://github.com/saltyse/Tandau/blob/main/Условия%20использования%20сервиса%20Tandau.pdf" class="download-btn" download="Tandau_Политика_конфиденциальности.pdf">
-                                <i class="fas fa-file-pdf"></i>
-                                Скачать PDF документ
-                                <i class="fas fa-download"></i>
-                            </a>
-                            <p style="margin-top: 10px; font-size: 0.8rem; color: #666;">Размер файла: 142 KB</p>
+                        <!-- Блок "Политика конфиденциальности" в стиле жидкое стекло -->
+                        <div class="glass-terms-container">
+                            <div class="glass-header">
+                                <div class="glass-icon">
+                                    <i class="fas fa-shield-alt"></i>
+                                </div>
+                                <h2 class="glass-title">Политика конфиденциальности Tandau Messenger</h2>
+                                <div class="glass-subtitle">Дата вступления в силу: 6 декабря 2025 г.</div>
+                            </div>
+                            
+                            <div class="glass-content">
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-database"></i> 1. Сбор информации</h3>
+                                    <div class="section-content">
+                                        <p>Мы собираем ограниченную информацию для обеспечения работы сервиса:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-user-circle"></i></div>
+                                                <div class="list-text"><span class="highlight">Учетные данные</span>: имя пользователя и хэш пароля</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-comment-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Контент сообщений</span>: текст, медиафайлы и файлы</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-network-wired"></i></div>
+                                                <div class="list-text"><span class="highlight">Технические данные</span>: IP-адрес, тип устройства, версия браузера</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-history"></i></div>
+                                                <div class="list-text"><span class="highlight">Активность</span>: время входа, активные сессии, использование функций</div>
+                                            </div>
+                                        </div>
+                                        <p class="contact-note">Мы не собираем избыточные персональные данные. Вся информация используется строго для работы сервиса.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-cogs"></i> 2. Использование информации</h3>
+                                    <div class="section-content">
+                                        <p>Собранная информация используется исключительно для:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-rocket"></i></div>
+                                                <div class="list-text"><span class="highlight">Работа сервиса</span>: доставка сообщений, синхронизация чатов</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-shield"></i></div>
+                                                <div class="list-text"><span class="highlight">Безопасность</span>: защита от злоупотреблений и мошенничества</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-wrench"></i></div>
+                                                <div class="list-text"><span class="highlight">Техподдержка</span>: решение технических проблем пользователей</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-chart-line"></i></div>
+                                                <div class="list-text"><span class="highlight">Аналитика</span>: улучшение пользовательского опыта (анонимно)</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-lock"></i> 3. Защита данных</h3>
+                                    <div class="section-content">
+                                        <p>Мы применяем многоуровневую защиту ваших данных:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-key"></i></div>
+                                                <div class="list-text"><span class="highlight">Шифрование</span>: все сообщения шифруются при передаче</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-server"></i></div>
+                                                <div class="list-text"><span class="highlight">Безопасное хранение</span>: данные хранятся на защищенных серверах</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-user-shield"></i></div>
+                                                <div class="list-text"><span class="highlight">Контроль доступа</span>: строгий доступ к данным только для технического персонала</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-sync-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Регулярные аудиты</span>: периодическая проверка систем безопасности</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-user-check"></i> 4. Права пользователей</h3>
+                                    <div class="section-content">
+                                        <p>Вы имеете полный контроль над своими данными:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-eye"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на доступ</span>: запрос информации о хранящихся данных</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-edit"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на исправление</span>: обновление неточной информации</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-trash-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на удаление</span>: полное удаление учетной записи и данных</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                                <div class="list-text"><span class="highlight">Право на отзыв согласия</span>: прекращение обработки данных</div>
+                                            </div>
+                                        </div>
+                                        <p class="contact-note">Для реализации этих прав обратитесь в поддержку через контактные данные ниже.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-cookie-bite"></i> 5. Файлы cookie и технологии отслеживания</h3>
+                                    <div class="section-content">
+                                        <p>Мы используем минимальные технологии для улучшения опыта:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-cookie"></i></div>
+                                                <div class="list-text"><span class="highlight">Сессионные куки</span>: только для поддержания входа в систему</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-tachometer-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Аналитические куки</span>: анонимная статистика использования</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-sliders-h"></i></div>
+                                                <div class="list-text"><span class="highlight">Настройки</span>: сохранение предпочтений пользователя</div>
+                                            </div>
+                                        </div>
+                                        <p>Вы можете отключить cookies в настройках браузера, но это может ограничить функциональность.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-users"></i> 6. Третьи стороны</h3>
+                                    <div class="section-content">
+                                        <p>Мы не продаем и не передаем ваши данные третьим лицам.</p>
+                                        <div class="glass-list negative">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-handshake-slash"></i></div>
+                                                <div class="list-text"><span class="highlight">Нет продажи данных</span>: мы никогда не продаем пользовательские данные</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-user-friends"></i></div>
+                                                <div class="list-text"><span class="highlight">Ограниченный доступ</span>: данные доступны только необходимым техническим службам</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-gavel"></i></div>
+                                                <div class="list-text"><span class="highlight">Исключения по закону</span>: передача данных только по официальным запросам правоохранительных органов</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-sync-alt"></i> 7. Изменения политики</h3>
+                                    <div class="section-content">
+                                        <p>Мы уведомляем пользователей о всех значительных изменениях:</p>
+                                        <div class="glass-list">
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-bell"></i></div>
+                                                <div class="list-text"><span class="highlight">Уведомление в приложении</span>: сообщение о важных изменениях</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-envelope"></i></div>
+                                                <div class="list-text"><span class="highlight">Электронная почта</span>: рассылка при серьезных изменениях</div>
+                                            </div>
+                                            <div class="list-item">
+                                                <div class="list-icon"><i class="fas fa-calendar-alt"></i></div>
+                                                <div class="list-text"><span class="highlight">Дата вступления в силу</span>: четкое указание времени изменений</div>
+                                            </div>
+                                        </div>
+                                        <p>Продолжая использовать сервис после изменений, вы соглашаетесь с новой версией политики.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass-section">
+                                    <h3 class="section-title"><i class="fas fa-headset"></i> 8. Контактная информация</h3>
+                                    <div class="section-content">
+                                        <p>По вопросам конфиденциальности и защиты данных:</p>
+                                        <a href="https://vk.com/rsaltyyt" target="_blank" class="glass-link contact-link">
+                                            <i class="fab fa-vk"></i> https://vk.com/rsaltyyt
+                                        </a>
+                                        <p class="contact-note">Мы отвечаем на запросы в течение 7 рабочих дней. Для срочных вопросов используйте вышеуказанную ссылку.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="glass-footer">
+                                <div class="version-info">
+                                    <i class="fas fa-history"></i>
+                                    <span>Актуальная версия: 2.1 (6 декабря 2025 г.)</span>
+                                </div>
+                                
+                                <div class="download-section glass-download">
+                                    <p>Полная версия документа для сохранения:</p>
+                                    <a href="/static/docs/privacy_policy.pdf" class="download-btn glass-btn" download="Tandau_Политика_конфиденциальности.pdf">
+                                        <i class="fas fa-file-pdf"></i>
+                                        Скачать PDF (198 KB)
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2303,7 +2456,7 @@ def create_app():
         
         theme = user['theme']
         
-        # Генерируем HTML с эффектом жидкого стекла
+        # Генерируем HTML с мобильной адаптацией
         return f'''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{theme}">
@@ -2314,34 +2467,25 @@ def create_app():
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         :root {{
-            --glass-bg: rgba(255, 255, 255, 0.15);
-            --glass-border: rgba(255, 255, 255, 0.25);
-            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            --glass-blur: 20px;
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --bg: #f8f9fa;
+            --text: #333;
+            --input: #fff;
+            --border: #ddd;
             --accent: #667eea;
-            --accent-dark: #5a67d8;
-            --text: #2d3748;
-            --text-light: #718096;
-            --bg: #f7fafc;
-            --input-bg: rgba(255, 255, 255, 0.7);
-            --border: rgba(255, 255, 255, 0.3);
             --sidebar-width: 300px;
             --favorite-color: #ffd700;
-            --online: #10b981;
-            --offline: #9ca3af;
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
         }}
         
         [data-theme="dark"] {{
-            --glass-bg: rgba(30, 30, 40, 0.4);
-            --glass-border: rgba(255, 255, 255, 0.15);
-            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            --text: #e2e8f0;
-            --text-light: #a0aec0;
-            --bg: #1a202c;
-            --input-bg: rgba(45, 55, 72, 0.7);
-            --border: rgba(255, 255, 255, 0.1);
+            --bg: #1a1a1a;
+            --text: #eee;
+            --input: #2d2d2d;
+            --border: #444;
+            --accent: #8b5cf6;
+            --favorite-color: #ffed4e;
         }}
         
         * {{
@@ -2353,40 +2497,42 @@ def create_app():
         
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--primary-gradient);
+            background: var(--bg);
             color: var(--text);
             height: 100vh;
             overflow: hidden;
             touch-action: manipulation;
         }}
         
-        /* Основной контейнер с эффектом стекла */
+        /* Основной контейнер для мобильной версии */
         .app-container {{
             display: flex;
             height: 100vh;
             position: relative;
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.05);
         }}
         
-        /* Сайдбар - жидкое стекло */
+        /* Сайдбар - виден по умолчанию на мобилке */
         .sidebar {{
-            width: var(--sidebar-width);
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            -webkit-backdrop-filter: blur(var(--glass-blur));
-            border-right: 1px solid var(--glass-border);
-            box-shadow: var(--glass-shadow);
+            width: 100%;
+            background: var(--input);
             display: flex;
             flex-direction: column;
-            position: relative;
-            z-index: 10;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 1000;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        
+        .sidebar.hidden {{
+            transform: translateX(-100%);
         }}
         
         .sidebar-header {{
             padding: 20px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             text-align: center;
             font-weight: 700;
             font-size: 1.2rem;
@@ -2394,21 +2540,31 @@ def create_app():
             align-items: center;
             justify-content: center;
             gap: 12px;
-            border-bottom: 1px solid var(--border);
+            position: relative;
+        }}
+        
+        .menu-toggle {{
+            position: absolute;
+            left: 20px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: none;
         }}
         
         .logo-placeholder {{
             width: 40px;
             height: 40px;
             border-radius: 12px;
-            background: var(--primary-gradient);
+            background: rgba(255, 255, 255, 0.2);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
             font-size: 20px;
             font-weight: bold;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }}
         
         .app-title {{
@@ -2416,7 +2572,6 @@ def create_app():
             font-size: 1.8rem;
             font-weight: 800;
             letter-spacing: -0.5px;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
         }}
         
         .user-info {{
@@ -2425,14 +2580,13 @@ def create_app():
             gap: 12px;
             align-items: center;
             border-bottom: 1px solid var(--border);
-            background: rgba(255, 255, 255, 0.05);
         }}
         
         .avatar {{
             width: 44px;
             height: 44px;
             border-radius: 50%;
-            background: var(--primary-gradient);
+            background: var(--accent);
             color: white;
             display: flex;
             align-items: center;
@@ -2443,8 +2597,7 @@ def create_app():
             background-size: cover;
             background-position: center;
             cursor: pointer;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 2px solid var(--accent);
         }}
         
         .user-details {{
@@ -2455,122 +2608,132 @@ def create_app():
             display: block;
             font-size: 1rem;
             margin-bottom: 4px;
-            color: white;
         }}
         
         .user-status {{
             font-size: 0.85rem;
-            opacity: 0.9;
+            opacity: 0.8;
             display: flex;
             align-items: center;
             gap: 5px;
-            color: var(--online);
         }}
         
         .status-dot {{
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: var(--online);
-            box-shadow: 0 0 10px var(--online);
+            background: #10b981;
         }}
         
         .nav {{
             flex: 1;
             overflow-y: auto;
-            padding: 15px;
+            padding: 10px;
             -webkit-overflow-scrolling: touch;
         }}
         
         .nav-title {{
             padding: 12px 15px;
             font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.7);
+            color: #666;
             text-transform: uppercase;
             font-weight: 600;
             letter-spacing: 0.5px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 10px;
+        }}
+        
+        [data-theme="dark"] .nav-title {{
+            color: #999;
         }}
         
         .nav-item {{
             padding: 12px 15px;
             cursor: pointer;
-            border-radius: 12px;
+            border-radius: 10px;
             margin: 4px 0;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             user-select: none;
-            color: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(5px);
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
         }}
         
         .nav-item:hover {{
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateX(5px);
-            border-color: rgba(255, 255, 255, 0.2);
+            background: #f0f0f0;
+        }}
+        
+        [data-theme="dark"] .nav-item:hover {{
+            background: #333;
         }}
         
         .nav-item.active {{
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--accent);
             color: white;
-            border-color: rgba(255, 255, 255, 0.3);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }}
+        
+        .nav-item.favorite {{
+            border-left: 3px solid var(--favorite-color);
         }}
         
         .nav-item i {{
             width: 20px;
             text-align: center;
-            font-size: 1.1rem;
         }}
         
         .add-btn {{
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
+            background: none;
+            border: none;
+            color: inherit;
             cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 6px;
+            padding: 4px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
         }}
         
-        .add-btn:hover {{
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
-        }}
-        
-        /* Область чата - жидкое стекло */
+        /* Область чата - скрыта по умолчанию на мобилке */
         .chat-area {{
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            -webkit-backdrop-filter: blur(var(--glass-blur));
-            border-left: 1px solid var(--glass-border);
-            box-shadow: var(--glass-shadow);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #cfe7ff;
+            z-index: 900;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        
+        .chat-area.active {{
+            transform: translateX(0);
         }}
         
         .chat-header {{
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            background: var(--input);
             border-bottom: 1px solid var(--border);
             font-weight: 600;
-            font-size: 1.3rem;
-            color: white;
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 10px;
+            position: relative;
+        }}
+        
+        .back-btn {{
+            background: none;
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 5px;
+            margin-right: 5px;
+            display: none;
         }}
         
         .channel-actions {{
@@ -2580,98 +2743,95 @@ def create_app():
         }}
         
         .channel-btn {{
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
+            background: none;
+            border: none;
+            color: var(--text);
             cursor: pointer;
-            padding: 8px;
-            border-radius: 8px;
+            padding: 5px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
-        }}
-        
-        .channel-btn:hover {{
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
         }}
         
         .messages {{
             flex: 1;
-            padding: 20px;
+            padding: 15px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 15px;
             -webkit-overflow-scrolling: touch;
         }}
         
-        /* Стили сообщений с эффектом стекла */
+        /* Стили сообщений */
+        .message-container {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+        
         .message {{
             display: flex;
             align-items: flex-start;
-            gap: 15px;
+            gap: 12px;
+            padding: 8px 0;
             animation: fadeIn 0.3s ease;
-            max-width: 85%;
         }}
         
         .message.own {{
-            align-self: flex-end;
             flex-direction: row-reverse;
         }}
         
         .message-avatar {{
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
-            background: var(--primary-gradient);
+            background: var(--accent);
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 0.9rem;
             flex-shrink: 0;
             background-size: cover;
             background-position: center;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }}
         
         .message-content {{
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            padding: 15px;
+            max-width: 85%;
+            background: var(--input);
+            padding: 12px 16px;
             border-radius: 18px;
             border-top-left-radius: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            max-width: 100%;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }}
         
         .message.own .message-content {{
-            background: rgba(102, 126, 234, 0.3);
+            background: var(--accent);
+            color: white;
             border-top-left-radius: 18px;
             border-top-right-radius: 4px;
-            border-color: rgba(255, 255, 255, 0.3);
         }}
         
         .message-sender {{
             font-weight: 600;
             font-size: 0.9rem;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
+            color: var(--text);
+        }}
+        
+        .message.own .message-sender {{
             color: white;
         }}
         
         .message-text {{
             word-break: break-word;
             line-height: 1.4;
-            color: white;
         }}
         
         .message-file {{
-            margin-top: 10px;
+            margin-top: 8px;
             border-radius: 12px;
             overflow: hidden;
             max-width: 100%;
@@ -2683,7 +2843,6 @@ def create_app():
             border-radius: 8px;
             cursor: pointer;
             transition: transform 0.2s;
-            border: 1px solid rgba(255, 255, 255, 0.2);
         }}
         
         .message-file img:hover {{
@@ -2694,157 +2853,62 @@ def create_app():
             max-width: 100%;
             max-height: 300px;
             border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
         }}
         
         .message-time {{
             font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.7);
-            margin-top: 5px;
+            color: #666;
+            margin-top: 4px;
             text-align: right;
         }}
         
-        /* Область ввода - жидкое стекло */
-        .input-area {{
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border-top: 1px solid var(--border);
-            padding: 20px;
-            box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.1);
+        .message.own .message-time {{
+            color: rgba(255,255,255,0.8);
         }}
         
-        .input-row {{
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }}
-        
-        .attachment-btn {{
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            cursor: pointer;
-            font-size: 1.2rem;
-            padding: 12px;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            transition: all 0.3s ease;
-        }}
-        
-        .attachment-btn:hover {{
-            background: rgba(255, 255, 255, 0.25);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }}
-        
-        .msg-input {{
-            flex: 1;
-            padding: 14px 18px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 25px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            color: white;
-            font-size: 1rem;
-            resize: none;
-            max-height: 120px;
-            min-height: 48px;
-            line-height: 1.4;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }}
-        
-        .msg-input:focus {{
-            outline: none;
-            border-color: var(--accent);
-            background: rgba(255, 255, 255, 0.15);
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
-        }}
-        
-        .msg-input::placeholder {{
-            color: rgba(255, 255, 255, 0.6);
-        }}
-        
-        .send-btn {{
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: var(--primary-gradient);
-            color: white;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }}
-        
-        .send-btn:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-        }}
-        
-        .send-btn:active {{
-            transform: translateY(0);
-        }}
-        
-        /* Избранное - сетка с эффектом стекла */
+        /* Стили для избранного */
         .favorites-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
             padding: 20px;
         }}
         
         .favorite-item {{
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: var(--input);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid var(--border);
             position: relative;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
         }}
         
         .favorite-item:hover {{
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }}
         
         .favorite-item.pinned {{
             border-left: 4px solid var(--favorite-color);
-            background: rgba(255, 215, 0, 0.05);
         }}
         
         .favorite-content {{
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             word-break: break-word;
-            color: white;
         }}
         
         .favorite-file {{
             max-width: 100%;
-            border-radius: 12px;
+            border-radius: 8px;
             overflow: hidden;
-            margin-bottom: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 10px;
         }}
         
         .favorite-file img, .favorite-file video {{
             width: 100%;
             height: auto;
             display: block;
-            border-radius: 12px;
+            border-radius: 8px;
         }}
         
         .favorite-meta {{
@@ -2852,8 +2916,8 @@ def create_app():
             justify-content: space-between;
             align-items: center;
             font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.7);
-            margin-top: 15px;
+            color: #666;
+            margin-top: 10px;
         }}
         
         .favorite-actions {{
@@ -2863,7 +2927,7 @@ def create_app():
             display: flex;
             gap: 5px;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.2s ease;
         }}
         
         .favorite-item:hover .favorite-actions {{
@@ -2871,91 +2935,91 @@ def create_app():
         }}
         
         .favorite-action-btn {{
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
+            background: rgba(0,0,0,0.7);
             color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.2s ease;
-        }}
-        
-        .favorite-action-btn:hover {{
-            background: rgba(0, 0, 0, 0.7);
-            transform: scale(1.1);
+            font-size: 0.8rem;
         }}
         
         .category-badge {{
             display: inline-block;
-            padding: 4px 12px;
-            background: rgba(102, 126, 234, 0.3);
+            padding: 2px 8px;
+            background: var(--accent);
             color: white;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin-top: 5px;
         }}
         
-        /* Фильтры категорий */
+        .empty-favorites {{
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }}
+        
+        .empty-favorites i {{
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #ccc;
+        }}
+        
         .categories-filter {{
             display: flex;
             gap: 10px;
-            padding: 15px 20px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            padding: 15px;
+            background: var(--input);
             border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
         }}
         
         .category-filter-btn {{
-            padding: 8px 16px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 6px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
             border-radius: 20px;
             cursor: pointer;
             font-size: 0.9rem;
-            transition: all 0.3s ease;
-            color: rgba(255, 255, 255, 0.8);
+            transition: all 0.2s ease;
             white-space: nowrap;
         }}
         
         .category-filter-btn.active {{
-            background: var(--primary-gradient);
+            background: var(--accent);
             color: white;
-            border-color: transparent;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            border-color: var(--accent);
         }}
         
-        /* Настройки канала */
+        /* Стили для настроек канала */
         .settings-content {{
             padding: 20px;
         }}
         
         .settings-section {{
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 30px;
         }}
         
         .settings-title {{
             font-size: 1.1rem;
             font-weight: 600;
             margin-bottom: 15px;
-            color: white;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text);
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
         }}
         
         .member-list {{
+            background: var(--bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
             max-height: 300px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
@@ -2966,57 +3030,211 @@ def create_app():
             align-items: center;
             justify-content: space-between;
             padding: 12px 15px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.2s ease;
+            border-bottom: 1px solid var(--border);
         }}
         
-        .member-item:hover {{
-            background: rgba(255, 255, 255, 0.05);
+        .member-item:last-child {{
+            border-bottom: none;
         }}
         
         .member-info {{
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }}
         
         .member-avatar {{
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
             font-size: 0.9rem;
-            background: var(--primary-gradient);
-            color: white;
             background-size: cover;
             background-position: center;
-            border: 2px solid rgba(255, 255, 255, 0.3);
         }}
         
         .member-name {{
             font-size: 0.95rem;
-            color: white;
         }}
         
         .member-role {{
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.7);
-            padding: 4px 10px;
-            background: rgba(255, 255, 255, 0.1);
+            font-size: 0.8rem;
+            color: #666;
+            padding: 2px 8px;
+            background: var(--bg);
             border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid var(--border);
         }}
         
         .member-role.admin {{
-            background: rgba(102, 126, 234, 0.3);
+            background: var(--accent);
             color: white;
-            border-color: rgba(102, 126, 234, 0.5);
+            border-color: var(--accent);
         }}
         
-        /* Модальные окна с эффектом стекла */
+        .member-actions {{
+            display: flex;
+            gap: 5px;
+        }}
+        
+        .action-btn {{
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+        
+        .action-btn:hover {{
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }}
+        
+        .action-btn.remove {{
+            background: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }}
+        
+        /* Стили области ввода сообщений - жидкое стекло */
+        .input-area {{
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 15px 20px;
+            box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.1);
+        }}
+        
+        [data-theme="dark"] .input-area {{
+            background: rgba(45, 45, 45, 0.85);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }}
+        
+        .input-row {{
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }}
+        
+        .attachment-btn {{
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 10px;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            transition: all 0.2s ease;
+        }}
+        
+        .attachment-btn:hover {{
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }}
+        
+        [data-theme="dark"] .attachment-btn {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }}
+        
+        [data-theme="dark"] .attachment-btn:hover {{
+            background: rgba(255, 255, 255, 0.2);
+        }}
+        
+        .msg-input {{
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            color: var(--text);
+            font-size: 1rem;
+            resize: none;
+            max-height: 120px;
+            min-height: 44px;
+            line-height: 1.4;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }}
+        
+        .msg-input:focus {{
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }}
+        
+        [data-theme="dark"] .msg-input {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }}
+        
+        [data-theme="dark"] .msg-input:focus {{
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--accent);
+        }}
+        
+        .send-btn {{
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }}
+        
+        .send-btn:hover {{
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }}
+        
+        .send-btn:active {{
+            transform: translateY(0);
+        }}
+        
+        .file-preview {{
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(5px);
+            border-radius: 12px;
+            border: 1px dashed rgba(255, 255, 255, 0.4);
+        }}
+        
+        .file-preview img, .file-preview video {{
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 8px;
+        }}
+        
+        /* Модальные окна */
         .modal {{
             display: none;
             position: fixed;
@@ -3024,96 +3242,141 @@ def create_app():
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            z-index: 1000;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }}
         
         .modal-content {{
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            padding: 30px;
-            border-radius: 20px;
+            background: var(--input);
+            padding: 25px;
+            border-radius: 15px;
             width: 100%;
             max-width: 500px;
             max-height: 90vh;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            color: white;
-        }}
-        
-        .modal-content h3 {{
-            margin-bottom: 20px;
-            color: white;
-            font-size: 1.5rem;
         }}
         
         .form-group {{
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }}
         
         .form-label {{
             display: block;
-            margin-bottom: 8px;
-            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 5px;
             font-weight: 500;
         }}
         
         .form-control {{
             width: 100%;
-            padding: 12px 16px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 1rem;
-            transition: all 0.3s ease;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 16px;
         }}
         
         .form-control:focus {{
             outline: none;
             border-color: var(--accent);
-            background: rgba(255, 255, 255, 0.15);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
         }}
         
-        .btn {{
-            padding: 12px 24px;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s ease;
+        .select-control {{
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
             font-size: 1rem;
         }}
         
+        .btn {{
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            user-select: none;
+        }}
+        
         .btn-primary {{
-            background: var(--primary-gradient);
+            background: var(--accent);
             color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }}
         
         .btn-primary:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            opacity: 0.9;
         }}
         
         .btn-secondary {{
-            background: rgba(255, 255, 255, 0.1);
+            background: #6c757d;
             color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
         }}
         
-        .btn-secondary:hover {{
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+        .avatar-upload {{
+            text-align: center;
+            margin: 20px 0;
+        }}
+        
+        .avatar-preview {{
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            background: var(--accent);
+            background-size: cover;
+            background-position: center;
+            cursor: pointer;
+            border: 3px solid var(--accent);
+        }}
+        
+        .theme-btn {{
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 8px;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+        }}
+        
+        .logout-btn {{
+            margin: 20px 10px 10px 10px;
+            padding: 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }}
+        
+        /* Скроллбар */
+        ::-webkit-scrollbar {{
+            width: 6px;
+        }}
+        
+        ::-webkit-scrollbar-track {{
+            background: transparent;
+        }}
+        
+        ::-webkit-scrollbar-thumb {{
+            background: #ccc;
+            border-radius: 3px;
+        }}
+        
+        [data-theme="dark"] ::-webkit-scrollbar-thumb {{
+            background: #555;
         }}
         
         /* Анимации */
@@ -3122,74 +3385,81 @@ def create_app():
             to {{ opacity: 1; transform: translateY(0); }}
         }}
         
-        /* Скроллбар */
-        ::-webkit-scrollbar {{
-            width: 8px;
+        /* Пустой чат */
+        .empty-chat {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            text-align: center;
+            padding: 40px;
         }}
         
-        ::-webkit-scrollbar-track {{
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
+        .empty-chat i {{
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
         }}
         
-        ::-webkit-scrollbar-thumb {{
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }}
-        
-        ::-webkit-scrollbar-thumb:hover {{
-            background: rgba(255, 255, 255, 0.3);
-        }}
-        
-        /* Адаптивность */
+        /* Медиа запросы для мобильных устройств */
         @media (max-width: 768px) {{
-            .sidebar {{
-                position: fixed;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                width: 100%;
-                max-width: 300px;
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
-                z-index: 1000;
-            }}
-            
-            .sidebar.active {{
-                transform: translateX(0);
-            }}
-            
             .menu-toggle {{
                 display: block;
-                position: absolute;
-                top: 20px;
-                left: 20px;
-                background: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                color: white;
-                padding: 10px;
-                border-radius: 8px;
-                cursor: pointer;
-                z-index: 1001;
             }}
             
             .back-btn {{
                 display: block;
-                background: none;
-                border: none;
-                color: white;
-                cursor: pointer;
-                font-size: 1.2rem;
-                padding: 5px;
             }}
             
-            .chat-header {{
+            .sidebar-header {{
+                padding: 15px 20px;
+            }}
+            
+            .app-title {{
+                font-size: 1.5rem;
+            }}
+            
+            .logo-placeholder {{
+                width: 35px;
+                height: 35px;
+                font-size: 18px;
+            }}
+            
+            .user-info {{
                 padding: 15px;
             }}
             
-            .messages {{
+            .avatar {{
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }}
+            
+            .favorites-grid {{
+                grid-template-columns: 1fr;
+                gap: 10px;
                 padding: 15px;
-                padding-bottom: 80px;
+            }}
+            
+            .message-content {{
+                max-width: 90%;
+            }}
+            
+            .modal-content {{
+                padding: 20px;
+                margin: 10px;
+            }}
+            
+            .categories-filter {{
+                padding: 10px;
+                gap: 8px;
+            }}
+            
+            .category-filter-btn {{
+                padding: 5px 10px;
+                font-size: 0.8rem;
             }}
             
             .input-area {{
@@ -3197,78 +3467,144 @@ def create_app():
                 bottom: 0;
                 left: 0;
                 right: 0;
-                padding: 15px;
-                z-index: 900;
+                padding: 12px 15px;
+                background: rgba(255, 255, 255, 0.9);
+                backdrop-filter: blur(15px);
+                -webkit-backdrop-filter: blur(15px);
+                border-top: 1px solid rgba(255, 255, 255, 0.3);
+                z-index: 1000;
+                box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.15);
+            }}
+            
+            [data-theme="dark"] .input-area {{
+                background: rgba(45, 45, 45, 0.9);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }}
+            
+            .msg-input {{
+                padding: 12px 14px;
+                font-size: 16px;
+                min-height: 44px;
+                background: rgba(255, 255, 255, 0.8);
+            }}
+            
+            [data-theme="dark"] .msg-input {{
+                background: rgba(255, 255, 255, 0.15);
+            }}
+            
+            .attachment-btn, .send-btn {{
+                width: 44px;
+                height: 44px;
+                flex-shrink: 0;
+            }}
+            
+            .messages {{
+                padding-bottom: 80px !important;
+                height: calc(100vh - 140px) !important;
             }}
             
             .favorites-grid {{
-                grid-template-columns: 1fr;
-                gap: 15px;
-                padding: 15px;
                 padding-bottom: 80px;
             }}
             
-            .message {{
-                max-width: 90%;
+            .chat-header {{
+                padding: 12px 15px;
+                min-height: 56px;
+            }}
+            
+            .chat-area.active {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 1000;
+                background: #cfe7ff;
+            }}
+            
+            .logout-btn {{
+                margin-top: 30px;
+                margin-bottom: 20px;
             }}
         }}
         
         @media (min-width: 769px) {{
-            .menu-toggle, .back-btn {{
+            .sidebar {{
+                width: var(--sidebar-width);
+                position: relative;
+                transform: none !important;
+            }}
+            
+            .chat-area {{
+                position: relative;
+                transform: none !important;
+            }}
+            
+            .menu-toggle {{
                 display: none;
+            }}
+            
+            .back-btn {{
+                display: none;
+            }}
+            
+            .logout-btn {{
+                margin-top: 30px;
+                margin-bottom: 20px;
             }}
         }}
         
-        .empty-chat, .empty-favorites {{
-            text-align: center;
-            padding: 60px 20px;
-            color: rgba(255, 255, 255, 0.7);
+        .no-select {{
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }}
         
-        .empty-chat i, .empty-favorites i {{
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }}
-        
-        .logout-btn {{
-            margin: 20px;
-            padding: 12px;
-            background: rgba(220, 53, 69, 0.3);
-            color: white;
-            border: 1px solid rgba(220, 53, 69, 0.3);
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 600;
+        .user-avatar {{
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            transition: all 0.3s ease;
+            font-weight: bold;
+            font-size: 0.8rem;
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+            color: white;
         }}
         
-        .logout-btn:hover {{
-            background: rgba(220, 53, 69, 0.5);
-            transform: translateY(-2px);
+        .user-avatar.online {{
+            position: relative;
+        }}
+        
+        .user-avatar.online::after {{
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            border: 2px solid var(--input);
         }}
     </style>
 </head>
 <body>
     <div class="app-container">
-        <!-- Кнопка меню для мобильных -->
-        <button class="menu-toggle" onclick="toggleSidebar()">
-            <i class="fas fa-bars"></i>
-        </button>
-        
         <!-- Сайдбар -->
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <div class="logo-placeholder">
                     <i class="fas fa-comments"></i>
                 </div>
                 <h1 class="app-title">Tandau</h1>
             </div>
-            
             <div class="user-info">
                 <div class="avatar" id="user-avatar" onclick="openAvatarModal()"></div>
                 <div class="user-details">
@@ -3282,7 +3618,6 @@ def create_app():
                     <i class="fas fa-palette"></i>
                 </button>
             </div>
-            
             <div class="nav">
                 <div class="nav-title">
                     <span>Избранное</span>
@@ -3291,7 +3626,7 @@ def create_app():
                     </button>
                 </div>
                 <div id="favorites-nav">
-                    <div class="nav-item" onclick="openFavorites()">
+                    <div class="nav-item favorite" onclick="openFavorites()">
                         <i class="fas fa-star"></i>
                         <span>Все заметки</span>
                     </div>
@@ -3320,7 +3655,6 @@ def create_app():
                 </div>
                 <div id="users"></div>
             </div>
-            
             <button class="logout-btn" onclick="location.href='/logout'">
                 <i class="fas fa-sign-out-alt"></i> Выйти
             </button>
@@ -3332,7 +3666,7 @@ def create_app():
                 <button class="back-btn" onclick="goBack()">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <span id="chat-title">Добро пожаловать!</span>
+                <span id="chat-title">Избранное</span>
                 <div class="channel-actions" id="channel-actions" style="display: none;">
                     <button class="channel-btn" onclick="openChannelSettings()">
                         <i class="fas fa-cog"></i>
@@ -3345,19 +3679,17 @@ def create_app():
             
             <div class="categories-filter" id="categories-filter" style="display: none;">
                 <button class="category-filter-btn active" onclick="filterFavorites('all')">Все</button>
+                <!-- Категории будут добавлены динамически -->
             </div>
             
             <div class="messages" id="messages">
-                <div class="empty-chat" id="welcome-message">
-                    <i class="fas fa-comments"></i>
-                    <h3>Добро пожаловать в Tandau Messenger!</h3>
-                    <p>Выберите чат, канал или избранное чтобы начать общение</p>
-                </div>
+                <!-- Для избранного показываем сетку заметок -->
+                <div id="favorites-grid" class="favorites-grid"></div>
                 
-                <div id="favorites-grid" class="favorites-grid" style="display: none;"></div>
-                
+                <!-- Для настроек канала -->
                 <div id="channel-settings" style="display: none;"></div>
                 
+                <!-- Для чата показываем сообщения -->
                 <div id="chat-messages" class="message-container" style="display: none;"></div>
             </div>
             
@@ -3382,32 +3714,26 @@ def create_app():
         <div class="modal-content">
             <h3>Выбор темы</h3>
             <div class="form-group">
-                <button class="btn btn-primary" onclick="setTheme('light')" style="margin-bottom: 10px; width: 100%;">
-                    <i class="fas fa-sun"></i> Светлая тема
-                </button>
-                <button class="btn btn-primary" onclick="setTheme('dark')" style="margin-bottom: 10px; width: 100%;">
-                    <i class="fas fa-moon"></i> Темная тема
-                </button>
-                <button class="btn btn-primary" onclick="setTheme('auto')" style="width: 100%;">
-                    <i class="fas fa-adjust"></i> Автоматически
-                </button>
+                <button class="theme-btn" onclick="setTheme('light')">🌞 Светлая</button>
+                <button class="theme-btn" onclick="setTheme('dark')">🌙 Темная</button>
+                <button class="theme-btn" onclick="setTheme('auto')">⚙️ Авто</button>
             </div>
-            <button class="btn btn-secondary" onclick="closeThemeModal()" style="width: 100%;">Закрыть</button>
+            <button class="btn btn-secondary" onclick="closeThemeModal()">Закрыть</button>
         </div>
     </div>
 
     <div class="modal" id="avatar-modal">
         <div class="modal-content">
             <h3>Смена аватарки</h3>
-            <div class="avatar-upload" style="text-align: center;">
-                <div class="avatar" id="avatar-preview" style="width: 100px; height: 100px; margin: 0 auto 20px; cursor: pointer;" onclick="document.getElementById('avatar-input').click()"></div>
+            <div class="avatar-upload">
+                <div class="avatar-preview" id="avatar-preview" onclick="document.getElementById('avatar-input').click()"></div>
                 <input type="file" id="avatar-input" accept="image/*" style="display:none" onchange="previewAvatar(this)">
-                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
                     <button class="btn btn-primary" onclick="uploadAvatar()">Загрузить</button>
                     <button class="btn btn-secondary" onclick="removeAvatar()">Удалить</button>
-                    <button class="btn btn-secondary" onclick="closeAvatarModal()">Отмена</button>
                 </div>
             </div>
+            <button class="btn btn-secondary" onclick="closeAvatarModal()">Закрыть</button>
         </div>
     </div>
 
@@ -3418,10 +3744,7 @@ def create_app():
                 <input type="text" class="form-control" id="channel-name" placeholder="Идентификатор канала (латинские буквы, цифры, _)">
                 <input type="text" class="form-control" id="channel-display-name" placeholder="Отображаемое название">
                 <input type="text" class="form-control" id="channel-description" placeholder="Описание">
-                <label style="color: white; display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                    <input type="checkbox" id="channel-private">
-                    Приватный канал
-                </label>
+                <label><input type="checkbox" id="channel-private"> Приватный канал</label>
             </div>
             <div style="display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="createChannel()">Создать</button>
@@ -3448,8 +3771,9 @@ def create_app():
             <h3>Добавить пользователя в канал</h3>
             <div class="form-group">
                 <label class="form-label">Пользователь</label>
-                <select class="form-control" id="user-select" style="padding: 12px;">
+                <select class="select-control" id="user-select">
                     <option value="">Выберите пользователя...</option>
+                    <!-- Пользователи будут загружены динамически -->
                 </select>
             </div>
             <div style="display: flex; gap: 10px;">
@@ -3472,7 +3796,7 @@ def create_app():
             </div>
             <div class="form-group">
                 <label class="form-label">Файл (опционально)</label>
-                <input type="file" class="form-control" id="favorite-file" accept="image/*,video/*,text/*,.pdf,.doc,.docx" style="border: none; background: transparent;">
+                <input type="file" class="form-control" id="favorite-file" accept="image/*,video/*,text/*,.pdf,.doc,.docx">
                 <div id="favorite-file-preview" style="margin-top: 10px;"></div>
             </div>
             <div style="display: flex; gap: 10px;">
@@ -3486,11 +3810,35 @@ def create_app():
     <script>
         const socket = io();
         const user = "{username}";
-        let currentRoom = "";
-        let roomType = "";
+        let room = "favorites";
+        let roomType = "favorites";
         let currentChannel = "";
         let currentCategory = "all";
         let isMobile = window.innerWidth <= 768;
+
+        // Определение мобильного устройства
+        function checkMobile() {{
+            isMobile = window.innerWidth <= 768;
+            if (!isMobile) {{
+                // На десктопе всегда показываем оба блока
+                document.getElementById('sidebar').classList.remove('hidden');
+                document.getElementById('chat-area').classList.add('active');
+            }}
+        }}
+
+        // Переключение сайдбара
+        function toggleSidebar() {{
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('hidden');
+        }}
+
+        // Возврат к списку чатов
+        function goBack() {{
+            if (isMobile) {{
+                document.getElementById('sidebar').classList.remove('hidden');
+                document.getElementById('chat-area').classList.remove('active');
+            }}
+        }}
 
         // Инициализация при загрузке
         window.onload = function() {{
@@ -3500,26 +3848,45 @@ def create_app():
             loadUsers();
             loadPersonalChats();
             loadFavoritesCategories();
+            loadFavorites();
             
+            // На мобильных устройствах показываем только сайдбар
             if (isMobile) {{
-                document.getElementById('sidebar').classList.remove('active');
+                document.getElementById('chat-area').classList.remove('active');
+            }} else {{
+                // На десктопе открываем избранное по умолчанию
+                openFavorites();
             }}
             
+            // Слушаем изменения размера окна
             window.addEventListener('resize', checkMobile);
+            
+            // Настраиваем управление клавиатурой для мобильных
+            setupMobileKeyboard();
         }};
 
-        function checkMobile() {{
-            isMobile = window.innerWidth <= 768;
-        }}
-
-        function toggleSidebar() {{
-            document.getElementById('sidebar').classList.toggle('active');
-        }}
-
-        function goBack() {{
-            if (isMobile) {{
-                document.getElementById('sidebar').classList.add('active');
-            }}
+        // Управление клавиатурой на мобильных устройствах
+        function setupMobileKeyboard() {{
+            if (!isMobile) return;
+            
+            const msgInput = document.getElementById('msg-input');
+            const messagesContainer = document.getElementById('messages');
+            
+            msgInput.addEventListener('focus', function() {{
+                // Прокручиваем к последнему сообщению при фокусе на поле ввода
+                setTimeout(() => {{
+                    if (messagesContainer.scrollHeight > messagesContainer.clientHeight) {{
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }}
+                }}, 300);
+            }});
+            
+            msgInput.addEventListener('blur', function() {{
+                // Мягкая прокрутка при скрытии клавиатуры
+                setTimeout(() => {{
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }}, 100);
+            }});
         }}
 
         // Загрузка аватарки пользователя
@@ -3529,18 +3896,13 @@ def create_app():
                 .then(userInfo => {{
                     if (userInfo.success) {{
                         const avatar = document.getElementById('user-avatar');
-                        const preview = document.getElementById('avatar-preview');
-                        
                         if (userInfo.avatar_path) {{
                             avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
                             avatar.textContent = '';
-                            preview.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                            preview.textContent = '';
                         }} else {{
-                            avatar.style.background = userInfo.avatar_color || 'var(--primary-gradient)';
+                            avatar.style.backgroundImage = 'none';
+                            avatar.style.backgroundColor = userInfo.avatar_color;
                             avatar.textContent = user.slice(0, 2).toUpperCase();
-                            preview.style.background = userInfo.avatar_color || 'var(--primary-gradient)';
-                            preview.textContent = user.slice(0, 2).toUpperCase();
                         }}
                     }}
                 }});
@@ -3555,12 +3917,14 @@ def create_app():
                         const filterContainer = document.getElementById('categories-filter');
                         filterContainer.innerHTML = '';
                         
+                        // Добавляем кнопку "Все"
                         const allBtn = document.createElement('button');
                         allBtn.className = 'category-filter-btn active';
                         allBtn.textContent = 'Все';
                         allBtn.onclick = () => filterFavorites('all');
                         filterContainer.appendChild(allBtn);
                         
+                        // Добавляем категории
                         data.categories.forEach(category => {{
                             const btn = document.createElement('button');
                             btn.className = 'category-filter-btn';
@@ -3584,11 +3948,10 @@ def create_app():
                 .then(data => {{
                     if (data.success) {{
                         const grid = document.getElementById('favorites-grid');
-                        grid.style.display = 'grid';
                         
                         if (data.favorites.length === 0) {{
                             grid.innerHTML = `
-                                <div class="empty-favorites" style="grid-column: 1/-1;">
+                                <div class="empty-favorites">
                                     <i class="fas fa-star"></i>
                                     <h3>Пока ничего нет</h3>
                                     <p>Добавьте свои заметки, фото или видео</p>
@@ -3638,7 +4001,7 @@ def create_app():
                         <div class="favorite-content">
                             <i class="fas fa-file"></i> ${{favorite.file_name}}
                             <br>
-                            <a href="${{favorite.file_path}}" target="_blank" style="color: white; opacity: 0.8;">Скачать</a>
+                            <a href="${{favorite.file_path}}" target="_blank" style="font-size: 0.8rem;">Скачать</a>
                         </div>
                     `;
                 }}
@@ -3672,176 +4035,951 @@ def create_app():
             return item;
         }}
 
-        // Функции для работы с чатом (остальные функции аналогичны предыдущей версии)
-        // ... (остальной JavaScript код остается таким же, как в предыдущей версии)
-        
-        // Основные функции для работы с мессенджером
+        // Фильтрация избранного по категории
+        function filterFavorites(category) {{
+            currentCategory = category;
+            
+            // Обновляем активную кнопку
+            document.querySelectorAll('.category-filter-btn').forEach(btn => {{
+                btn.classList.remove('active');
+            }});
+            event?.currentTarget.classList.add('active');
+            
+            loadFavorites(category === 'all' ? null : category);
+        }}
+
+        // Открытие избранного
         function openFavorites() {{
-            currentRoom = "favorites";
+            room = "favorites";
             roomType = "favorites";
             
             document.getElementById('chat-title').textContent = 'Избранное';
             document.getElementById('categories-filter').style.display = 'flex';
-            document.getElementById('welcome-message').style.display = 'none';
+            document.getElementById('favorites-grid').style.display = 'grid';
             document.getElementById('channel-settings').style.display = 'none';
             document.getElementById('chat-messages').style.display = 'none';
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
             
+            // На мобильных устройствах переключаемся в режим чата
+            if (isMobile) {{
+                document.getElementById('sidebar').classList.add('hidden');
+                document.getElementById('chat-area').classList.add('active');
+            }}
+            
+            // Обновляем активные элементы в навигации
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
             loadFavorites(currentCategory === 'all' ? null : currentCategory);
-            
-            if (isMobile) {{
-                document.getElementById('sidebar').classList.remove('active');
-            }}
         }}
 
-        function openRoom(room, type, title) {{
-            currentRoom = room;
-            roomType = type;
-            currentChannel = type === 'channel' ? room.replace('channel_', '') : '';
-            
-            document.getElementById('chat-title').textContent = type === 'channel' ? '# ' + title : title;
-            document.getElementById('categories-filter').style.display = 'none';
-            document.getElementById('welcome-message').style.display = 'none';
-            document.getElementById('favorites-grid').style.display = 'none';
-            document.getElementById('channel-settings').style.display = 'none';
-            document.getElementById('chat-messages').style.display = 'block';
-            document.getElementById('input-area').style.display = 'flex';
-            
-            if (type === 'channel') {{
-                document.getElementById('channel-actions').style.display = 'flex';
-            }} else {{
-                document.getElementById('channel-actions').style.display = 'none';
-            }}
-            
-            // Загружаем сообщения
-            loadMessages(room);
-            
-            if (isMobile) {{
-                document.getElementById('sidebar').classList.remove('active');
-            }}
-        }}
-
-        function loadMessages(roomName) {{
-            fetch('/get_messages/' + roomName)
+        // Функции для работы с аватарками
+        function openAvatarModal() {{
+            document.getElementById('avatar-modal').style.display = 'flex';
+            const preview = document.getElementById('avatar-preview');
+            fetch('/user_info/' + user)
                 .then(r => r.json())
-                .then(messages => {{
-                    const messagesContainer = document.getElementById('chat-messages');
-                    messagesContainer.innerHTML = '';
-                    
-                    if (messages && Array.isArray(messages) && messages.length > 0) {{
-                        messages.forEach(msg => {{
-                            addMessageToChat(msg);
-                        }});
+                .then(userInfo => {{
+                    if (userInfo.success) {{
+                        if (userInfo.avatar_path) {{
+                            preview.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                            preview.textContent = '';
+                        }} else {{
+                            preview.style.backgroundImage = 'none';
+                            preview.style.backgroundColor = userInfo.avatar_color;
+                            preview.textContent = user.slice(0, 2).toUpperCase();
+                        }}
                     }}
-                    
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 }});
         }}
 
-        function addMessageToChat(data) {{
-            const messagesContainer = document.getElementById('chat-messages');
-            
-            const message = document.createElement('div');
-            message.className = `message ${{data.user === user ? 'own' : 'other'}}`;
-            
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.style.background = data.color || 'var(--primary-gradient)';
-            
-            if (data.avatar_path) {{
-                avatar.style.backgroundImage = `url(${{data.avatar_path}})`;
-            }} else if (data.user !== user) {{
-                avatar.textContent = data.user.slice(0, 2).toUpperCase();
-            }}
-            
-            const content = document.createElement('div');
-            content.className = 'message-content';
-            
-            if (data.user !== user) {{
-                const sender = document.createElement('div');
-                sender.className = 'message-sender';
-                sender.textContent = data.user;
-                content.appendChild(sender);
-            }}
-            
-            if (data.message) {{
-                const text = document.createElement('div');
-                text.className = 'message-text';
-                text.innerHTML = data.message.replace(/\\n/g, '<br>');
-                content.appendChild(text);
-            }}
-            
-            if (data.file) {{
-                const fileContainer = document.createElement('div');
-                fileContainer.className = 'message-file';
-                
-                if (data.file.match(/\.(mp4|webm|mov)$/)) {{
-                    const video = document.createElement('video');
-                    video.src = data.file;
-                    video.controls = true;
-                    fileContainer.appendChild(video);
-                }} else {{
-                    const img = document.createElement('img');
-                    img.src = data.file;
-                    img.alt = data.file_name || 'Файл';
-                    img.onclick = () => window.open(data.file, '_blank');
-                    fileContainer.appendChild(img);
-                }}
-                
-                content.appendChild(fileContainer);
-            }}
-            
-            const time = document.createElement('div');
-            time.className = 'message-time';
-            time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
-            content.appendChild(time);
-            
-            message.appendChild(avatar);
-            message.appendChild(content);
-            messagesContainer.appendChild(message);
-            
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        function closeAvatarModal() {{
+            document.getElementById('avatar-modal').style.display = 'none';
         }}
 
-        function sendMessage() {{
-            const input = document.getElementById('msg-input');
-            const msg = input.value.trim();
-            const fileInput = document.getElementById('file-input');
-            
-            if (!msg && !fileInput.files[0]) return;
-            
-            const data = {{ 
-                message: msg, 
-                room: currentRoom, 
-                type: roomType 
-            }};
-            
-            if (fileInput.files[0]) {{
+        function previewAvatar(input) {{
+            const file = input.files[0];
+            if (file) {{
                 const reader = new FileReader();
                 reader.onload = (e) => {{
-                    data.file = e.target.result;
-                    data.fileType = fileInput.files[0].type.startsWith('image/') ? 'image' : 'video';
-                    data.fileName = fileInput.files[0].name;
-                    socket.emit('message', data);
-                    resetInput();
+                    const preview = document.getElementById('avatar-preview');
+                    preview.style.backgroundImage = `url(${{e.target.result}})`;
+                    preview.textContent = '';
                 }};
-                reader.readAsDataURL(fileInput.files[0]);
-            }} else {{
-                socket.emit('message', data);
-                resetInput();
+                reader.readAsDataURL(file);
             }}
         }}
 
-        socket.on('message', (data) => {{
-            if (data.room === currentRoom) {{
-                addMessageToChat(data);
+        function uploadAvatar() {{
+            const fileInput = document.getElementById('avatar-input');
+            const file = fileInput.files[0];
+            
+            if (file) {{
+                const formData = new FormData();
+                formData.append('avatar', file);
+                
+                fetch('/upload_avatar', {{
+                    method: 'POST',
+                    body: formData
+                }})
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        loadUserAvatar();
+                        closeAvatarModal();
+                        alert('Аватарка обновлена!');
+                    }} else {{
+                        alert(data.error || 'Ошибка загрузки аватарки');
+                    }}
+                }});
+            }} else {{
+                alert('Выберите файл');
+            }}
+        }}
+
+        function removeAvatar() {{
+            fetch('/delete_avatar', {{ method: 'POST' }})
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        loadUserAvatar();
+                        closeAvatarModal();
+                        alert('Аватарка удалена!');
+                    }}
+                }});
+        }}
+
+        // Функции для работы с темами
+        function openThemeModal() {{
+            document.getElementById('theme-modal').style.display = 'flex';
+        }}
+
+        function closeThemeModal() {{
+            document.getElementById('theme-modal').style.display = 'none';
+        }}
+
+        function setTheme(theme) {{
+            fetch('/set_theme', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ theme: theme }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    document.documentElement.setAttribute('data-theme', theme);
+                    closeThemeModal();
+                }}
+            }});
+        }}
+
+        // Функции для работы с каналами
+        function openCreateChannelModal() {{
+            document.getElementById('create-channel-modal').style.display = 'flex';
+        }}
+
+        function closeCreateChannelModal() {{
+            document.getElementById('create-channel-modal').style.display = 'none';
+        }}
+
+        function openRenameModal() {{
+            document.getElementById('rename-modal').style.display = 'flex';
+            document.getElementById('channel-rename-input').value = document.getElementById('chat-title').textContent.replace('# ', '');
+        }}
+
+        function closeRenameModal() {{
+            document.getElementById('rename-modal').style.display = 'none';
+        }}
+
+        function openAddUserModal() {{
+            document.getElementById('add-user-modal').style.display = 'flex';
+            
+            // Загружаем доступных пользователей
+            fetch(`/get_available_users?channel_name=${{encodeURIComponent(currentChannel)}}`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        const select = document.getElementById('user-select');
+                        select.innerHTML = '<option value="">Выберите пользователя...</option>';
+                        
+                        data.users.forEach(username => {{
+                            const option = document.createElement('option');
+                            option.value = username;
+                            option.textContent = username;
+                            select.appendChild(option);
+                        }});
+                    }}
+                }});
+        }}
+
+        function closeAddUserModal() {{
+            document.getElementById('add-user-modal').style.display = 'none';
+            document.getElementById('user-select').value = '';
+        }}
+
+        function createChannel() {{
+            const name = document.getElementById('channel-name').value.trim();
+            const displayName = document.getElementById('channel-display-name').value.trim();
+            const description = document.getElementById('channel-description').value.trim();
+            const isPrivate = document.getElementById('channel-private').checked;
+            
+            if (!name) {{
+                alert('Введите идентификатор канала');
+                return;
+            }}
+            
+            // Проверка имени канала
+            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
+                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
+                return;
+            }}
+            
+            fetch('/create_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    name: name,
+                    display_name: displayName || name,
+                    description: description,
+                    is_private: isPrivate
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeCreateChannelModal();
+                    loadUserChannels();
+                    alert('Канал создан!');
+                }} else {{
+                    alert(data.error || 'Ошибка при создании канала');
+                }}
+            }});
+        }}
+
+        function renameChannel() {{
+            const newName = document.getElementById('channel-rename-input').value.trim();
+            if (!newName) {{
+                alert('Введите новое название');
+                return;
+            }}
+            
+            fetch('/rename_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    channel_name: currentChannel,
+                    new_display_name: newName
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    document.getElementById('chat-title').textContent = '# ' + newName;
+                    closeRenameModal();
+                    loadUserChannels();
+                    alert('Канал переименован!');
+                }} else {{
+                    alert(data.error || 'Ошибка при переименовании канала');
+                }}
+            }});
+        }}
+
+        function addUserToChannel() {{
+            const selectedUser = document.getElementById('user-select').value;
+            if (!selectedUser) {{
+                alert('Выберите пользователя');
+                return;
+            }}
+            
+            fetch('/add_user_to_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    channel_name: currentChannel,
+                    username: selectedUser
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeAddUserModal();
+                    openChannelSettings(); // Обновляем настройки
+                    alert(data.message || 'Пользователь добавлен');
+                }} else {{
+                    alert(data.message || 'Ошибка при добавлении пользователя');
+                }}
+            }});
+        }}
+
+        function removeUserFromChannel(username) {{
+            if (!confirm(`Удалить пользователя ${{username}} из канала?`)) return;
+            
+            fetch('/remove_user_from_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    channel_name: currentChannel,
+                    username: username
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    openChannelSettings(); // Обновляем настройки
+                    alert(data.message || 'Пользователь удален');
+                }} else {{
+                    alert(data.message || 'Ошибка при удалении пользователя');
+                }}
+            }});
+        }}
+
+        // Открытие настроек канала
+        function openChannelSettings() {{
+            room = "settings_" + currentChannel;
+            roomType = "settings";
+            
+            document.getElementById('chat-title').textContent = 'Настройки канала';
+            document.getElementById('categories-filter').style.display = 'none';
+            document.getElementById('favorites-grid').style.display = 'none';
+            document.getElementById('chat-messages').style.display = 'none';
+            document.getElementById('input-area').style.display = 'none';
+            document.getElementById('channel-actions').style.display = 'none';
+            
+            // Загружаем информацию о канале
+            fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        renderChannelSettings(data.data);
+                    }}
+                }});
+        }}
+
+        // Рендеринг настроек канала
+        function renderChannelSettings(channelInfo) {{
+            const settingsContainer = document.getElementById('channel-settings');
+            settingsContainer.innerHTML = '';
+            settingsContainer.style.display = 'block';
+            
+            // Создаем HTML для настроек
+            let settingsHTML = `
+                <div class="settings-content">
+                    <div class="settings-section">
+                        <div class="settings-title">Информация о канале</div>
+                        <div style="margin-bottom: 15px;">
+                            <strong>Название:</strong> ${{channelInfo.display_name || channelInfo.name}}
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <strong>Описание:</strong> ${{channelInfo.description || 'Нет описания'}}
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <strong>Создатель:</strong> ${{channelInfo.created_by}}
+                        </div>
+                        <div>
+                            <strong>Тип:</strong> ${{channelInfo.is_private ? 'Приватный' : 'Публичный'}}
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <div class="settings-title" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Участники (${{channelInfo.members.length}})</span>
+                            <button class="action-btn" onclick="openAddUserModal()" style="padding: 4px 12px;">
+                                <i class="fas fa-user-plus"></i> Добавить
+                            </button>
+                        </div>
+                        <div class="member-list" id="members-list">
+            `;
+            
+            // Добавляем участников
+            channelInfo.members.forEach(member => {{
+                const isCurrentUser = member.username === user;
+                settingsHTML += `
+                    <div class="member-item">
+                        <div class="member-info">
+                            <div class="member-avatar" style="background-color: ${{member.color}};">
+                                ${{member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}}
+                            </div>
+                            <div class="member-name">
+                                ${{member.username}}
+                                ${{member.is_admin ? '<span class="member-role admin">Админ</span>' : '<span class="member-role">Участник</span>'}}
+                            </div>
+                        </div>
+                `;
+                
+                // Кнопки действий (только для администраторов и не для себя)
+                if (channelInfo.created_by === user && !isCurrentUser) {{
+                    settingsHTML += `
+                        <div class="member-actions">
+                            <button class="action-btn remove" onclick="removeUserFromChannel('${{member.username}}')" title="Удалить из канала">
+                                <i class="fas fa-user-minus"></i>
+                            </button>
+                        </div>
+                    `;
+                }}
+                
+                settingsHTML += `</div>`;
+            }});
+            
+            settingsHTML += `
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <div class="settings-title">Управление каналом</div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="openRenameModal()">
+                        <i class="fas fa-edit"></i> Переименовать
+                    </button>
+                    <button class="btn btn-secondary" onclick="openRoom('channel_' + currentChannel, 'channel', currentChannel)">
+                        <i class="fas fa-arrow-left"></i> Вернуться в чат
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    settingsContainer.innerHTML = settingsHTML;
+    
+    // Загружаем аватарки участников
+    channelInfo.members.forEach(member => {{
+        if (member.avatar) {{
+            const avatar = settingsContainer.querySelector(`.member-avatar[style*="${{member.color}}"]`);
+            if (avatar) {{
+                avatar.style.backgroundImage = `url(${{member.avatar}})`;
+                avatar.textContent = '';
+            }}
+        }}
+    }});
+}}
+
+// Загрузка каналов пользователя
+function loadUserChannels() {{
+    fetch('/user_channels')
+        .then(r => r.json())
+        .then(data => {{
+            if (data.success) {{
+                const channelsContainer = document.getElementById('channels');
+                channelsContainer.innerHTML = '';
+                
+                // Добавляем общий канал
+                const generalEl = document.createElement('div');
+                generalEl.className = 'nav-item' + (room === 'channel_general' ? ' active' : '');
+                generalEl.innerHTML = `
+                    <i class="fas fa-hashtag"></i>
+                    <span>General</span>
+                `;
+                generalEl.onclick = () => openRoom('channel_general', 'channel', 'General');
+                channelsContainer.appendChild(generalEl);
+                
+                // Добавляем пользовательские каналы
+                data.channels.forEach(channel => {{
+                    if (channel.name !== 'general') {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
+                        el.innerHTML = `
+                            <i class="fas fa-hashtag"></i>
+                            <span>${{channel.display_name}}</span>
+                        `;
+                        el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
+                        channelsContainer.appendChild(el);
+                    }}
+                }});
             }}
         }});
+}}
 
-        // Остальные функции (handleKeydown, resetInput, autoResizeTextarea и т.д.)
-        // ... (остальной JavaScript код остается таким же)
-    </script>
+// Загрузка пользователей с аватарками
+function loadUsers() {{
+    fetch('/users')
+        .then(r => r.json())
+        .then(users => {{
+            if (users && Array.isArray(users)) {{
+                const usersContainer = document.getElementById('users');
+                usersContainer.innerHTML = '';
+                
+                users.forEach(u => {{
+                    if (u.username !== user) {{
+                        const el = document.createElement('div');
+                        el.className = 'nav-item';
+                        
+                        // Создаем аватарку вместо иконки
+                        const avatarDiv = document.createElement('div');
+                        avatarDiv.className = `user-avatar ${{u.online ? 'online' : ''}}`;
+                        avatarDiv.style.backgroundColor = u.color || '#6366F1';
+                        
+                        if (u.avatar) {{
+                            avatarDiv.style.backgroundImage = `url(${{u.avatar}})`;
+                        }} else {{
+                            avatarDiv.textContent = u.username.slice(0, 2).toUpperCase();
+                        }}
+                        
+                        el.appendChild(avatarDiv);
+                        
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = u.username;
+                        el.appendChild(nameSpan);
+                        
+                        el.onclick = () => openRoom(
+                            'private_' + [user, u.username].sort().join('_'),
+                            'private',
+                            u.username
+                        );
+                        usersContainer.appendChild(el);
+                    }}
+                }});
+            }}
+        }});
+}}
+
+// Загрузка личных чатов с аватарками
+function loadPersonalChats() {{
+    fetch('/personal_chats')
+        .then(r => r.json())
+        .then(data => {{
+            if (data.success) {{
+                const pc = document.getElementById('personal-chats');
+                pc.innerHTML = '';
+                
+                data.chats.forEach(chatUser => {{
+                    const el = document.createElement('div');
+                    el.className = 'nav-item';
+                    
+                    // Получаем информацию о пользователе для аватарки
+                    fetch('/user_info/' + chatUser)
+                        .then(r => r.json())
+                        .then(userInfo => {{
+                            if (userInfo.success) {{
+                                const avatarDiv = document.createElement('div');
+                                avatarDiv.className = 'user-avatar';
+                                avatarDiv.style.backgroundColor = userInfo.avatar_color || '#6366F1';
+                                
+                                if (userInfo.avatar_path) {{
+                                    avatarDiv.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                                }} else {{
+                                    avatarDiv.textContent = chatUser.slice(0, 2).toUpperCase();
+                                }}
+                                
+                                el.insertBefore(avatarDiv, el.firstChild);
+                            }}
+                        }});
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = chatUser;
+                    el.appendChild(nameSpan);
+                    
+                    el.onclick = () => openRoom(
+                        'private_' + [user, chatUser].sort().join('_'),
+                        'private',
+                        chatUser
+                    );
+                    pc.appendChild(el);
+                }});
+            }}
+        }});
+}}
+
+// Открытие комнаты (чат или канал)
+function openRoom(r, t, title) {{
+    room = r;
+    roomType = t;
+    currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
+    
+    document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
+    document.getElementById('categories-filter').style.display = 'none';
+    document.getElementById('favorites-grid').style.display = 'none';
+    document.getElementById('channel-settings').style.display = 'none';
+    document.getElementById('chat-messages').style.display = 'block';
+    document.getElementById('input-area').style.display = 'flex';
+    
+    // На мобильных устройствах переключаемся в режим чата
+    if (isMobile) {{
+        document.getElementById('sidebar').classList.add('hidden');
+        document.getElementById('chat-area').classList.add('active');
+        
+        // Убедимся, что поле ввода всегда видно
+        setTimeout(() => {{
+            const inputArea = document.getElementById('input-area');
+            if (inputArea) {{
+                inputArea.style.display = 'flex';
+                inputArea.style.position = 'fixed';
+                inputArea.style.bottom = '0';
+                inputArea.style.left = '0';
+                inputArea.style.right = '0';
+                inputArea.style.zIndex = '1000';
+            }}
+        }}, 50);
+    }}
+    
+    // Обновляем активные элементы в навигации
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    
+    // Очищаем чат и показываем заглушку
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
+    
+    // Показываем/скрываем кнопки управления каналом
+    const channelActions = document.getElementById('channel-actions');
+    if (t === 'channel') {{
+        channelActions.style.display = 'flex';
+    }} else {{
+        channelActions.style.display = 'none';
+    }}
+    
+    // Загружаем историю
+    loadMessages(r);
+    
+    // Присоединяемся к комнате через сокет
+    socket.emit('join', {{ room: r }});
+}}
+
+// Загрузка сообщений комнаты
+function loadMessages(roomName) {{
+    fetch('/get_messages/' + roomName)
+        .then(r => r.json())
+        .then(messages => {{
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.innerHTML = '';
+            
+            if (messages && Array.isArray(messages) && messages.length > 0) {{
+                messages.forEach(msg => {{
+                    addMessageToChat(msg, roomName);
+                }});
+            }} else {{
+                messagesContainer.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
+            }}
+            
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }})
+        .catch(error => console.error('Error loading messages:', error));
+}}
+
+// Добавление сообщения в чат (с поддержкой аватарок в личных чатах)
+function addMessageToChat(data, roomName = '') {{
+    const messagesContainer = document.getElementById('chat-messages');
+    
+    // Удаляем пустой экран, если он есть
+    const emptyChat = messagesContainer.querySelector('.empty-chat');
+    if (emptyChat) {{
+        emptyChat.remove();
+    }}
+    
+    const message = document.createElement('div');
+    message.className = `message ${{data.user === user ? 'own' : 'other'}}`;
+    
+    // Создаем аватарку
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    
+    // Для личных чатов загружаем аватарку пользователя
+    if (data.user !== user && roomName.startsWith('private_')) {{
+        fetch('/user_info/' + data.user)
+            .then(r => r.json())
+            .then(userInfo => {{
+                if (userInfo.success) {{
+                    if (userInfo.avatar_path) {{
+                        avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                        avatar.textContent = '';
+                    }} else {{
+                        avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#6366F1';
+                        avatar.textContent = data.user.slice(0, 2).toUpperCase();
+                    }}
+                }}
+            }});
+    }} else {{
+        avatar.style.backgroundColor = data.color || '#6366F1';
+        if (data.user !== user) {{
+            avatar.textContent = data.user.slice(0, 2).toUpperCase();
+        }}
+    }}
+    
+    // Создаем контент сообщения
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    
+    // Добавляем отправителя (только для чужих сообщений)
+    if (data.user !== user) {{
+        const sender = document.createElement('div');
+        sender.className = 'message-sender';
+        sender.textContent = data.user;
+        content.appendChild(sender);
+    }}
+    
+    // Добавляем текст сообщения
+    if (data.message) {{
+        const text = document.createElement('div');
+        text.className = 'message-text';
+        text.innerHTML = data.message.replace(/\\n/g, '<br>');
+        content.appendChild(text);
+    }}
+    
+    // Добавляем файл, если есть
+    if (data.file) {{
+        const fileContainer = document.createElement('div');
+        fileContainer.className = 'message-file';
+        
+        if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
+            const video = document.createElement('video');
+            video.src = data.file;
+            video.controls = true;
+            fileContainer.appendChild(video);
+        }} else {{
+            const img = document.createElement('img');
+            img.src = data.file;
+            img.alt = data.file_name || 'Файл';
+            img.onclick = () => window.open(data.file, '_blank');
+            fileContainer.appendChild(img);
+        }}
+        
+        content.appendChild(fileContainer);
+    }}
+    
+    // Добавляем время
+    const time = document.createElement('div');
+    time.className = 'message-time';
+    time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
+    content.appendChild(time);
+    
+    // Собираем сообщение
+    message.appendChild(avatar);
+    message.appendChild(content);
+    messagesContainer.appendChild(message);
+    
+    // Прокручиваем к последнему сообщению
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}}
+
+// Отправка сообщения
+function sendMessage() {{
+    const input = document.getElementById('msg-input');
+    const msg = input.value.trim();
+    const fileInput = document.getElementById('file-input');
+    
+    if (!msg && !fileInput.files[0]) return;
+    
+    const data = {{ 
+        message: msg, 
+        room: room, 
+        type: roomType 
+    }};
+    
+    if (fileInput.files[0]) {{
+        const reader = new FileReader();
+        reader.onload = (e) => {{
+            data.file = e.target.result;
+            data.fileType = fileInput.files[0].type.startsWith('image/') ? 'image' : 'video';
+            data.fileName = fileInput.files[0].name;
+            socket.emit('message', data);
+            resetInput();
+        }};
+        reader.readAsDataURL(fileInput.files[0]);
+    }} else {{
+        socket.emit('message', data);
+        resetInput();
+    }}
+}}
+
+function resetInput() {{
+    document.getElementById('msg-input').value = '';
+    document.getElementById('file-input').value = '';
+    document.getElementById('file-preview').innerHTML = '';
+    autoResizeTextarea();
+}}
+
+function handleKeydown(e) {{
+    if (e.key === 'Enter' && !e.shiftKey) {{
+        e.preventDefault();
+        sendMessage();
+    }}
+}}
+
+function autoResizeTextarea() {{
+    const textarea = document.getElementById('msg-input');
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+}}
+
+document.getElementById('msg-input').addEventListener('input', autoResizeTextarea);
+
+function handleFileSelect(input) {{
+    const file = input.files[0];
+    if (file) {{
+        const reader = new FileReader();
+        reader.onload = (e) => {{
+            const preview = document.getElementById('file-preview');
+            if (file.type.startsWith('image/')) {{
+                preview.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
+                        <div>
+                            <div style="font-weight: 500;">${{file.name}}</div>
+                            <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }} else if (file.type.startsWith('video/')) {{
+                preview.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <video src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;"></video>
+                        <div>
+                            <div style="font-weight: 500;">${{file.name}}</div>
+                            <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }} else {{
+                preview.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg); border-radius: 8px;">
+                        <i class="fas fa-file" style="font-size: 2rem; color: var(--accent);"></i>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 500;">${{file.name}}</div>
+                            <div style="font-size: 0.8rem; color: #666;">${{(file.size / 1024).toFixed(1)}} KB</div>
+                        </div>
+                        <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            }}
+        }};
+        reader.readAsDataURL(file);
+    }}
+}}
+
+// Socket events
+socket.on('message', (data) => {{
+    if (data.room === room) {{
+        addMessageToChat(data, room);
+    }}
+}});
+
+// Функции для работы с избранным
+function openAddFavoriteModal() {{
+    document.getElementById('add-favorite-modal').style.display = 'flex';
+    document.getElementById('favorite-file').addEventListener('change', function(e) {{
+        const file = e.target.files[0];
+        const preview = document.getElementById('favorite-file-preview');
+        
+        if (file) {{
+            if (file.type.startsWith('image/')) {{
+                const reader = new FileReader();
+                reader.onload = (e) => {{
+                    preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 100%; border-radius: 8px;">`;
+                }};
+                reader.readAsDataURL(file);
+            }} else if (file.type.startsWith('video/')) {{
+                const reader = new FileReader();
+                reader.onload = (e) => {{
+                    preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
+                }};
+                reader.readAsDataURL(file);
+            }} else {{
+                preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                    <i class="fas fa-file"></i> ${{file.name}}
+                </div>`;
+            }}
+        }}
+    }});
+}}
+
+function closeAddFavoriteModal() {{
+    document.getElementById('add-favorite-modal').style.display = 'none';
+    document.getElementById('favorite-content').value = '';
+    document.getElementById('favorite-category').value = 'general';
+    document.getElementById('favorite-file').value = '';
+    document.getElementById('favorite-file-preview').innerHTML = '';
+}}
+
+function saveFavorite() {{
+    const content = document.getElementById('favorite-content').value.trim();
+    const category = document.getElementById('favorite-category').value.trim() || 'general';
+    const fileInput = document.getElementById('favorite-file');
+    const file = fileInput.files[0];
+    
+    if (!content && !file) {{
+        alert('Добавьте текст или файл');
+        return;
+    }}
+    
+    const formData = new FormData();
+    formData.append('content', content);
+    formData.append('category', category);
+    
+    if (file) {{
+        formData.append('file', file);
+    }}
+    
+    fetch('/add_to_favorites', {{
+        method: 'POST',
+        body: formData
+    }})
+    .then(r => r.json())
+    .then(data => {{
+        if (data.success) {{
+            closeAddFavoriteModal();
+            loadFavoritesCategories();
+            loadFavorites(currentCategory === 'all' ? null : currentCategory);
+            alert('Добавлено в избранное!');
+        }} else {{
+            alert(data.error || 'Ошибка при сохранении');
+        }}
+    }});
+}}
+
+function deleteFavorite(favoriteId) {{
+    if (!confirm('Удалить эту заметку?')) return;
+    
+    fetch(`/delete_favorite/${{favoriteId}}`, {{
+        method: 'DELETE'
+    }})
+    .then(r => r.json())
+    .then(data => {{
+        if (data.success) {{
+            document.getElementById(`favorite-${{favoriteId}}`).remove();
+            
+            // Если удалили последний элемент, показываем пустой экран
+            const grid = document.getElementById('favorites-grid');
+            if (grid.children.length === 0) {{
+                loadFavorites(currentCategory === 'all' ? null : currentCategory);
+            }}
+        }} else {{
+            alert('Ошибка при удалении');
+        }}
+    }});
+}}
+
+function togglePinFavorite(favoriteId) {{
+    fetch(`/toggle_pin_favorite/${{favoriteId}}`, {{
+        method: 'POST'
+    }})
+    .then(r => r.json())
+    .then(data => {{
+        if (data.success) {{
+            const item = document.getElementById(`favorite-${{favoriteId}}`);
+            if (data.pinned) {{
+                item.classList.add('pinned');
+            }} else {{
+                item.classList.remove('pinned');
+            }}
+            
+            // Перезагружаем чтобы обновить порядок
+            loadFavorites(currentCategory === 'all' ? null : currentCategory);
+        }}
+    }});
+}}
+
+function openFilePreview(filePath) {{
+    const win = window.open(filePath, '_blank');
+    if (win) {{
+        win.focus();
+    }}
+}}
+</script>
 </body>
 </html>'''
 
