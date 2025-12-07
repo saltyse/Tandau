@@ -4774,7 +4774,7 @@ function addMessageToChat(data, roomName = '') {{
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }}
 
-// Отправка сообщения с файлом - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// ИСПРАВЛЕННАЯ ФУНКЦИЯ отправки сообщения
 async function sendMessage() {{
     const input = document.getElementById('msg-input');
     const msg = input.value.trim();
@@ -4820,7 +4820,7 @@ async function sendMessage() {{
         type: roomType
     }};
     
-    // Добавляем информацию о файле если есть - ВАЖНО: передаем данные файла
+    // Добавляем информацию о файле если есть
     if (fileData) {{
         messageData.file = fileData;
         messageData.fileName = fileName;
@@ -4829,30 +4829,11 @@ async function sendMessage() {{
     
     socket.emit('message', messageData);
     
-    // Добавляем сообщение сразу в чат (не дожидаясь ответа от сервера)
-    const userInfoResponse = await fetch('/user_info/' + user);
-    const userInfo = await userInfoResponse.json();
-    
-    const tempMessage = {{
-        user: user,
-        message: msg,
-        file: fileData,
-        file_name: fileName,
-        color: userInfo.success ? userInfo.avatar_color : '#6366F1',
-        avatar_path: userInfo.success ? userInfo.avatar_path : null,
-        timestamp: new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }})
-    }};
-    
-    addMessageToChat(tempMessage, room);
-    
-    resetInput();
-}}
-
-function resetInput() {{
-    document.getElementById('msg-input').value = '';
-    document.getElementById('file-input').value = '';
+    // Сбрасываем поле ввода сразу
+    input.value = '';
+    input.style.height = 'auto';
     document.getElementById('file-preview').innerHTML = '';
-    autoResizeTextarea();
+    fileInput.value = '';
 }}
 
 function handleKeydown(e) {{
@@ -4921,6 +4902,7 @@ function handleFileSelect(input) {{
 
 // Socket events - ИСПРАВЛЕННЫЙ ОБРАБОТЧИК
 socket.on('message', (data) => {{
+    // Показываем сообщение только если мы в этой же комнате
     if (data.room === room) {{
         addMessageToChat(data, room);
     }}
@@ -5047,6 +5029,15 @@ function openFilePreview(filePath) {{
         win.focus();
     }}
 }}
+
+// Инициализация Socket.IO
+socket.on('connect', function() {{
+    console.log('Connected to server');
+}});
+
+socket.on('disconnect', function() {{
+    console.log('Disconnected from server');
+}});
 </script>
 </body>
 </html>'''
@@ -5082,7 +5073,7 @@ function openFilePreview(filePath) {{
     def on_leave(data): 
         leave_room(data['room'])
 
-    # ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СООБЩЕНИЙ - КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+    # ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СООБЩЕНИЙ - ОТПРАВЛЯЕТСЯ ТОЛЬКО ОДИН РАЗ
     @socketio.on('message')
     def on_message(data):
         if 'username' not in session:
@@ -5090,7 +5081,7 @@ function openFilePreview(filePath) {{
         
         msg = data.get('message', '').strip()
         room = data.get('room')
-        file_path = data.get('file')  # Теперь получаем путь к файлу
+        file_path = data.get('file')
         file_name = data.get('fileName')
         file_type = data.get('fileType', 'text')
         
@@ -5128,13 +5119,13 @@ function openFilePreview(filePath) {{
             'room': room
         }
         
-        # Добавляем информацию о файле если есть - ВАЖНО: передаем путь к файлу
+        # Добавляем информацию о файле если есть
         if file_path:
             message_data['file'] = file_path
             message_data['fileName'] = file_name
             message_data['fileType'] = file_type
         
-        # Отправляем сообщение всем в комнате
+        # Отправляем сообщение всем в комнате ТОЛЬКО ОДИН РАЗ
         emit('message', message_data, room=room)
 
     # Health check
