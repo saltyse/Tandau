@@ -206,6 +206,31 @@ def create_app():
             conn.commit()
             return c.lastrowid
 
+    def get_messages_for_room(room, limit=100):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT username, message, message_type, file_path, file_name, timestamp 
+                FROM messages 
+                WHERE room = ? 
+                ORDER BY timestamp ASC
+                LIMIT ?
+            ''', (room, limit))
+            messages = []
+            for row in c.fetchall():
+                user_info = get_user(row[0])
+                messages.append({
+                    'user': row[0],
+                    'message': row[1],
+                    'type': row[2],
+                    'file': row[3],
+                    'file_name': row[4],
+                    'timestamp': row[5][11:16] if row[5] else '',
+                    'color': user_info['avatar_color'] if user_info else '#6366F1',
+                    'avatar_path': user_info['avatar_path'] if user_info else None
+                })
+            return messages
+
     def add_to_favorites(username, content=None, file_path=None, file_name=None, file_type='text', category='general'):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
@@ -276,30 +301,6 @@ def create_app():
             c = conn.cursor()
             c.execute('SELECT DISTINCT category FROM favorites WHERE username = ? ORDER BY category', (username,))
             return [row[0] for row in c.fetchall()]
-
-    def get_messages_for_room(room):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('''
-                SELECT username, message, message_type, file_path, file_name, timestamp 
-                FROM messages 
-                WHERE room = ? 
-                ORDER BY timestamp ASC
-            ''', (room,))
-            messages = []
-            for row in c.fetchall():
-                user_info = get_user(row[0])
-                messages.append({
-                    'user': row[0],
-                    'message': row[1],
-                    'type': row[2],
-                    'file': row[3],
-                    'file_name': row[4],
-                    'timestamp': row[5][11:16] if row[5] else '',
-                    'color': user_info['avatar_color'] if user_info else '#6366F1',
-                    'avatar_path': user_info['avatar_path'] if user_info else None
-                })
-            return messages
 
     def get_user_personal_chats(username):
         with sqlite3.connect('messenger.db') as conn:
@@ -844,6 +845,7 @@ def create_app():
                     gap: 15px;
                     background: rgba(255, 255, 255, 0.1);
                     backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
                     padding: 20px 40px;
                     border-radius: 24px;
                     margin-bottom: 25px;
@@ -1324,7 +1326,6 @@ def create_app():
                     background: linear-gradient(135deg, #667eea, #764ba2);
                     -webkit-background-clip: text;
                     -webkit-text-fill-color: transparent;
-                    background-clip: text;
                 }
                 
                 .list-text {
