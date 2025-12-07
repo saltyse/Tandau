@@ -4774,7 +4774,7 @@ function addMessageToChat(data, roomName = '') {{
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }}
 
-// Отправка сообщения с файлом
+// Отправка сообщения с файлом - ИСПРАВЛЕННАЯ ВЕРСИЯ
 async function sendMessage() {{
     const input = document.getElementById('msg-input');
     const msg = input.value.trim();
@@ -4814,14 +4814,36 @@ async function sendMessage() {{
     }}
     
     // Отправляем через WebSocket
-    socket.emit('message', {{
+    const messageData = {{
         message: msg,
         room: room,
-        type: roomType,
+        type: roomType
+    }};
+    
+    // Добавляем информацию о файле если есть - ВАЖНО: передаем данные файла
+    if (fileData) {{
+        messageData.file = fileData;
+        messageData.fileName = fileName;
+        messageData.fileType = fileType;
+    }}
+    
+    socket.emit('message', messageData);
+    
+    // Добавляем сообщение сразу в чат (не дожидаясь ответа от сервера)
+    const userInfoResponse = await fetch('/user_info/' + user);
+    const userInfo = await userInfoResponse.json();
+    
+    const tempMessage = {{
+        user: user,
+        message: msg,
         file: fileData,
-        fileName: fileName,
-        fileType: fileType
-    }});
+        file_name: fileName,
+        color: userInfo.success ? userInfo.avatar_color : '#6366F1',
+        avatar_path: userInfo.success ? userInfo.avatar_path : null,
+        timestamp: new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }})
+    }};
+    
+    addMessageToChat(tempMessage, room);
     
     resetInput();
 }}
@@ -4897,7 +4919,7 @@ function handleFileSelect(input) {{
     }}
 }}
 
-// Socket events
+// Socket events - ИСПРАВЛЕННЫЙ ОБРАБОТЧИК
 socket.on('message', (data) => {{
     if (data.room === room) {{
         addMessageToChat(data, room);
@@ -5060,6 +5082,7 @@ function openFilePreview(filePath) {{
     def on_leave(data): 
         leave_room(data['room'])
 
+    # ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СООБЩЕНИЙ - КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
     @socketio.on('message')
     def on_message(data):
         if 'username' not in session:
@@ -5067,27 +5090,9 @@ function openFilePreview(filePath) {{
         
         msg = data.get('message', '').strip()
         room = data.get('room')
-        file_data = data.get('file')
-        file_type = data.get('fileType', 'text')
+        file_path = data.get('file')  # Теперь получаем путь к файлу
         file_name = data.get('fileName')
-        
-        if not msg and not file_data:
-            return
-        
-        # Сохраняем файл если есть
-        file_path = None
-        saved_file_name = None
-        
-        if file_data and file_type in ['image', 'video']:
-            file_path, saved_file_name = save_base64_file(
-                file_data, 
-                app.config['UPLOAD_FOLDER'], 
-                'png' if file_type == 'image' else 'mp4'
-            )
-        elif file_data:
-            # Уже загруженный через HTTP файл
-            file_path = file_data
-            saved_file_name = file_name
+        file_type = data.get('fileType', 'text')
         
         # Для приватных чатов
         recipient = None
@@ -5097,7 +5102,7 @@ function openFilePreview(filePath) {{
                 user1, user2 = parts[1], parts[2]
                 recipient = user1 if user2 == session['username'] else user2
         
-        # Сохраняем в БД
+        # Сохраняем сообщение в БД
         msg_id = save_message(
             session['username'], 
             msg, 
@@ -5105,7 +5110,7 @@ function openFilePreview(filePath) {{
             recipient, 
             file_type, 
             file_path,
-            file_name or saved_file_name
+            file_name
         )
         
         # Получаем информацию об отправителе для аватарки
@@ -5113,18 +5118,24 @@ function openFilePreview(filePath) {{
         user_color = user_info['avatar_color'] if user_info else '#6366F1'
         user_avatar_path = user_info['avatar_path'] if user_info else None
         
-        # Отправляем сообщение
-        emit('message', {
+        # Подготавливаем данные для отправки
+        message_data = {
             'user': session['username'], 
             'message': msg, 
-            'file': file_path, 
-            'fileType': file_type,
-            'fileName': file_name or saved_file_name,
             'color': user_color,
             'avatar_path': user_avatar_path,
             'timestamp': datetime.now().strftime('%H:%M'),
             'room': room
-        }, room=room)
+        }
+        
+        # Добавляем информацию о файле если есть - ВАЖНО: передаем путь к файлу
+        if file_path:
+            message_data['file'] = file_path
+            message_data['fileName'] = file_name
+            message_data['fileType'] = file_type
+        
+        # Отправляем сообщение всем в комнате
+        emit('message', message_data, room=room)
 
     # Health check
     @app.route('/health')
