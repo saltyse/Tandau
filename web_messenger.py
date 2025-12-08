@@ -1,4 +1,4 @@
-# web_messenger.py - Tandau Messenger
+# web_messenger.py - Tandau Messenger (единый файл)
 from flask import Flask, request, jsonify, session, redirect, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -2233,7 +2233,7 @@ def create_app():
                                     </div>
                                 </div>
                                 
-                                <div class="glass-section">
+                                <div class="glass-section {
                                     <h3 class="section-title"><i class="fas fa-lock"></i> 3. Защита данных</h3>
                                     <div class="section-content">
                                         <p>Мы применяем многоуровневую защиту ваших данных:</p>
@@ -2289,7 +2289,7 @@ def create_app():
                                     <div class="section-content">
                                         <p>Мы используем минимальные технологии для улучшения опыта:</p>
                                         <div class="glass-list">
-                                            <div class="list-item">
+                                            <div class="list-item {
                                                 <div class="list-icon"><i class="fas fa-cookie"></i></div>
                                                 <div class="list-text"><span class="highlight">Сессионные куки</span>: только для поддержания входа в систему</div>
                                             </div>
@@ -3920,6 +3920,24 @@ def create_app():
             border-radius: 50%;
             border: 2px solid var(--input);
         }}
+        
+        /* Стили для аватарок каналов в списке */
+        .channel-avatar {{
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+            margin-right: 10px;
+        }}
     </style>
 </head>
 <body>
@@ -3969,10 +3987,7 @@ def create_app():
                     </button>
                 </div>
                 <div id="channels">
-                    <div class="nav-item" onclick="openRoom('channel_general', 'channel', 'General')">
-                        <i class="fas fa-hashtag"></i>
-                        <span>General</span>
-                    </div>
+                    <!-- Каналы будут загружены динамически с аватарками -->
                 </div>
                 
                 <div class="nav-title">
@@ -4667,7 +4682,7 @@ def create_app():
             .then(r => r.json())
             .then(data => {{
                 if (data.success) {{
-                    document.getElementById('chat-title').textContent = '# ' + newName;
+                    document.getElementById('chat-title').textContent = newName;
                     closeRenameModal();
                     loadUserChannels();
                     alert('Канал переименован!');
@@ -4695,7 +4710,7 @@ def create_app():
             .then(r => r.json())
             .then(data => {{
                 if (data.success) {{
-                    document.getElementById('chat-title').textContent = '# ' + newName;
+                    document.getElementById('chat-title').textContent = newName;
                     loadUserChannels();
                     loadChannelInfo();
                     alert('Канал переименован!');
@@ -4994,7 +5009,7 @@ def create_app():
                 }});
         }}
 
-        // Загрузка каналов пользователя
+        // Загрузка каналов пользователя с аватарками
         function loadUserChannels() {{
             fetch('/user_channels')
                 .then(r => r.json())
@@ -5003,28 +5018,31 @@ def create_app():
                         const channelsContainer = document.getElementById('channels');
                         channelsContainer.innerHTML = '';
                         
-                        // Добавляем общий канал
-                        const generalEl = document.createElement('div');
-                        generalEl.className = 'nav-item' + (room === 'channel_general' ? ' active' : '');
-                        generalEl.innerHTML = `
-                            <i class="fas fa-hashtag"></i>
-                            <span>General</span>
-                        `;
-                        generalEl.onclick = () => openRoom('channel_general', 'channel', 'General');
-                        channelsContainer.appendChild(generalEl);
-                        
                         // Добавляем пользовательские каналы
                         data.channels.forEach(channel => {{
-                            if (channel.name !== 'general') {{
-                                const el = document.createElement('div');
-                                el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
-                                el.innerHTML = `
-                                    <i class="fas fa-hashtag"></i>
-                                    <span>${{channel.display_name}}</span>
-                                `;
-                                el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name);
-                                channelsContainer.appendChild(el);
+                            const el = document.createElement('div');
+                            el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
+                            
+                            // Создаем аватарку канала
+                            const channelAvatar = document.createElement('div');
+                            channelAvatar.className = 'channel-avatar';
+                            channelAvatar.style.backgroundColor = '#667eea';
+                            
+                            if (channel.avatar_path) {{
+                                channelAvatar.style.backgroundImage = `url(${{channel.avatar_path}})`;
+                                channelAvatar.textContent = '';
+                            }} else {{
+                                channelAvatar.textContent = channel.display_name ? channel.display_name.slice(0, 2).toUpperCase() : channel.name.slice(0, 2).toUpperCase();
                             }}
+                            
+                            el.appendChild(channelAvatar);
+                            
+                            const nameSpan = document.createElement('span');
+                            nameSpan.textContent = channel.display_name || channel.name;
+                            el.appendChild(nameSpan);
+                            
+                            el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name || channel.name);
+                            channelsContainer.appendChild(el);
                         }});
                     }}
                 }});
@@ -5126,7 +5144,7 @@ def create_app():
             roomType = t;
             currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
             
-            document.getElementById('chat-title').textContent = t === 'channel' ? '# ' + title : title;
+            document.getElementById('chat-title').textContent = title;
             document.getElementById('categories-filter').style.display = 'none';
             document.getElementById('favorites-grid').style.display = 'none';
             document.getElementById('channel-settings').style.display = 'none';
