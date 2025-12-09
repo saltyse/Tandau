@@ -321,18 +321,30 @@ def create_app():
             ''', (username, username, username))
             return [row[0] for row in c.fetchall()]
 
+    # ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ КАНАЛА
     def create_channel(name, display_name, description, created_by, is_private=False):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             try:
+                # Проверяем, существует ли канал
+                c.execute('SELECT id FROM channels WHERE name = ?', (name,))
+                if c.fetchone():
+                    return None
+                
+                # Создаем канал
                 c.execute('INSERT INTO channels (name, display_name, description, created_by, is_private) VALUES (?, ?, ?, ?, ?)',
-                          (name, display_name, description, created_by, is_private))
+                          (name, display_name or name, description or '', created_by, is_private))
                 channel_id = c.lastrowid
+                
+                # Добавляем создателя в канал как администратора
                 c.execute('INSERT INTO channel_members (channel_id, username, is_admin) VALUES (?, ?, ?)',
                           (channel_id, created_by, True))
                 conn.commit()
                 return channel_id
-            except:
+            except sqlite3.IntegrityError:
+                return None
+            except Exception as e:
+                print(f"Error creating channel: {e}")
                 return None
 
     def rename_channel(channel_name, new_display_name, username):
@@ -748,26 +760,49 @@ def create_app():
             conn.commit()
         return jsonify({'success': True})
 
+    # ИСПРАВЛЕННЫЙ МАРШРУТ СОЗДАНИЯ КАНАЛА
     @app.route('/create_channel', methods=['POST'])
     def create_channel_handler():
         if 'username' not in session: 
             return jsonify({'success': False, 'error': 'Не авторизован'})
         
-        name = request.json.get('name', '').strip()
-        display_name = request.json.get('display_name', '').strip()
-        description = request.json.get('description', '').strip()
-        is_private = request.json.get('is_private', False)
-        
-        if not name or len(name) < 2:
-            return jsonify({'success': False, 'error': 'Название канала должно быть не менее 2 символов'})
-        
-        if not display_name:
-            display_name = name.capitalize()
-        
-        channel_id = create_channel(name, display_name, description, session['username'], is_private)
-        if channel_id:
-            return jsonify({'success': True, 'channel_name': name, 'display_name': display_name})
-        return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'success': False, 'error': 'Неверный формат данных'})
+            
+            name = data.get('name', '').strip()
+            display_name = data.get('display_name', '').strip()
+            description = data.get('description', '').strip()
+            is_private = data.get('is_private', False)
+            
+            if not name:
+                return jsonify({'success': False, 'error': 'Название канала не может быть пустым'})
+            
+            if len(name) < 2:
+                return jsonify({'success': False, 'error': 'Название канала должно быть не менее 2 символов'})
+            
+            if len(name) > 50:
+                return jsonify({'success': False, 'error': 'Название канала должно быть не более 50 символов'})
+            
+            if not re.match(r'^[a-zA-Z0-9_]+$', name):
+                return jsonify({'success': False, 'error': 'Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания'})
+            
+            if not display_name:
+                display_name = name.capitalize()
+            
+            channel_id = create_channel(name, display_name, description, session['username'], is_private)
+            if channel_id:
+                return jsonify({
+                    'success': True, 
+                    'channel_name': name, 
+                    'display_name': display_name,
+                    'message': 'Канал успешно создан!'
+                })
+            return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
+        except Exception as e:
+            print(f"Error creating channel: {e}")
+            return jsonify({'success': False, 'error': f'Ошибка сервера: {str(e)}'})
 
     @app.route('/rename_channel', methods=['POST'])
     def rename_channel_handler():
@@ -2233,7 +2268,7 @@ def create_app():
                                     </div>
                                 </div>
                                 
-                                <div class="glass-section {
+                                <div class="glass-section">
                                     <h3 class="section-title"><i class="fas fa-lock"></i> 3. Защита данных</h3>
                                     <div class="section-content">
                                         <p>Мы применяем многоуровневую защиту ваших данных:</p>
@@ -2289,7 +2324,7 @@ def create_app():
                                     <div class="section-content">
                                         <p>Мы используем минимальные технологии для улучшения опыта:</p>
                                         <div class="glass-list">
-                                            <div class="list-item {
+                                            <div class="list-item">
                                                 <div class="list-icon"><i class="fas fa-cookie"></i></div>
                                                 <div class="list-text"><span class="highlight">Сессионные куки</span>: только для поддержания входа в систему</div>
                                             </div>
@@ -3938,6 +3973,391 @@ def create_app():
             flex-shrink: 0;
             margin-right: 10px;
         }}
+        
+        /* СТИЛИ ДЛЯ БЛОКА СОЗДАНИЯ КАНАЛА С ЖИДКИМ СТЕКЛОМ */
+        .glass-modal-overlay {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 2000;
+            animation: fadeIn 0.3s ease-out;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }}
+        
+        .glass-modal-container {{
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            box-shadow: 
+                0 25px 60px rgba(0, 0, 0, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            position: relative;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        
+        [data-theme="dark"] .glass-modal-container {{
+            background: rgba(30, 30, 40, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }}
+        
+        .glass-modal-header {{
+            text-align: center;
+            margin-bottom: 35px;
+            position: relative;
+            padding-bottom: 25px;
+        }}
+        
+        .glass-modal-header::after {{
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #667eea, #764ba2, transparent);
+            border-radius: 2px;
+        }}
+        
+        .glass-modal-icon {{
+            width: 70px;
+            height: 70px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }}
+        
+        .glass-modal-icon i {{
+            font-size: 32px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+        
+        .glass-modal-title {{
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }}
+        
+        .glass-modal-subtitle {{
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 1rem;
+            font-weight: 400;
+        }}
+        
+        [data-theme="dark"] .glass-modal-subtitle {{
+            color: rgba(255, 255, 255, 0.75);
+        }}
+        
+        .glass-form-group {{
+            margin-bottom: 25px;
+        }}
+        
+        .glass-form-label {{
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: white;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        [data-theme="dark"] .glass-form-label {{
+            color: rgba(255, 255, 255, 0.9);
+        }}
+        
+        .glass-form-label i {{
+            font-size: 1.1rem;
+            color: #667eea;
+        }}
+        
+        .glass-form-input {{
+            width: 100%;
+            padding: 16px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }}
+        
+        .glass-form-input:focus {{
+            outline: none;
+            border-color: rgba(102, 126, 234, 0.6);
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 
+                inset 0 2px 4px rgba(0, 0, 0, 0.1),
+                0 0 0 3px rgba(102, 126, 234, 0.2);
+        }}
+        
+        .glass-form-input::placeholder {{
+            color: rgba(255, 255, 255, 0.6);
+        }}
+        
+        [data-theme="dark"] .glass-form-input {{
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+        }}
+        
+        [data-theme="dark"] .glass-form-input:focus {{
+            border-color: rgba(102, 126, 234, 0.5);
+            background: rgba(255, 255, 255, 0.12);
+        }}
+        
+        .glass-form-textarea {{
+            min-height: 100px;
+            resize: vertical;
+        }}
+        
+        .glass-form-checkbox {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            user-select: none;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }}
+        
+        .glass-form-checkbox:hover {{
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(102, 126, 234, 0.3);
+        }}
+        
+        .glass-form-checkbox input {{
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            position: relative;
+            appearance: none;
+            -webkit-appearance: none;
+        }}
+        
+        .glass-form-checkbox input:checked {{
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-color: transparent;
+        }}
+        
+        .glass-form-checkbox input:checked::after {{
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }}
+        
+        .glass-form-checkbox-text {{
+            flex: 1;
+            color: white;
+            font-weight: 500;
+        }}
+        
+        [data-theme="dark"] .glass-form-checkbox-text {{
+            color: rgba(255, 255, 255, 0.9);
+        }}
+        
+        .glass-modal-buttons {{
+            display: flex;
+            gap: 15px;
+            margin-top: 35px;
+        }}
+        
+        .glass-btn {{
+            flex: 1;
+            padding: 18px;
+            border: none;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }}
+        
+        .glass-btn-primary {{
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }}
+        
+        .glass-btn-primary:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+        }}
+        
+        .glass-btn-primary:active {{
+            transform: translateY(-1px);
+        }}
+        
+        .glass-btn-secondary {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }}
+        
+        .glass-btn-secondary:hover {{
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }}
+        
+        .glass-close-btn {{
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }}
+        
+        .glass-close-btn:hover {{
+            background: rgba(255, 255, 255, 0.25);
+            transform: rotate(90deg);
+        }}
+        
+        .glass-form-hint {{
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 6px;
+            margin-left: 34px;
+            font-style: italic;
+        }}
+        
+        .glass-channel-preview {{
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 10px;
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            text-align: center;
+        }}
+        
+        .glass-channel-preview h4 {{
+            color: white;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }}
+        
+        .preview-channel-avatar {{
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }}
+        
+        .preview-channel-name {{
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }}
+        
+        .preview-channel-desc {{
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            margin-bottom: 15px;
+        }}
+        
+        .preview-channel-badge {{
+            display: inline-block;
+            padding: 6px 12px;
+            background: rgba(102, 126, 234, 0.3);
+            color: white;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }}
+        
+        /* Анимации */
+        @keyframes fadeIn {{
+            from {{ opacity: 0; }}
+            to {{ opacity: 1; }}
+        }}
+        
+        @keyframes slideUp {{
+            from {{
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }}
+            to {{
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }}
+        }}
+        
+        @keyframes pulse {{
+            0% {{ transform: scale(1); }}
+            50% {{ transform: scale(1.05); }}
+            100% {{ transform: scale(1); }}
+        }}
+        
+        .pulse-animation {{
+            animation: pulse 2s infinite;
+        }}
     </style>
 </head>
 <body>
@@ -3982,7 +4402,7 @@ def create_app():
                 
                 <div class="nav-title">
                     <span>Каналы</span>
-                    <button class="add-btn" onclick="openCreateChannelModal()">
+                    <button class="add-btn" onclick="openCreateChannelGlassModal()">
                         <i class="fas fa-plus"></i>
                     </button>
                 </div>
@@ -4083,6 +4503,7 @@ def create_app():
         </div>
     </div>
 
+    <!-- СТАРОЕ МОДАЛЬНОЕ ОКНО СОЗДАНИЯ КАНАЛА (оставлено для обратной совместимости) -->
     <div class="modal" id="create-channel-modal">
         <div class="modal-content">
             <h3>Создать канал</h3>
@@ -4095,6 +4516,83 @@ def create_app():
             <div style="display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="createChannel()">Создать</button>
                 <button class="btn btn-secondary" onclick="closeCreateChannelModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- НОВОЕ МОДАЛЬНОЕ ОКНО СОЗДАНИЯ КАНАЛА В СТИЛЕ ЖИДКОЕ СТЕКЛО -->
+    <div class="glass-modal-overlay" id="create-channel-glass-modal">
+        <div class="glass-modal-container">
+            <button class="glass-close-btn" onclick="closeCreateChannelGlassModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            
+            <div class="glass-modal-header">
+                <div class="glass-modal-icon">
+                    <i class="fas fa-hashtag"></i>
+                </div>
+                <h2 class="glass-modal-title">Создать новый канал</h2>
+                <p class="glass-modal-subtitle">Создайте пространство для общения и совместной работы</p>
+            </div>
+            
+            <div class="glass-form-group">
+                <label class="glass-form-label">
+                    <i class="fas fa-hashtag"></i>
+                    Идентификатор канала
+                </label>
+                <input type="text" class="glass-form-input" id="glass-channel-name" 
+                       placeholder="Например: team_chat, projects, news" 
+                       oninput="updateChannelPreview()">
+                <div class="glass-form-hint">Только латинские буквы, цифры и символ подчеркивания</div>
+            </div>
+            
+            <div class="glass-form-group">
+                <label class="glass-form-label">
+                    <i class="fas fa-font"></i>
+                    Отображаемое название
+                </label>
+                <input type="text" class="glass-form-input" id="glass-channel-display-name" 
+                       placeholder="Например: Командный чат, Проекты, Новости"
+                       oninput="updateChannelPreview()">
+                <div class="glass-form-hint">Пользователи будут видеть это название</div>
+            </div>
+            
+            <div class="glass-form-group">
+                <label class="glass-form-label">
+                    <i class="fas fa-align-left"></i>
+                    Описание (необязательно)
+                </label>
+                <textarea class="glass-form-input glass-form-textarea" id="glass-channel-description" 
+                          placeholder="Расскажите о назначении канала..."
+                          oninput="updateChannelPreview()"></textarea>
+            </div>
+            
+            <div class="glass-form-group">
+                <label class="glass-form-checkbox">
+                    <input type="checkbox" id="glass-channel-private" onchange="updateChannelPreview()">
+                    <span class="glass-form-checkbox-text">Приватный канал (только по приглашению)</span>
+                </label>
+            </div>
+            
+            <div id="channel-preview" class="glass-channel-preview" style="display: none;">
+                <h4>Предпросмотр канала</h4>
+                <div class="preview-channel-avatar" id="preview-channel-avatar">
+                    <i class="fas fa-hashtag"></i>
+                </div>
+                <div class="preview-channel-name" id="preview-channel-name">Название канала</div>
+                <div class="preview-channel-desc" id="preview-channel-desc">Описание канала</div>
+                <div class="preview-channel-badge" id="preview-channel-badge">Публичный канал</div>
+            </div>
+            
+            <div class="glass-modal-buttons">
+                <button class="glass-btn glass-btn-secondary" onclick="closeCreateChannelGlassModal()">
+                    <i class="fas fa-times"></i>
+                    Отмена
+                </button>
+                <button class="glass-btn glass-btn-primary" onclick="createChannelGlass()" id="create-channel-glass-btn">
+                    <i class="fas fa-plus"></i>
+                    Создать канал
+                </button>
             </div>
         </div>
     </div>
@@ -4585,6 +5083,232 @@ def create_app():
             document.getElementById('create-channel-modal').style.display = 'none';
         }}
 
+        // НОВАЯ ФУНКЦИЯ: Открытие модального окна создания канала в стиле жидкое стекло
+        function openCreateChannelGlassModal() {{
+            document.getElementById('create-channel-glass-modal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            // Очищаем поля и обновляем превью
+            document.getElementById('glass-channel-name').value = '';
+            document.getElementById('glass-channel-display-name').value = '';
+            document.getElementById('glass-channel-description').value = '';
+            document.getElementById('glass-channel-private').checked = false;
+            updateChannelPreview();
+        }}
+
+        function closeCreateChannelGlassModal() {{
+            document.getElementById('create-channel-glass-modal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }}
+
+        // Функция обновления предпросмотра канала
+        function updateChannelPreview() {{
+            const name = document.getElementById('glass-channel-name').value.trim();
+            const displayName = document.getElementById('glass-channel-display-name').value.trim();
+            const description = document.getElementById('glass-channel-description').value.trim();
+            const isPrivate = document.getElementById('glass-channel-private').checked;
+            
+            const preview = document.getElementById('channel-preview');
+            const previewAvatar = document.getElementById('preview-channel-avatar');
+            const previewName = document.getElementById('preview-channel-name');
+            const previewDesc = document.getElementById('preview-channel-desc');
+            const previewBadge = document.getElementById('preview-channel-badge');
+            
+            if (name || displayName) {{
+                preview.style.display = 'block';
+                
+                // Устанавливаем аватарку
+                if (displayName) {{
+                    previewAvatar.textContent = displayName.slice(0, 2).toUpperCase();
+                }} else if (name) {{
+                    previewAvatar.textContent = name.slice(0, 2).toUpperCase();
+                }} else {{
+                    previewAvatar.innerHTML = '<i class="fas fa-hashtag"></i>';
+                }}
+                
+                // Устанавливаем название
+                previewName.textContent = displayName || name || 'Название канала';
+                
+                // Устанавливаем описание
+                previewDesc.textContent = description || 'Описание канала';
+                
+                // Устанавливаем бейдж
+                previewBadge.textContent = isPrivate ? 'Приватный канал' : 'Публичный канал';
+                previewBadge.style.background = isPrivate ? 
+                    'rgba(220, 53, 69, 0.3)' : 
+                    'rgba(102, 126, 234, 0.3)';
+            }} else {{
+                preview.style.display = 'none';
+            }}
+        }}
+
+        // НОВАЯ ФУНКЦИЯ: Создание канала через красивое модальное окно
+        async function createChannelGlass() {{
+            const name = document.getElementById('glass-channel-name').value.trim();
+            const displayName = document.getElementById('glass-channel-display-name').value.trim();
+            const description = document.getElementById('glass-channel-description').value.trim();
+            const isPrivate = document.getElementById('glass-channel-private').checked;
+            
+            if (!name) {{
+                alert('Введите идентификатор канала');
+                document.getElementById('glass-channel-name').focus();
+                return;
+            }}
+            
+            // Проверка имени канала
+            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
+                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
+                document.getElementById('glass-channel-name').focus();
+                return;
+            }}
+            
+            if (name.length < 2) {{
+                alert('Идентификатор канала должен быть не менее 2 символов');
+                document.getElementById('glass-channel-name').focus();
+                return;
+            }}
+            
+            if (name.length > 50) {{
+                alert('Идентификатор канала должен быть не более 50 символов');
+                document.getElementById('glass-channel-name').focus();
+                return;
+            }}
+            
+            const btn = document.getElementById('create-channel-glass-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Создание...';
+            btn.disabled = true;
+            
+            try {{
+                const response = await fetch('/create_channel', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        name: name,
+                        display_name: displayName || name,
+                        description: description,
+                        is_private: isPrivate
+                    }})
+                }});
+                
+                const data = await response.json();
+                
+                if (data.success) {{
+                    closeCreateChannelGlassModal();
+                    loadUserChannels();
+                    
+                    // Показываем анимацию успеха
+                    showNotification('Канал создан успешно!', 'success');
+                    
+                    // Автоматически открываем созданный канал
+                    setTimeout(() => {{
+                        // Находим элемент созданного канала в списке и открываем его
+                        const channelName = data.channel_name;
+                        openRoom('channel_' + channelName, 'channel', data.display_name);
+                    }}, 1000);
+                }} else {{
+                    alert(data.error || 'Ошибка при создании канала');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }}
+            }} catch (error) {{
+                console.error('Error creating channel:', error);
+                alert('Ошибка соединения с сервером');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }}
+        }}
+
+        // Функция для показа уведомлений
+        function showNotification(message, type = 'success') {{
+            // Создаем элемент уведомления
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 25px;
+                background: ${{type === 'success' ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #ef4444, #dc2626)'}};
+                color: white;
+                border-radius: 12px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                z-index: 9999;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s;
+                animation-fill-mode: forwards;
+            `;
+            
+            notification.innerHTML = `
+                <i class="fas fa-${{type === 'success' ? 'check-circle' : 'exclamation-circle'}}"></i>
+                ${{message}}
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Удаляем уведомление через 3 секунды
+            setTimeout(() => {{
+                if (notification.parentNode) {{
+                    notification.parentNode.removeChild(notification);
+                }}
+            }}, 3000);
+        }}
+
+        // Добавляем стили для анимаций уведомлений
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {{
+                from {{ transform: translateX(100%); opacity: 0; }}
+                to {{ transform: translateX(0); opacity: 1; }}
+            }}
+            @keyframes fadeOut {{
+                from {{ opacity: 1; }}
+                to {{ opacity: 0; }}
+            }}
+        `;
+        document.head.appendChild(style);
+
+        // СТАРАЯ ФУНКЦИЯ создания канала (оставлена для обратной совместимости)
+        function createChannel() {{
+            const name = document.getElementById('channel-name').value.trim();
+            const displayName = document.getElementById('channel-display-name').value.trim();
+            const description = document.getElementById('channel-description').value.trim();
+            const isPrivate = document.getElementById('channel-private').checked;
+            
+            if (!name) {{
+                alert('Введите идентификатор канала');
+                return;
+            }}
+            
+            // Проверка имени канала
+            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
+                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
+                return;
+            }}
+            
+            fetch('/create_channel', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    name: name,
+                    display_name: displayName || name,
+                    description: description,
+                    is_private: isPrivate
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeCreateChannelModal();
+                    loadUserChannels();
+                    alert('Канал создан!');
+                }} else {{
+                    alert(data.error || 'Ошибка при создании канала');
+                }}
+            }});
+        }}
+
         function openRenameModal() {{
             document.getElementById('rename-modal').style.display = 'flex';
             document.getElementById('channel-rename-input').value = document.getElementById('chat-title').textContent.replace('# ', '');
@@ -4623,45 +5347,6 @@ def create_app():
         function closeAddUserModal() {{
             document.getElementById('add-user-modal').style.display = 'none';
             document.getElementById('user-select').value = '';
-        }}
-
-        function createChannel() {{
-            const name = document.getElementById('channel-name').value.trim();
-            const displayName = document.getElementById('channel-display-name').value.trim();
-            const description = document.getElementById('channel-description').value.trim();
-            const isPrivate = document.getElementById('channel-private').checked;
-            
-            if (!name) {{
-                alert('Введите идентификатор канала');
-                return;
-            }}
-            
-            // Проверка имени канала
-            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
-                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
-                return;
-            }}
-            
-            fetch('/create_channel', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
-                    name: name,
-                    display_name: displayName || name,
-                    description: description,
-                    is_private: isPrivate
-                }})
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    closeCreateChannelModal();
-                    loadUserChannels();
-                    alert('Канал создан!');
-                }} else {{
-                    alert(data.error || 'Ошибка при создании канала');
-                }}
-            }});
         }}
 
         function renameChannel() {{
@@ -5598,6 +6283,21 @@ def create_app():
 
         socket.on('disconnect', function() {{
             console.log('Disconnected from server');
+        }});
+        
+        // Закрытие модальных окон при клике вне их
+        document.addEventListener('click', function(event) {{
+            const glassModal = document.getElementById('create-channel-glass-modal');
+            if (event.target === glassModal) {{
+                closeCreateChannelGlassModal();
+            }}
+        }});
+        
+        // Закрытие по клавише ESC
+        document.addEventListener('keydown', function(event) {{
+            if (event.key === 'Escape') {{
+                closeCreateChannelGlassModal();
+            }}
         }});
     </script>
 </body>
