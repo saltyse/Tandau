@@ -634,477 +634,13 @@ def create_app():
             } for row in c.fetchall()]
 
     # === API Routes ===
-    @app.route('/upload_avatar', methods=['POST'])
-    def upload_avatar_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        if 'avatar' in request.files:
-            file = request.files['avatar']
-            path, filename = save_uploaded_file(file, app.config['AVATAR_FOLDER'])
-        else:
-            return jsonify({'success': False, 'error': 'Файл не найден'})
-        
-        if path:
-            with sqlite3.connect('messenger.db') as conn:
-                c = conn.cursor()
-                c.execute('UPDATE users SET avatar_path = ? WHERE username = ?', (path, session['username']))
-                conn.commit()
-            return jsonify({'success': True, 'path': path})
-        return jsonify({'success': False, 'error': 'Неверный формат файла'})
-
-    @app.route('/upload_channel_avatar', methods=['POST'])
-    def upload_channel_avatar_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.form.get('channel_name')
-        if not channel_name:
-            return jsonify({'success': False, 'error': 'Не указан канал'})
-        
-        if 'avatar' in request.files:
-            file = request.files['avatar']
-            path, filename = save_uploaded_file(file, app.config['CHANNEL_AVATAR_FOLDER'])
-        else:
-            return jsonify({'success': False, 'error': 'Файл не найден'})
-        
-        if path:
-            success = update_channel_avatar(channel_name, path, session['username'])
-            if success:
-                return jsonify({'success': True, 'path': path})
-            else:
-                return jsonify({'success': False, 'error': 'Нет прав для изменения аватарки канала'})
-        return jsonify({'success': False, 'error': 'Неверный формат файла'})
-
-    @app.route('/delete_channel_avatar', methods=['POST'])
-    def delete_channel_avatar_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        if not channel_name:
-            return jsonify({'success': False, 'error': 'Не указан канал'})
-        
-        success = delete_channel_avatar(channel_name, session['username'])
-        if success:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': 'Нет прав для удаления аватарки канала'})
-
-    @app.route('/update_channel_description', methods=['POST'])
-    def update_channel_description_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        description = request.json.get('description', '').strip()
-        
-        if not channel_name:
-            return jsonify({'success': False, 'error': 'Не указан канал'})
-        
-        success = update_channel_description(channel_name, description, session['username'])
-        if success:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': 'Нет прав для изменения описания канала'})
-
-    @app.route('/make_admin', methods=['POST'])
-    def make_admin_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = make_user_admin(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
-
-    @app.route('/remove_admin', methods=['POST'])
-    def remove_admin_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = remove_admin(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
-
-    @app.route('/delete_avatar', methods=['POST'])
-    def delete_avatar_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('UPDATE users SET avatar_path = NULL WHERE username = ?', (session['username'],))
-            conn.commit()
-        return jsonify({'success': True})
-
-    @app.route('/set_theme', methods=['POST'])
-    def set_theme_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        theme = request.json.get('theme', 'light')
-        if theme not in ['light', 'dark', 'auto']: 
-            return jsonify({'success': False, 'error': 'Неверная тема'})
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('UPDATE users SET theme = ? WHERE username = ?', (theme, session['username']))
-            conn.commit()
-        return jsonify({'success': True})
-
-    @app.route('/create_channel', methods=['POST'])
-    def create_channel_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        try:
-            data = request.get_json()
-            if not data:
-                return jsonify({'success': False, 'error': 'Неверный формат данных'})
-            
-            name = data.get('name', '').strip()
-            display_name = data.get('display_name', '').strip()
-            description = data.get('description', '').strip()
-            is_private = data.get('is_private', False)
-            
-            if not name:
-                return jsonify({'success': False, 'error': 'Название канала не может быть пустым'})
-            
-            if len(name) < 2:
-                return jsonify({'success': False, 'error': 'Название канала должно быть не менее 2 символов'})
-            
-            if len(name) > 50:
-                return jsonify({'success': False, 'error': 'Название канала должно быть не более 50 символов'})
-            
-            if not re.match(r'^[a-zA-Z0-9_]+$', name):
-                return jsonify({'success': False, 'error': 'Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания'})
-            
-            if not display_name:
-                display_name = name.capitalize()
-            
-            channel_id = create_channel(name, display_name, description, session['username'], is_private)
-            if channel_id:
-                return jsonify({
-                    'success': True, 
-                    'channel_name': name, 
-                    'display_name': display_name,
-                    'message': 'Канал успешно создан!'
-                })
-            return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
-        except Exception as e:
-            print(f"Error creating channel: {e}")
-            return jsonify({'success': False, 'error': f'Ошибка сервера: {str(e)}'})
-
-    @app.route('/rename_channel', methods=['POST'])
-    def rename_channel_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        new_display_name = request.json.get('new_display_name', '').strip()
-        
-        if not new_display_name:
-            return jsonify({'success': False, 'error': 'Новое название не может быть пустым'})
-        
-        if rename_channel(channel_name, new_display_name, session['username']):
-            return jsonify({'success': True})
-        return jsonify({'success': False, 'error': 'Не удалось переименовать канал или нет прав'})
-
-    @app.route('/add_user_to_channel', methods=['POST'])
-    def add_user_to_channel_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = add_user_to_channel(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
-
-    @app.route('/remove_user_from_channel', methods=['POST'])
-    def remove_user_from_channel_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = remove_user_from_channel(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
-
-    @app.route('/channel_info/<channel_name>')
-    def channel_info_handler(channel_name):
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        info = get_channel_info(channel_name)
-        if info:
-            info['is_member'] = is_channel_member(channel_name, session['username'])
-            info['members'] = get_channel_members(channel_name)
-            return jsonify({'success': True, 'data': info})
-        return jsonify({'success': False, 'error': 'Канал не найден'})
-
-    @app.route('/get_available_users')
-    def get_available_users_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.args.get('channel_name')
-        if not channel_name:
-            return jsonify({'success': False, 'error': 'Не указан канал'})
-        
-        # Получаем всех пользователей, кроме уже состоящих в канале
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('''
-                SELECT username 
-                FROM users 
-                WHERE username != ? 
-                AND username NOT IN (
-                    SELECT cm.username 
-                    FROM channel_members cm 
-                    JOIN channels c ON cm.channel_id = c.id 
-                    WHERE c.name = ?
-                )
-                ORDER BY username
-            ''', (session['username'], channel_name))
-            
-            users = [row[0] for row in c.fetchall()]
-            return jsonify({'success': True, 'users': users})
-
-    @app.route('/user_channels')
-    def user_channels_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        return jsonify({'success': True, 'channels': get_user_channels(session['username'])})
-
-    @app.route('/personal_chats')
-    def personal_chats_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        return jsonify({'success': True, 'chats': get_user_personal_chats(session['username'])})
-
-    @app.route('/user_info/<username>')
-    def user_info_handler(username):
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        user = get_user(username)
-        if user:
-            return jsonify({
-                'success': True,
-                'username': user['username'],
-                'online': user['is_online'],
-                'avatar_color': user['avatar_color'],
-                'avatar_path': user['avatar_path'],
-                'theme': user['theme']
-            })
-        return jsonify({'success': False, 'error': 'Пользователь не найден'})
-
-    # Новый маршрут для загрузки файлов через HTTP
-    @app.route('/upload_file', methods=['POST'])
-    def upload_file_handler():
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'Файл не найден'})
-        
-        file = request.files['file']
-        if not file or file.filename == '':
-            return jsonify({'success': False, 'error': 'Файл не выбран'})
-        
-        path, filename = save_uploaded_file(file, app.config['UPLOAD_FOLDER'])
-        if path:
-            return jsonify({
-                'success': True, 
-                'path': path,
-                'filename': filename,
-                'file_type': 'image' if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) else 'video'
-            })
-        return jsonify({'success': False, 'error': 'Неверный формат файла'})
-
-    # Избранное
-    @app.route('/add_to_favorites', methods=['POST'])
-    def add_to_favorites_handler():
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        content = request.form.get('content', '').strip()
-        category = request.form.get('category', 'general').strip()
-        
-        file_path = None
-        file_name = None
-        file_type = 'text'
-        
-        if 'file' in request.files:
-            file = request.files['file']
-            if file and file.filename:
-                path, filename = save_uploaded_file(file, app.config['FAVORITE_FOLDER'])
-                if path:
-                    file_path = path
-                    file_name = filename
-                    file_type = 'file'
-                    content = content or f"Файл: {filename}"
-        
-        elif request.is_json:
-            data = request.json
-            content = data.get('content', '').strip()
-            category = data.get('category', 'general').strip()
-            file_data = data.get('file')
-            
-            if file_data:
-                file_type = data.get('fileType', 'image')
-                file_extension = 'png' if file_type == 'image' else 'mp4'
-                path, filename = save_base64_file(file_data, app.config['FAVORITE_FOLDER'], file_extension)
-                if path:
-                    file_path = path
-                    file_name = filename
-                    content = content or f"Медиа файл"
-        
-        favorite_id = add_to_favorites(
-            session['username'],
-            content,
-            file_path,
-            file_name,
-            file_type,
-            category
-        )
-        
-        if favorite_id:
-            return jsonify({'success': True, 'id': favorite_id})
-        return jsonify({'success': False, 'error': 'Не удалось добавить в избранное'})
-
-    @app.route('/get_favorites')
-    def get_favorites_handler():
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        category = request.args.get('category', None)
-        favorites = get_favorites(session['username'], category)
-        return jsonify({'success': True, 'favorites': favorites})
-
-    @app.route('/get_favorite_categories')
-    def get_favorite_categories_handler():
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        categories = get_favorite_categories(session['username'])
-        return jsonify({'success': True, 'categories': categories})
-
-    @app.route('/delete_favorite/<int:favorite_id>', methods=['DELETE'])
-    def delete_favorite_handler(favorite_id):
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        if delete_favorite(favorite_id, session['username']):
-            return jsonify({'success': True})
-        return jsonify({'success': False, 'error': 'Не удалось удалить'})
-
-    @app.route('/toggle_pin_favorite/<int:favorite_id>', methods=['POST'])
-    def toggle_pin_favorite_handler(favorite_id):
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        new_state = toggle_pin_favorite(favorite_id, session['username'])
-        if new_state is not None:
-            return jsonify({'success': True, 'pinned': new_state})
-        return jsonify({'success': False, 'error': 'Не удалось закрепить/открепить'})
-
-    # Статические файлы
-    @app.route('/static/<path:filename>')
-    def static_files(filename):
-        return send_from_directory('static', filename)
-
-    @app.route('/create_docs_folder', methods=['POST'])
-    def create_docs_folder():
-        try:
-            # Создаем папку для документов
-            docs_folder = 'static/docs'
-            os.makedirs(docs_folder, exist_ok=True)
-            
-            # Создаем пример PDF файла Условий использования
-            terms_file = os.path.join(docs_folder, 'terms_of_use.pdf')
-            if not os.path.exists(terms_file):
-                with open(terms_file, 'w', encoding='utf-8') as f:
-                    f.write('Tandau Messenger - Условия использования\n\n')
-                    f.write('Это демонстрационный файл. В реальном приложении здесь был бы PDF документ.\n')
-                
-            # Создаем пример PDF файла Политики конфиденциальности
-            privacy_file = os.path.join(docs_folder, 'privacy_policy.pdf')
-            if not os.path.exists(privacy_file):
-                with open(privacy_file, 'w', encoding='utf-8') as f:
-                    f.write('Tandau Messenger - Политика конфиденциальности\n\n')
-                    f.write('Это демонстрационный файл. В реальном приложении здесь был бы PDF документ.\n')
-            
-            return jsonify({'success': True, 'message': 'Documents folder created'})
-        except Exception as e:
-            return jsonify({'success': False, 'error': str(e)})
-
-    # === Маршруты для аутентификации ===
-    @app.route('/register', methods=['POST'])
-    def register_handler():
-        username = request.json.get('username', '').strip()
-        password = request.json.get('password', '').strip()
-        
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Заполните все поля'})
-        
-        if len(username) < 3 or len(username) > 20:
-            return jsonify({'success': False, 'error': 'Логин должен быть от 3 до 20 символов'})
-        
-        if len(password) < 4:
-            return jsonify({'success': False, 'error': 'Пароль должен быть не менее 4 символов'})
-        
-        success, message = create_user(username, password)
-        if success:
-            return jsonify({'success': True, 'message': message})
-        else:
-            return jsonify({'success': False, 'error': message})
-
-    @app.route('/login', methods=['POST'])
-    def login_handler():
-        username = request.json.get('username', '').strip()
-        password = request.json.get('password', '').strip()
-        
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Заполните все поля'})
-        
-        user = verify_user(username, password)
-        if user:
-            session['username'] = username
-            update_online(username, True)
-            return jsonify({'success': True, 'message': 'Успешный вход'})
-        else:
-            return jsonify({'success': False, 'error': 'Неверный логин или пароль'})
-
-    @app.route('/logout')
-    def logout_handler():
-        if 'username' in session:
-            update_online(session['username'], False)
-            session.pop('username', None)
-        return redirect('/')
-
-    # === Основные маршруты ===
     @app.route('/')
     def index():
         if 'username' in session: 
             return redirect('/chat')
         
-        # Исправленная страница входа/регистрации с логотипом
-        return r'''
+        # Современная страница входа/регистрации с логотипом
+        return '''
         <!DOCTYPE html>
         <html lang="ru">
         <head>
@@ -1346,6 +882,18 @@ def create_app():
                     transform: translateY(0);
                 }
                 
+                .btn-google {
+                    background: white;
+                    color: var(--text);
+                    border: 2px solid var(--border);
+                    margin-top: 16px;
+                }
+                
+                .btn-google:hover {
+                    background: var(--bg);
+                    border-color: var(--text-light);
+                }
+                
                 .alert {
                     padding: 14px 18px;
                     border-radius: var(--radius-sm);
@@ -1383,7 +931,88 @@ def create_app():
                     text-decoration: underline;
                 }
                 
-                /* Анимации */
+                .modal-overlay {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.7);
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    z-index: 1000;
+                    animation: fadeIn 0.3s ease-out;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }
+                
+                .terms-modal {
+                    background: white;
+                    border-radius: var(--radius);
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    max-width: 800px;
+                    width: 100%;
+                    max-height: 85vh;
+                    overflow: hidden;
+                    animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                
+                .modal-header {
+                    padding: 24px 30px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                .modal-header h2 {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    margin: 0;
+                }
+                
+                .close-modal {
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    color: white;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                
+                .close-modal:hover {
+                    background: rgba(255, 255, 255, 0.3);
+                    transform: rotate(90deg);
+                }
+                
+                .modal-content {
+                    padding: 30px;
+                    overflow-y: auto;
+                    max-height: calc(85vh - 100px);
+                }
+                
+                .loader {
+                    display: inline-block;
+                    width: 20px;
+                    height: 20px;
+                    border: 3px solid rgba(255, 255, 255, 0.3);
+                    border-radius: 50%;
+                    border-top-color: white;
+                    animation: spin 1s ease-in-out infinite;
+                }
+                
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+                
                 @keyframes fadeInUp {
                     from {
                         opacity: 0;
@@ -1422,18 +1051,45 @@ def create_app():
                     }
                 }
                 
-                .loader {
-                    display: inline-block;
-                    width: 20px;
-                    height: 20px;
-                    border: 3px solid rgba(255, 255, 255, 0.3);
-                    border-radius: 50%;
-                    border-top-color: white;
-                    animation: spin 1s ease-in-out infinite;
+                @keyframes slideUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(30px) scale(0.95);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0) scale(1);
+                    }
                 }
                 
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
+                @media (max-width: 768px) {
+                    .container {
+                        max-width: 100%;
+                    }
+                    
+                    .auth-content {
+                        padding: 30px 20px;
+                    }
+                    
+                    .app-title {
+                        font-size: 2.2rem;
+                    }
+                    
+                    .logo-container {
+                        padding: 15px 30px;
+                    }
+                    
+                    .modal-content {
+                        padding: 20px;
+                    }
+                    
+                    .modal-header {
+                        padding: 20px;
+                    }
+                    
+                    .terms-modal {
+                        max-height: 90vh;
+                    }
                 }
             </style>
         </head>
@@ -1536,9 +1192,57 @@ def create_app():
                 </div>
             </div>
 
+            <!-- Модальное окно Условий использования -->
+            <div class="modal-overlay" id="terms-modal">
+                <div class="terms-modal">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-file-contract"></i> Условия использования</h2>
+                        <button class="close-modal" onclick="closeTermsModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-content">
+                        <div style="max-width: 800px; margin: 0 auto; line-height: 1.6;">
+                            <h3 style="margin-bottom: 20px; color: #333;">Условия использования Tandau Messenger</h3>
+                            <p style="margin-bottom: 15px;">Дата вступления в силу: 6 декабря 2025 г.</p>
+                            
+                            <h4 style="margin: 25px 0 15px 0; color: #444;">Регистрация и учетная запись</h4>
+                            <p style="margin-bottom: 15px;">Регистрируясь в Tandau Messenger, вы подтверждаете что:</p>
+                            <ul style="margin-bottom: 25px; padding-left: 20px;">
+                                <li style="margin-bottom: 8px;">Вы достигли возраста 14 лет на момент регистрации</li>
+                                <li style="margin-bottom: 8px;">Предоставленная информация является точной и достоверной</li>
+                                <li style="margin-bottom: 8px;">Вы несете ответственность за сохранность учетных данных</li>
+                            </ul>
+                            
+                            <h4 style="margin: 25px 0 15px 0; color: #444;">Правила общения</h4>
+                            <p style="margin-bottom: 15px;">В Tandau Messenger запрещается:</p>
+                            <ul style="margin-bottom: 25px; padding-left: 20px;">
+                                <li style="margin-bottom: 8px;">Распространение спама и вредоносного контента</li>
+                                <li style="margin-bottom: 8px;">Нарушение прав других пользователей</li>
+                                <li style="margin-bottom: 8px;">Использование для противоправной деятельности</li>
+                                <li style="margin-bottom: 8px;">Создание фишинговых или мошеннических аккаунтов</li>
+                            </ul>
+                            
+                            <h4 style="margin: 25px 0 15px 0; color: #444;">Контактная информация</h4>
+                            <p style="margin-bottom: 15px;">По всем вопросам, связанным с условиями использования:</p>
+                            <p style="margin-bottom: 25px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                                <i class="fab fa-vk"></i> https://vk.com/rsaltyyt
+                            </p>
+                            
+                            <h4 style="margin: 25px 0 15px 0; color: #444;">Изменения условий</h4>
+                            <p style="margin-bottom: 25px;">Мы оставляем за собой право вносить изменения в Условия использования. Актуальная версия всегда доступна на этой странице.</p>
+                            
+                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                                <p style="margin-bottom: 15px;">Последнее обновление: 6 декабря 2025 года</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <script>
                 function showTab(tabName) {
-                    // Переключаем табы
+                    // Переключение вкладок
                     document.querySelectorAll('.auth-tab').forEach(tab => {
                         tab.classList.remove('active');
                     });
@@ -1547,51 +1251,50 @@ def create_app():
                     });
                     
                     if (tabName === 'login') {
-                        document.querySelector('.auth-tab:nth-child(1)').classList.add('active');
+                        document.querySelectorAll('.auth-tab')[0].classList.add('active');
                         document.getElementById('login-form').classList.add('active');
                     } else {
-                        document.querySelector('.auth-tab:nth-child(2)').classList.add('active');
+                        document.querySelectorAll('.auth-tab')[1].classList.add('active');
                         document.getElementById('register-form').classList.add('active');
                     }
-                    
-                    // Очищаем сообщения
-                    const alert = document.getElementById('alert');
-                    alert.style.display = 'none';
-                    alert.className = 'alert';
                 }
                 
                 function togglePassword(inputId) {
                     const input = document.getElementById(inputId);
-                    const toggle = input.nextElementSibling;
+                    const toggleBtn = input.nextElementSibling;
                     
                     if (input.type === 'password') {
                         input.type = 'text';
-                        toggle.innerHTML = '<i class="fas fa-eye-slash"></i>';
+                        toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i>';
                     } else {
                         input.type = 'password';
-                        toggle.innerHTML = '<i class="fas fa-eye"></i>';
+                        toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
                     }
                 }
                 
-                function showAlert(message, type) {
-                    const alert = document.getElementById('alert');
-                    alert.textContent = message;
-                    alert.className = `alert alert-${type}`;
-                    alert.style.display = 'block';
+                function showAlert(message, type = 'error') {
+                    const alertDiv = document.getElementById('alert');
+                    alertDiv.textContent = message;
+                    alertDiv.className = 'alert alert-' + type;
+                    alertDiv.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        alertDiv.style.display = 'none';
+                    }, 5000);
                 }
                 
                 async function login() {
                     const username = document.getElementById('login-username').value.trim();
                     const password = document.getElementById('login-password').value.trim();
                     const btn = document.getElementById('login-btn');
+                    const originalText = btn.innerHTML;
                     
                     if (!username || !password) {
-                        showAlert('Заполните все поля', 'error');
+                        showAlert('Введите логин и пароль');
                         return;
                     }
                     
-                    const originalText = btn.innerHTML;
-                    btn.innerHTML = '<span class="loader"></span> Вход...';
+                    btn.innerHTML = '<span class="loader"></span>';
                     btn.disabled = true;
                     
                     try {
@@ -1604,17 +1307,14 @@ def create_app():
                         const data = await response.json();
                         
                         if (data.success) {
-                            showAlert('Успешный вход! Перенаправление...', 'success');
-                            setTimeout(() => {
-                                window.location.href = '/chat';
-                            }, 1000);
+                            window.location.href = '/chat';
                         } else {
-                            showAlert(data.error || 'Ошибка входа', 'error');
+                            showAlert(data.error || 'Ошибка входа');
                             btn.innerHTML = originalText;
                             btn.disabled = false;
                         }
                     } catch (error) {
-                        showAlert('Ошибка соединения с сервером', 'error');
+                        showAlert('Ошибка соединения с сервером');
                         btn.innerHTML = originalText;
                         btn.disabled = false;
                     }
@@ -1623,31 +1323,31 @@ def create_app():
                 async function register() {
                     const username = document.getElementById('register-username').value.trim();
                     const password = document.getElementById('register-password').value.trim();
-                    const confirm = document.getElementById('register-confirm').value.trim();
+                    const confirmPassword = document.getElementById('register-confirm').value.trim();
                     const btn = document.getElementById('register-btn');
+                    const originalText = btn.innerHTML;
                     
-                    if (!username || !password || !confirm) {
-                        showAlert('Заполните все поля', 'error');
-                        return;
-                    }
-                    
-                    if (password !== confirm) {
-                        showAlert('Пароли не совпадают', 'error');
+                    if (!username || !password || !confirmPassword) {
+                        showAlert('Заполните все поля');
                         return;
                     }
                     
                     if (username.length < 3 || username.length > 20) {
-                        showAlert('Логин должен быть от 3 до 20 символов', 'error');
+                        showAlert('Логин должен быть от 3 до 20 символов');
                         return;
                     }
                     
                     if (password.length < 4) {
-                        showAlert('Пароль должен быть не менее 4 символов', 'error');
+                        showAlert('Пароль должен быть не менее 4 символов');
                         return;
                     }
                     
-                    const originalText = btn.innerHTML;
-                    btn.innerHTML = '<span class="loader"></span> Регистрация...';
+                    if (password !== confirmPassword) {
+                        showAlert('Пароли не совпадают');
+                        return;
+                    }
+                    
+                    btn.innerHTML = '<span class="loader"></span>';
                     btn.disabled = true;
                     
                     try {
@@ -1660,1880 +1360,989 @@ def create_app():
                         const data = await response.json();
                         
                         if (data.success) {
-                            showAlert(data.message + ' Теперь выполните вход.', 'success');
-                            setTimeout(() => {
-                                showTab('login');
-                                document.getElementById('login-username').value = username;
-                                document.getElementById('login-password').value = password;
-                                btn.innerHTML = originalText;
-                                btn.disabled = false;
-                            }, 1500);
+                            window.location.href = '/chat';
                         } else {
-                            showAlert(data.error || 'Ошибка регистрации', 'error');
+                            showAlert(data.error || 'Ошибка регистрации');
                             btn.innerHTML = originalText;
                             btn.disabled = false;
                         }
                     } catch (error) {
-                        showAlert('Ошибка соединения с сервером', 'error');
+                        showAlert('Ошибка соединения с сервером');
                         btn.innerHTML = originalText;
                         btn.disabled = false;
                     }
                 }
                 
                 function openTermsModal() {
-                    alert('Условия использования Tandau Messenger\n\n1. Вы обязуетесь использовать сервис в законных целях.\n2. Вы несете ответственность за содержание своих сообщений.\n3. Мы оставляем за собой право блокировать аккаунты за нарушение правил.\n\nПолная версия доступна по ссылке: https://vk.com/rsaltyyt');
+                    document.getElementById('terms-modal').style.display = 'flex';
                 }
+                
+                function closeTermsModal() {
+                    document.getElementById('terms-modal').style.display = 'none';
+                }
+                
+                // Закрытие модального окна при клике вне его
+                document.addEventListener('click', function(event) {
+                    const modal = document.getElementById('terms-modal');
+                    if (event.target === modal) {
+                        closeTermsModal();
+                    }
+                });
+                
+                // Закрытие по клавише ESC
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'Escape') {
+                        closeTermsModal();
+                    }
+                });
             </script>
         </body>
         </html>'''
 
+    @app.route('/login', methods=['POST'])
+    def login_handler():
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Неверный формат данных'})
+        
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Заполните все поля'})
+        
+        user = verify_user(username, password)
+        if user:
+            session['username'] = username
+            update_online(username, True)
+            return jsonify({'success': True})
+        
+        return jsonify({'success': False, 'error': 'Неверный логин или пароль'})
+
+    @app.route('/register', methods=['POST'])
+    def register_handler():
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Неверный формат данных'})
+        
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Заполните все поля'})
+        
+        if len(username) < 3 or len(username) > 20:
+            return jsonify({'success': False, 'error': 'Логин должен быть от 3 до 20 символов'})
+        
+        if len(password) < 4:
+            return jsonify({'success': False, 'error': 'Пароль должен быть не менее 4 символов'})
+        
+        success, message = create_user(username, password)
+        if success:
+            session['username'] = username
+            update_online(username, True)
+            return jsonify({'success': True})
+        
+        return jsonify({'success': False, 'error': message})
+
     @app.route('/chat')
-    def chat():
+    def chat_handler():
         if 'username' not in session:
             return redirect('/')
         
-        # ИСПРАВЛЕННАЯ СТРАНИЦА ЧАТА
-        return f'''<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tandau Messenger - Чат</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }}
-        
-        :root {{
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --primary-light: #818cf8;
-            --secondary: #8b5cf6;
-            --accent: #10b981;
-            --text: #1f2937;
-            --text-light: #6b7280;
-            --bg: #f9fafb;
-            --bg-light: #ffffff;
-            --border: #e5e7eb;
-            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            --radius: 16px;
-            --radius-sm: 10px;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --sidebar-width: 280px;
-        }}
-        
-        [data-theme="dark"] {{
-            --primary: #818cf8;
-            --primary-dark: #6366f1;
-            --primary-light: #a5b4fc;
-            --secondary: #a78bfa;
-            --accent: #34d399;
-            --text: #f9fafb;
-            --text-light: #d1d5db;
-            --bg: #111827;
-            --bg-light: #1f2937;
-            --border: #374151;
-            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
-        }}
-        
-        body {{
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            overflow-x: hidden;
-        }}
-        
-        .app-container {{
-            display: flex;
-            height: 100vh;
-            position: relative;
-        }}
-        
-        /* Сайдбар */
-        .sidebar {{
-            width: var(--sidebar-width);
-            background: var(--bg-light);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.3s ease;
-            z-index: 100;
-            height: 100%;
-            overflow-y: auto;
-        }}
-        
-        .sidebar.hidden {{
-            transform: translateX(-100%);
-        }}
-        
-        .sidebar-header {{
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-light);
-        }}
-        
-        .menu-toggle {{
-            background: none;
-            border: none;
-            color: var(--text);
-            font-size: 1.2rem;
-            cursor: pointer;
-            display: none;
-        }}
-        
-        .logo-placeholder {{
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-            font-weight: bold;
-        }}
-        
-        .app-title {{
-            font-size: 1.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }}
-        
-        .user-info {{
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-bottom: 1px solid var(--border);
-        }}
-        
-        .avatar {{
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: var(--accent);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 1.2rem;
-            cursor: pointer;
-            background-size: cover;
-            background-position: center;
-        }}
-        
-        .user-details {{
-            flex: 1;
-        }}
-        
-        .user-details strong {{
-            display: block;
-            margin-bottom: 4px;
-        }}
-        
-        .user-status {{
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.85rem;
-            color: var(--text-light);
-        }}
-        
-        .status-dot {{
-            width: 8px;
-            height: 8px;
-            background: #10b981;
-            border-radius: 50%;
-        }}
-        
-        .channel-btn {{
-            background: none;
-            border: none;
-            color: var(--text-light);
-            font-size: 1.1rem;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 8px;
-        }}
-        
-        .channel-btn:hover {{
-            background: var(--bg);
-        }}
-        
-        .nav {{
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 0;
-        }}
-        
-        .nav-title {{
-            padding: 0 20px 10px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-light);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
-        
-        .add-btn {{
-            background: none;
-            border: none;
-            color: var(--text-light);
-            cursor: pointer;
-            font-size: 0.9rem;
-            padding: 2px 8px;
-            border-radius: 6px;
-        }}
-        
-        .add-btn:hover {{
-            background: var(--border);
-        }}
-        
-        .nav-item {{
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 20px;
-            cursor: pointer;
-            transition: var(--transition);
-            user-select: none;
-        }}
-        
-        .nav-item:hover {{
-            background: var(--bg);
-        }}
-        
-        .nav-item.active {{
-            background: var(--primary);
-            color: white;
-        }}
-        
-        .nav-item i {{
-            font-size: 1rem;
-            width: 20px;
-            text-align: center;
-        }}
-        
-        /* Область чата */
-        .chat-area {{
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: var(--bg);
-            height: 100%;
-        }}
-        
-        .chat-area.active {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 50;
-        }}
-        
-        .chat-header {{
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            background: var(--bg-light);
-        }}
-        
-        .back-btn {{
-            background: none;
-            border: none;
-            color: var(--text);
-            font-size: 1.2rem;
-            cursor: pointer;
-            display: none;
-        }}
-        
-        .channel-header-avatar {{
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 1rem;
-            background-size: cover;
-            background-position: center;
-        }}
-        
-        .channel-actions {{
-            display: flex;
-            gap: 10px;
-        }}
-        
-        /* Категории фильтра */
-        .categories-filter {{
-            padding: 15px 20px;
-            display: flex;
-            gap: 10px;
-            overflow-x: auto;
-            background: var(--bg-light);
-            border-bottom: 1px solid var(--border);
-        }}
-        
-        .category-filter-btn {{
-            padding: 6px 15px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            color: var(--text);
-            font-size: 0.9rem;
-            cursor: pointer;
-            white-space: nowrap;
-        }}
-        
-        .category-filter-btn.active {{
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }}
-        
-        /* Сетка избранного */
-        .favorites-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            padding: 20px;
-            overflow-y: auto;
-            flex: 1;
-        }}
-        
-        .favorite-item {{
-            background: var(--bg-light);
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            padding: 20px;
-            position: relative;
-            transition: var(--transition);
-        }}
-        
-        .favorite-item:hover {{
-            transform: translateY(-2px);
-            box-shadow: var(--shadow);
-        }}
-        
-        .favorite-item.pinned {{
-            border-color: var(--accent);
-            border-left: 4px solid var(--accent);
-        }}
-        
-        .favorite-actions {{
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            display: flex;
-            gap: 5px;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        }}
-        
-        .favorite-item:hover .favorite-actions {{
-            opacity: 1;
-        }}
-        
-        .favorite-action-btn {{
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            color: var(--text);
-        }}
-        
-        .favorite-action-btn:hover {{
-            background: var(--primary);
-            color: white;
-        }}
-        
-        .favorite-content {{
-            margin-bottom: 15px;
-            font-size: 0.95rem;
-            line-height: 1.5;
-        }}
-        
-        .favorite-file {{
-            margin-bottom: 15px;
-        }}
-        
-        .favorite-file img, .favorite-file video {{
-            max-width: 100%;
-            border-radius: var(--radius-sm);
-        }}
-        
-        .favorite-meta {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.8rem;
-            color: var(--text-light);
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid var(--border);
-        }}
-        
-        .category-badge {{
-            background: var(--primary-light);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.75rem;
-        }}
-        
-        .empty-favorites {{
-            grid-column: 1 / -1;
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-light);
-        }}
-        
-        .empty-favorites i {{
-            font-size: 3rem;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }}
-        
-        /* Сообщения чата */
-        .messages {{
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }}
-        
-        .message {{
-            display: flex;
-            gap: 12px;
-            max-width: 80%;
-        }}
-        
-        .message.own {{
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }}
-        
-        .message-avatar {{
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 0.9rem;
-            background-size: cover;
-            background-position: center;
-        }}
-        
-        .message-content {{
-            background: var(--bg-light);
-            border-radius: 18px;
-            padding: 12px 16px;
-            position: relative;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }}
-        
-        .message.own .message-content {{
-            background: var(--primary);
-            color: white;
-        }}
-        
-        .message-sender {{
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: var(--text-light);
-        }}
-        
-        .message.own .message-sender {{
-            color: rgba(255,255,255,0.9);
-        }}
-        
-        .message-text {{
-            word-wrap: break-word;
-            line-height: 1.4;
-        }}
-        
-        .message-time {{
-            font-size: 0.75rem;
-            color: var(--text-light);
-            margin-top: 4px;
-            text-align: right;
-        }}
-        
-        .message.own .message-time {{
-            color: rgba(255,255,255,0.7);
-        }}
-        
-        .message-file {{
-            margin-top: 10px;
-        }}
-        
-        .message-file img {{
-            max-width: 200px;
-            max-height: 150px;
-            border-radius: 8px;
-            cursor: pointer;
-        }}
-        
-        .message-file video {{
-            max-width: 300px;
-            max-height: 200px;
-            border-radius: 8px;
-        }}
-        
-        /* Область ввода */
-        .input-area {{
-            background: var(--bg-light);
-            border-top: 1px solid var(--border);
-            padding: 20px;
-        }}
-        
-        .input-row {{
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }}
-        
-        .emoji-btn {{
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 1.4rem;
-            padding: 10px;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }}
-        
-        .attachment-btn {{
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 1.2rem;
-            padding: 12px;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }}
-        
-        .msg-input {{
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            background: var(--bg);
-            color: var(--text);
-            font-size: 1rem;
-            resize: none;
-            max-height: 120px;
-            min-height: 48px;
-            line-height: 1.4;
-        }}
-        
-        .msg-input:focus {{
-            outline: none;
-            border-color: var(--primary);
-        }}
-        
-        .send-btn {{
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: white;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }}
-        
-        .send-btn:hover {{
-            background: var(--primary-dark);
-        }}
-        
-        /* Блок эмодзи */
-        .emoji-picker-container {{
-            position: absolute;
-            bottom: 80px;
-            left: 20px;
-            z-index: 1000;
-            display: none;
-        }}
-        
-        .emoji-picker-glass {{
-            background: var(--bg-light);
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            padding: 15px;
-            width: 300px;
-            max-height: 300px;
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }}
-        
-        .emoji-grid {{
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 5px;
-            overflow-y: auto;
-            max-height: 200px;
-        }}
-        
-        .emoji-item {{
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 5px;
-            border-radius: 5px;
-            text-align: center;
-        }}
-        
-        .emoji-item:hover {{
-            background: var(--bg);
-        }}
-        
-        /* Модальные окна */
-        .modal {{
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }}
-        
-        .modal-content {{
-            background: var(--bg-light);
-            padding: 25px;
-            border-radius: 15px;
-            width: 100%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-        }}
-        
-        .form-group {{
-            margin-bottom: 15px;
-        }}
-        
-        .form-label {{
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }}
-        
-        .form-control {{
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: var(--bg);
-            color: var(--text);
-            font-size: 16px;
-        }}
-        
-        .form-control:focus {{
-            outline: none;
-            border-color: var(--accent);
-        }}
-        
-        .btn {{
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }}
-        
-        .btn-primary {{
-            background: var(--accent);
-            color: white;
-        }}
-        
-        .btn-primary:hover {{
-            opacity: 0.9;
-        }}
-        
-        .btn-secondary {{
-            background: #6c757d;
-            color: white;
-        }}
-        
-        .avatar-upload {{
-            text-align: center;
-            margin: 20px 0;
-        }}
-        
-        .avatar-preview {{
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            margin: 0 auto 15px;
-            background: var(--accent);
-            background-size: cover;
-            background-position: center;
-            cursor: pointer;
-            border: 3px solid var(--accent);
-        }}
-        
-        .theme-btn {{
-            padding: 10px 20px;
-            margin: 5px;
-            border: none;
-            border-radius: 8px;
-            background: var(--accent);
-            color: white;
-            cursor: pointer;
-        }}
-        
-        .logout-btn {{
-            margin: 20px;
-            padding: 12px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }}
-        
-        /* Скроллбар */
-        ::-webkit-scrollbar {{
-            width: 6px;
-        }}
-        
-        ::-webkit-scrollbar-track {{
-            background: transparent;
-        }}
-        
-        ::-webkit-scrollbar-thumb {{
-            background: #ccc;
-            border-radius: 3px;
-        }}
-        
-        [data-theme="dark"] ::-webkit-scrollbar-thumb {{
-            background: #555;
-        }}
-        
-        /* Адаптивность */
-        @media (max-width: 768px) {{
-            .menu-toggle {{
-                display: block;
-            }}
-            
-            .back-btn {{
-                display: block;
-            }}
-            
-            .sidebar {{
-                position: fixed;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                transform: translateX(-100%);
-            }}
-            
-            .sidebar.hidden {{
-                transform: translateX(-100%);
-            }}
-            
-            .sidebar:not(.hidden) {{
-                transform: translateX(0);
-            }}
-            
-            .favorites-grid {{
-                grid-template-columns: 1fr;
-            }}
-            
-            .message {{
-                max-width: 90%;
-            }}
-        }}
-        
-        .emoji-in-message {{
-            font-size: 1.2em;
-            vertical-align: middle;
-        }}
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <!-- Сайдбар -->
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <button class="menu-toggle" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <div class="logo-placeholder">
-                    <i class="fas fa-comments"></i>
-                </div>
-                <h1 class="app-title">Tandau</h1>
-            </div>
-            <div class="user-info">
-                <div class="avatar" id="user-avatar" onclick="openAvatarModal()"></div>
-                <div class="user-details">
-                    <strong>{session['username']}</strong>
-                    <div class="user-status">
-                        <div class="status-dot"></div>
-                        Online
-                    </div>
-                </div>
-                <button class="channel-btn" onclick="openThemeModal()" title="Сменить тему">
-                    <i class="fas fa-palette"></i>
-                </button>
-            </div>
-            <div class="nav">
-                <div class="nav-title">
-                    <span>Избранное</span>
-                    <button class="add-btn" onclick="openAddFavoriteModal()" title="Добавить заметку">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-                <div id="favorites-nav">
-                    <div class="nav-item favorite" onclick="openFavorites()">
-                        <i class="fas fa-star"></i>
-                        <span>Все заметки</span>
-                    </div>
-                </div>
-                
-                <div class="nav-title">
-                    <span>Каналы</span>
-                    <button class="add-btn" onclick="openCreateChannelModal()">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-                <div id="channels"></div>
-                
-                <div class="nav-title">
-                    <span>Личные чаты</span>
-                </div>
-                <div id="personal-chats"></div>
-                
-                <div class="nav-title">
-                    <span>Пользователи</span>
-                </div>
-                <div id="users"></div>
-            </div>
-            <button class="logout-btn" onclick="location.href='/logout'">
-                <i class="fas fa-sign-out-alt"></i> Выйти
-            </button>
-        </div>
-        
-        <!-- Область чата -->
-        <div class="chat-area" id="chat-area">
-            <div class="chat-header">
-                <button class="back-btn" onclick="goBack()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-                <div class="channel-header-avatar" id="channel-header-avatar" onclick="openChannelSettingsModal()"></div>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600;" id="chat-title">Избранное</div>
-                    <div style="font-size: 0.8rem; color: #666;" id="channel-description"></div>
-                </div>
-                <div class="channel-actions" id="channel-actions" style="display: none;">
-                    <button class="channel-btn" onclick="openChannelSettingsModal()">
-                        <i class="fas fa-cog"></i>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="categories-filter" id="categories-filter" style="display: none;">
-                <button class="category-filter-btn active" onclick="filterFavorites('all')">Все</button>
-            </div>
-            
-            <div class="messages" id="messages">
-                <div id="favorites-grid" class="favorites-grid"></div>
-                <div id="channel-settings" style="display: none;"></div>
-                <div id="chat-messages" class="message-container" style="display: none;"></div>
-            </div>
-            
-            <div class="input-area" id="input-area" style="display: none;">
-                <div class="input-row">
-                    <button class="emoji-btn" onclick="toggleEmojiPicker()" title="Эмодзи">
-                        😊
-                    </button>
-                    <button class="attachment-btn" onclick="document.getElementById('file-input').click()" title="Прикрепить файл">
-                        <i class="fas fa-paperclip"></i>
-                    </button>
-                    <input type="file" id="file-input" accept="image/*,video/*,text/*,.pdf,.doc,.docx" style="display:none" onchange="handleFileSelect(this)">
-                    <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1" onkeydown="handleKeydown(event)"></textarea>
-                    <button class="send-btn" onclick="sendMessage()" title="Отправить">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-                
-                <div class="emoji-picker-container" id="emoji-picker">
-                    <div class="emoji-picker-glass">
-                        <div class="emoji-grid" id="emoji-grid"></div>
-                    </div>
-                </div>
-                
-                <div id="file-preview"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модальные окна -->
-    <div class="modal" id="theme-modal">
-        <div class="modal-content">
-            <h3>Выбор темы</h3>
-            <div class="form-group">
-                <button class="theme-btn" onclick="setTheme('light')">🌞 Светлая</button>
-                <button class="theme-btn" onclick="setTheme('dark')">🌙 Темная</button>
-                <button class="theme-btn" onclick="setTheme('auto')">⚙️ Авто</button>
-            </div>
-            <button class="btn btn-secondary" onclick="closeThemeModal()">Закрыть</button>
-        </div>
-    </div>
-
-    <div class="modal" id="avatar-modal">
-        <div class="modal-content">
-            <h3>Смена аватарки</h3>
-            <div class="avatar-upload">
-                <div class="avatar-preview" id="avatar-preview" onclick="document.getElementById('avatar-input').click()"></div>
-                <input type="file" id="avatar-input" accept="image/*" style="display:none" onchange="previewAvatar(this)">
-                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
-                    <button class="btn btn-primary" onclick="uploadAvatar()">Загрузить</button>
-                    <button class="btn btn-secondary" onclick="removeAvatar()">Удалить</button>
-                </div>
-            </div>
-            <button class="btn btn-secondary" onclick="closeAvatarModal()">Закрыть</button>
-        </div>
-    </div>
-
-    <div class="modal" id="create-channel-modal">
-        <div class="modal-content">
-            <h3>Создать канал</h3>
-            <div class="form-group">
-                <input type="text" class="form-control" id="channel-name" placeholder="Идентификатор канала (латинские буквы, цифры, _)">
-                <input type="text" class="form-control" id="channel-display-name" placeholder="Отображаемое название">
-                <input type="text" class="form-control" id="channel-description" placeholder="Описание">
-                <label><input type="checkbox" id="channel-private"> Приватный канал</label>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-primary" onclick="createChannel()">Создать</button>
-                <button class="btn btn-secondary" onclick="closeCreateChannelModal()">Отмена</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="add-favorite-modal">
-        <div class="modal-content">
-            <h3>Добавить в избранное</h3>
-            <div class="form-group">
-                <label class="form-label">Текст заметки</label>
-                <textarea class="form-control" id="favorite-content" placeholder="Введите текст заметки..." rows="4"></textarea>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Категория</label>
-                <input type="text" class="form-control" id="favorite-category" placeholder="Например: идеи, ссылки, работа" value="general">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Файл (опционально)</label>
-                <input type="file" class="form-control" id="favorite-file" accept="image/*,video/*,text/*,.pdf,.doc,.docx">
-                <div id="favorite-file-preview" style="margin-top: 10px;"></div>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-primary" onclick="saveFavorite()">Сохранить</button>
-                <button class="btn btn-secondary" onclick="closeAddFavoriteModal()">Отмена</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script>
-        const socket = io();
-        const user = "{session['username']}";
-        let room = "favorites";
-        let roomType = "favorites";
-        let currentChannel = "";
-        let currentCategory = "all";
-        let isMobile = window.innerWidth <= 768;
-        
-        // Базовые эмодзи
-        const emojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🥸", "🤩", "🥳"];
-        
-        function checkMobile() {{
-            isMobile = window.innerWidth <= 768;
-        }}
-        
-        function toggleSidebar() {{
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('hidden');
-        }}
-        
-        function goBack() {{
-            if (isMobile) {{
-                document.getElementById('sidebar').classList.remove('hidden');
-                document.getElementById('chat-area').classList.remove('active');
-            }}
-        }}
-        
-        window.onload = function() {{
-            checkMobile();
-            loadUserAvatar();
-            loadUserChannels();
-            loadUsers();
-            loadPersonalChats();
-            loadFavoritesCategories();
-            loadFavorites();
-            initEmojiPicker();
-            
-            if (isMobile) {{
-                document.getElementById('chat-area').classList.remove('active');
-            }} else {{
-                openFavorites();
-            }}
-            
-            window.addEventListener('resize', checkMobile);
-            
-            // Загружаем тему пользователя
-            fetch('/user_info/' + user)
-                .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.success && userInfo.theme) {{
-                        document.documentElement.setAttribute('data-theme', userInfo.theme);
-                    }}
-                }});
-        }};
-        
-        function initEmojiPicker() {{
-            const emojiGrid = document.getElementById('emoji-grid');
-            emojis.forEach(emoji => {{
-                const emojiItem = document.createElement('div');
-                emojiItem.className = 'emoji-item';
-                emojiItem.textContent = emoji;
-                emojiItem.onclick = () => insertEmoji(emoji);
-                emojiGrid.appendChild(emojiItem);
-            }});
-        }}
-        
-        function insertEmoji(emoji) {{
-            const input = document.getElementById('msg-input');
-            const cursorPos = input.selectionStart;
-            const textBefore = input.value.substring(0, cursorPos);
-            const textAfter = input.value.substring(cursorPos);
-            
-            input.value = textBefore + emoji + textAfter;
-            input.focus();
-            input.selectionStart = input.selectionEnd = cursorPos + emoji.length;
-            
-            closeEmojiPicker();
-        }}
-        
-        function toggleEmojiPicker() {{
-            const emojiPicker = document.getElementById('emoji-picker');
-            emojiPicker.style.display = emojiPicker.style.display === 'block' ? 'none' : 'block';
-        }}
-        
-        function closeEmojiPicker() {{
-            document.getElementById('emoji-picker').style.display = 'none';
-        }}
-        
-        function loadUserAvatar() {{
-            fetch('/user_info/' + user)
-                .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.success) {{
-                        const avatar = document.getElementById('user-avatar');
-                        if (userInfo.avatar_path) {{
-                            avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                            avatar.textContent = '';
-                        }} else {{
-                            avatar.style.backgroundImage = 'none';
-                            avatar.style.backgroundColor = userInfo.avatar_color;
-                            avatar.textContent = user.slice(0, 2).toUpperCase();
-                        }}
-                    }}
-                }});
-        }}
-        
-        function loadFavoritesCategories() {{
-            fetch('/get_favorite_categories')
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        const filterContainer = document.getElementById('categories-filter');
-                        filterContainer.innerHTML = '';
-                        
-                        const allBtn = document.createElement('button');
-                        allBtn.className = 'category-filter-btn active';
-                        allBtn.textContent = 'Все';
-                        allBtn.onclick = () => filterFavorites('all');
-                        filterContainer.appendChild(allBtn);
-                        
-                        data.categories.forEach(category => {{
-                            const btn = document.createElement('button');
-                            btn.className = 'category-filter-btn';
-                            btn.textContent = category || 'Без категории';
-                            btn.onclick = () => filterFavorites(category);
-                            filterContainer.appendChild(btn);
-                        }});
-                    }}
-                }});
-        }}
-        
-        function loadFavorites(category = null) {{
-            let url = '/get_favorites';
-            if (category && category !== 'all') {{
-                url += `?category=${{encodeURIComponent(category)}}`;
-            }}
-            
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        const grid = document.getElementById('favorites-grid');
-                        
-                        if (data.favorites.length === 0) {{
-                            grid.innerHTML = `
-                                <div class="empty-favorites">
-                                    <i class="fas fa-star"></i>
-                                    <h3>Пока ничего нет</h3>
-                                    <p>Добавьте свои заметки, фото или видео</p>
-                                    <button class="btn btn-primary" onclick="openAddFavoriteModal()" style="margin-top: 15px;">
-                                        <i class="fas fa-plus"></i> Добавить заметку
-                                    </button>
-                                </div>
-                            `;
-                        }} else {{
-                            grid.innerHTML = '';
-                            data.favorites.forEach(favorite => {{
-                                const item = createFavoriteItem(favorite);
-                                grid.appendChild(item);
-                            }});
-                        }}
-                    }}
-                }});
-        }}
-        
-        function createFavoriteItem(favorite) {{
-            const item = document.createElement('div');
-            item.className = `favorite-item ${{favorite.is_pinned ? 'pinned' : ''}}`;
-            item.id = `favorite-${{favorite.id}}`;
-            
-            let contentHTML = '';
-            
-            if (favorite.content) {{
-                contentHTML += `<div class="favorite-content">${{favorite.content}}</div>`;
-            }}
-            
-            if (favorite.file_path) {{
-                if (favorite.file_type === 'image' || favorite.file_name.match(/\\.(jpg|jpeg|png|gif|webp)$/i)) {{
-                    contentHTML += `
-                        <div class="favorite-file">
-                            <img src="${{favorite.file_path}}" alt="${{favorite.file_name}}" onclick="openFilePreview('${{favorite.file_path}}')">
-                        </div>
-                    `;
-                }} else if (favorite.file_type === 'video' || favorite.file_name.match(/\\.(mp4|webm|mov)$/i)) {{
-                    contentHTML += `
-                        <div class="favorite-file">
-                            <video src="${{favorite.file_path}}" controls></video>
-                        </div>
-                    `;
-                }} else {{
-                    contentHTML += `
-                        <div class="favorite-content">
-                            <i class="fas fa-file"></i> ${{favorite.file_name}}
-                            <br>
-                            <a href="${{favorite.file_path}}" target="_blank" style="font-size: 0.8rem;">Скачать</a>
-                        </div>
-                    `;
+        username = session['username']
+        
+        # Получаем информацию о пользователе для передачи в шаблон
+        user_info = get_user(username)
+        if not user_info:
+            return redirect('/logout')
+        
+        # Здесь будет основной интерфейс мессенджера
+        return f'''
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Tandau Messenger - {username}</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 }}
-            }}
-            
-            const category = favorite.category && favorite.category !== 'general' ? 
-                `<span class="category-badge">${{favorite.category}}</span>` : '';
-            
-            const date = new Date(favorite.created_at).toLocaleDateString('ru-RU', {{
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric'
-            }});
-            
-            item.innerHTML = `
-                <div class="favorite-actions">
-                    <button class="favorite-action-btn" onclick="togglePinFavorite(${{favorite.id}})" title="${{favorite.is_pinned ? 'Открепить' : 'Закрепить'}}">
-                        <i class="fas fa-thumbtack"></i>
-                    </button>
-                    <button class="favorite-action-btn" onclick="deleteFavorite(${{favorite.id}})" title="Удалить">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-                ${{contentHTML}}
-                <div class="favorite-meta">
-                    <span>${{date}}</span>
-                    ${{category}}
-                </div>
-            `;
-            
-            return item;
-        }}
-        
-        function filterFavorites(category) {{
-            currentCategory = category;
-            event?.currentTarget.classList.add('active');
-            loadFavorites(category === 'all' ? null : category);
-        }}
-        
-        function openFavorites() {{
-            room = "favorites";
-            roomType = "favorites";
-            
-            document.getElementById('chat-title').textContent = 'Избранное';
-            document.getElementById('channel-description').textContent = '';
-            document.getElementById('channel-header-avatar').style.display = 'none';
-            document.getElementById('categories-filter').style.display = 'flex';
-            document.getElementById('favorites-grid').style.display = 'grid';
-            document.getElementById('channel-settings').style.display = 'none';
-            document.getElementById('chat-messages').style.display = 'none';
-            document.getElementById('input-area').style.display = 'none';
-            document.getElementById('channel-actions').style.display = 'none';
-            
-            if (isMobile) {{
-                document.getElementById('sidebar').classList.add('hidden');
-                document.getElementById('chat-area').classList.add('active');
-            }}
-            
-            loadFavorites(currentCategory === 'all' ? null : currentCategory);
-        }}
-        
-        function openAvatarModal() {{
-            document.getElementById('avatar-modal').style.display = 'flex';
-            const preview = document.getElementById('avatar-preview');
-            fetch('/user_info/' + user)
-                .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.success) {{
-                        if (userInfo.avatar_path) {{
-                            preview.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                            preview.textContent = '';
-                        }} else {{
-                            preview.style.backgroundImage = 'none';
-                            preview.style.backgroundColor = userInfo.avatar_color;
-                            preview.textContent = user.slice(0, 2).toUpperCase();
-                        }}
+                
+                :root {{
+                    --primary: #6366f1;
+                    --primary-dark: #4f46e5;
+                    --primary-light: #818cf8;
+                    --secondary: #8b5cf6;
+                    --accent: #10b981;
+                    --text: #1f2937;
+                    --text-light: #6b7280;
+                    --bg: #f9fafb;
+                    --bg-light: #ffffff;
+                    --border: #e5e7eb;
+                    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                    --radius: 16px;
+                    --radius-sm: 10px;
+                    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }}
+                
+                body {{
+                    background: var(--bg);
+                    color: var(--text);
+                    height: 100vh;
+                    overflow: hidden;
+                }}
+                
+                .app-container {{
+                    display: flex;
+                    height: 100vh;
+                }}
+                
+                .sidebar {{
+                    width: 280px;
+                    background: var(--bg-light);
+                    border-right: 1px solid var(--border);
+                    display: flex;
+                    flex-direction: column;
+                    transition: transform 0.3s ease;
+                }}
+                
+                .sidebar-header {{
+                    padding: 20px;
+                    border-bottom: 1px solid var(--border);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }}
+                
+                .logo-placeholder {{
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 12px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                    font-weight: bold;
+                }}
+                
+                .app-title {{
+                    font-size: 1.5rem;
+                    font-weight: 800;
+                    color: var(--text);
+                }}
+                
+                .user-info {{
+                    padding: 20px;
+                    border-bottom: 1px solid var(--border);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }}
+                
+                .avatar {{
+                    width: 50px;
+                    height: 50px;
+                    border-radius: 50%;
+                    background: var(--accent);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 1.2rem;
+                    background-size: cover;
+                    background-position: center;
+                    cursor: pointer;
+                }}
+                
+                .user-details {{
+                    flex: 1;
+                }}
+                
+                .user-status {{
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 0.85rem;
+                    color: var(--text-light);
+                    margin-top: 4px;
+                }}
+                
+                .status-dot {{
+                    width: 8px;
+                    height: 8px;
+                    background: #10b981;
+                    border-radius: 50%;
+                }}
+                
+                .channel-btn {{
+                    background: var(--bg);
+                    border: 1px solid var(--border);
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: var(--text);
+                    cursor: pointer;
+                    transition: var(--transition);
+                }}
+                
+                .channel-btn:hover {{
+                    background: var(--primary-light);
+                    color: white;
+                    border-color: var(--primary-light);
+                }}
+                
+                .nav {{
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 20px;
+                }}
+                
+                .nav-title {{
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                    font-weight: 600;
+                    color: var(--text-light);
+                    font-size: 0.9rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }}
+                
+                .add-btn {{
+                    background: none;
+                    border: none;
+                    color: var(--accent);
+                    cursor: pointer;
+                    font-size: 1rem;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 6px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                
+                .add-btn:hover {{
+                    background: var(--bg);
+                }}
+                
+                .nav-item {{
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 15px;
+                    border-radius: var(--radius-sm);
+                    cursor: pointer;
+                    transition: var(--transition);
+                    margin-bottom: 5px;
+                    user-select: none;
+                }}
+                
+                .nav-item:hover {{
+                    background: var(--bg);
+                }}
+                
+                .nav-item.active {{
+                    background: var(--primary-light);
+                    color: white;
+                }}
+                
+                .nav-item.active:hover {{
+                    background: var(--primary);
+                }}
+                
+                .chat-area {{
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    background: var(--bg);
+                }}
+                
+                .chat-header {{
+                    padding: 20px;
+                    background: var(--bg-light);
+                    border-bottom: 1px solid var(--border);
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                }}
+                
+                .back-btn {{
+                    display: none;
+                    background: none;
+                    border: none;
+                    font-size: 1.2rem;
+                    color: var(--text);
+                    cursor: pointer;
+                }}
+                
+                .channel-header-avatar {{
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    background: var(--primary);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    background-size: cover;
+                    background-position: center;
+                    cursor: pointer;
+                }}
+                
+                .messages {{
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 20px;
+                    background: var(--bg);
+                }}
+                
+                .message-container {{
+                    display: flex;
+                    flex-direction: column;
+                    gap: 20px;
+                }}
+                
+                .message {{
+                    display: flex;
+                    gap: 12px;
+                    max-width: 70%;
+                }}
+                
+                .message.own {{
+                    margin-left: auto;
+                    flex-direction: row-reverse;
+                }}
+                
+                .message-avatar {{
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    flex-shrink: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 0.9rem;
+                    background-size: cover;
+                    background-position: center;
+                }}
+                
+                .message-content {{
+                    background: var(--bg-light);
+                    padding: 12px 16px;
+                    border-radius: 18px;
+                    border-top-left-radius: 4px;
+                    box-shadow: var(--shadow);
+                    max-width: 100%;
+                }}
+                
+                .message.own .message-content {{
+                    background: var(--primary);
+                    color: white;
+                    border-top-left-radius: 18px;
+                    border-top-right-radius: 4px;
+                }}
+                
+                .message-sender {{
+                    font-weight: 600;
+                    font-size: 0.9rem;
+                    margin-bottom: 4px;
+                }}
+                
+                .message.own .message-sender {{
+                    display: none;
+                }}
+                
+                .message-text {{
+                    word-wrap: break-word;
+                    line-height: 1.4;
+                }}
+                
+                .message-time {{
+                    font-size: 0.75rem;
+                    color: var(--text-light);
+                    margin-top: 4px;
+                    text-align: right;
+                }}
+                
+                .message.own .message-time {{
+                    color: rgba(255, 255, 255, 0.8);
+                }}
+                
+                .message-file {{
+                    margin-top: 10px;
+                }}
+                
+                .message-file img, .message-file video {{
+                    max-width: 200px;
+                    max-height: 150px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                }}
+                
+                .input-area {{
+                    padding: 20px;
+                    background: var(--bg-light);
+                    border-top: 1px solid var(--border);
+                }}
+                
+                .input-row {{
+                    display: flex;
+                    gap: 10px;
+                    align-items: flex-end;
+                }}
+                
+                .emoji-btn, .attachment-btn {{
+                    background: var(--bg);
+                    border: 1px solid var(--border);
+                    color: var(--text);
+                    cursor: pointer;
+                    font-size: 1.2rem;
+                    padding: 10px;
+                    border-radius: 50%;
+                    width: 44px;
+                    height: 44px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                }}
+                
+                .emoji-btn:hover, .attachment-btn:hover {{
+                    background: var(--primary-light);
+                    color: white;
+                    border-color: var(--primary-light);
+                }}
+                
+                .msg-input {{
+                    flex: 1;
+                    padding: 12px 16px;
+                    border: 1px solid var(--border);
+                    border-radius: 22px;
+                    background: var(--bg);
+                    color: var(--text);
+                    font-size: 1rem;
+                    resize: none;
+                    max-height: 120px;
+                    min-height: 44px;
+                    line-height: 1.4;
+                }}
+                
+                .msg-input:focus {{
+                    outline: none;
+                    border-color: var(--accent);
+                }}
+                
+                .send-btn {{
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 50%;
+                    background: var(--accent);
+                    color: white;
+                    border: none;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                    transition: var(--transition);
+                }}
+                
+                .send-btn:hover {{
+                    background: var(--primary-dark);
+                    transform: translateY(-2px);
+                }}
+                
+                .send-btn:active {{
+                    transform: translateY(0);
+                }}
+                
+                .logout-btn {{
+                    margin: 20px;
+                    padding: 12px;
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: var(--radius-sm);
+                    cursor: pointer;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                }}
+                
+                .logout-btn:hover {{
+                    background: #c82333;
+                }}
+                
+                /* Эмодзи */
+                .emoji-in-message {{
+                    font-size: 1.2em;
+                    vertical-align: middle;
+                }}
+                
+                /* Адаптивность */
+                @media (max-width: 768px) {{
+                    .sidebar {{
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        bottom: 0;
+                        z-index: 100;
+                        transform: translateX(-100%);
                     }}
-                }});
-        }}
-        
-        function closeAvatarModal() {{
-            document.getElementById('avatar-modal').style.display = 'none';
-        }}
-        
-        function previewAvatar(input) {{
-            const file = input.files[0];
-            if (file) {{
-                const reader = new FileReader();
-                reader.onload = (e) => {{
-                    const preview = document.getElementById('avatar-preview');
-                    preview.style.backgroundImage = `url(${{e.target.result}})`;
-                    preview.textContent = '';
+                    
+                    .sidebar.active {{
+                        transform: translateX(0);
+                    }}
+                    
+                    .chat-area {{
+                        width: 100%;
+                    }}
+                    
+                    .back-btn {{
+                        display: block;
+                    }}
+                    
+                    .message {{
+                        max-width: 85%;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="app-container">
+                <!-- Сайдбар -->
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-header">
+                        <div class="logo-placeholder">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <h1 class="app-title">Tandau</h1>
+                    </div>
+                    
+                    <div class="user-info">
+                        <div class="avatar" id="user-avatar" onclick="openAvatarModal()">
+                            {username[:2].upper()}
+                        </div>
+                        <div class="user-details">
+                            <strong>{username}</strong>
+                            <div class="user-status">
+                                <div class="status-dot"></div>
+                                Online
+                            </div>
+                        </div>
+                        <button class="channel-btn" onclick="openSettings()">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="nav">
+                        <div class="nav-title">
+                            <span>Чаты</span>
+                        </div>
+                        
+                        <div class="nav-item" onclick="openChat('general')">
+                            <i class="fas fa-hashtag"></i>
+                            <span>General</span>
+                        </div>
+                        
+                        <div class="nav-title">
+                            <span>Избранное</span>
+                            <button class="add-btn" onclick="addToFavorites()">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="favorites-list">
+                            <!-- Избранное будет загружено динамически -->
+                        </div>
+                        
+                        <div class="nav-title">
+                            <span>Пользователи</span>
+                        </div>
+                        
+                        <div id="users-list">
+                            <!-- Пользователи будут загружены динамически -->
+                        </div>
+                    </div>
+                    
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Выйти
+                    </button>
+                </div>
+                
+                <!-- Область чата -->
+                <div class="chat-area">
+                    <div class="chat-header">
+                        <button class="back-btn" onclick="toggleSidebar()">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <div class="channel-header-avatar" id="current-chat-avatar">
+                            <i class="fas fa-hashtag"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600;" id="chat-title">General</div>
+                            <div style="font-size: 0.8rem; color: #666;" id="chat-status">Онлайн</div>
+                        </div>
+                    </div>
+                    
+                    <div class="messages" id="messages">
+                        <div class="message-container" id="message-container">
+                            <!-- Сообщения будут загружены динамически -->
+                        </div>
+                    </div>
+                    
+                    <div class="input-area">
+                        <div class="input-row">
+                            <button class="emoji-btn" onclick="toggleEmojiPicker()">
+                                😊
+                            </button>
+                            <button class="attachment-btn" onclick="attachFile()">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1" onkeydown="handleKeydown(event)"></textarea>
+                            <button class="send-btn" onclick="sendMessage()">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+            <script>
+                const socket = io();
+                const username = "{username}";
+                let currentRoom = "general";
+                
+                // Инициализация
+                window.onload = function() {{
+                    loadUsers();
+                    loadFavorites();
+                    loadMessages(currentRoom);
+                    socket.emit('join', {{ room: currentRoom }});
+                    
+                    // Проверка мобильного устройства
+                    if (window.innerWidth <= 768) {{
+                        document.getElementById('sidebar').classList.remove('active');
+                    }}
                 }};
-                reader.readAsDataURL(file);
-            }}
-        }}
-        
-        function uploadAvatar() {{
-            const fileInput = document.getElementById('avatar-input');
-            const file = fileInput.files[0];
-            
-            if (file) {{
-                const formData = new FormData();
-                formData.append('avatar', file);
                 
-                fetch('/upload_avatar', {{
-                    method: 'POST',
-                    body: formData
-                }})
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        loadUserAvatar();
-                        closeAvatarModal();
-                        alert('Аватарка обновлена!');
-                    }} else {{
-                        alert(data.error || 'Ошибка загрузки аватарки');
-                    }}
-                }});
-            }} else {{
-                alert('Выберите файл');
-            }}
-        }}
-        
-        function removeAvatar() {{
-            fetch('/delete_avatar', {{ method: 'POST' }})
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        loadUserAvatar();
-                        closeAvatarModal();
-                        alert('Аватарка удалена!');
-                    }}
-                }});
-        }}
-        
-        function openThemeModal() {{
-            document.getElementById('theme-modal').style.display = 'flex';
-        }}
-        
-        function closeThemeModal() {{
-            document.getElementById('theme-modal').style.display = 'none';
-        }}
-        
-        function setTheme(theme) {{
-            fetch('/set_theme', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ theme: theme }})
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    document.documentElement.setAttribute('data-theme', theme);
-                    closeThemeModal();
+                function toggleSidebar() {{
+                    const sidebar = document.getElementById('sidebar');
+                    sidebar.classList.toggle('active');
                 }}
-            }});
-        }}
-        
-        function openCreateChannelModal() {{
-            document.getElementById('create-channel-modal').style.display = 'flex';
-        }}
-        
-        function closeCreateChannelModal() {{
-            document.getElementById('create-channel-modal').style.display = 'none';
-        }}
-        
-        function createChannel() {{
-            const name = document.getElementById('channel-name').value.trim();
-            const displayName = document.getElementById('channel-display-name').value.trim();
-            const description = document.getElementById('channel-description').value.trim();
-            const isPrivate = document.getElementById('channel-private').checked;
-            
-            if (!name) {{
-                alert('Введите идентификатор канала');
-                return;
-            }}
-            
-            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
-                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
-                return;
-            }}
-            
-            fetch('/create_channel', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
-                    name: name,
-                    display_name: displayName || name,
-                    description: description,
-                    is_private: isPrivate
-                }})
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    closeCreateChannelModal();
-                    loadUserChannels();
-                    alert('Канал создан!');
-                }} else {{
-                    alert(data.error || 'Ошибка при создании канала');
+                
+                function openChat(roomName) {{
+                    currentRoom = roomName;
+                    document.getElementById('chat-title').textContent = roomName.charAt(0).toUpperCase() + roomName.slice(1);
+                    loadMessages(roomName);
+                    socket.emit('leave', {{ room: currentRoom }});
+                    socket.emit('join', {{ room: roomName }});
+                    
+                    // Закрываем сайдбар на мобильных
+                    if (window.innerWidth <= 768) {{
+                        toggleSidebar();
+                    }}
                 }}
-            }});
-        }}
-        
-        function loadUserChannels() {{
-            fetch('/user_channels')
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        const channelsContainer = document.getElementById('channels');
-                        channelsContainer.innerHTML = '';
-                        
-                        data.channels.forEach(channel => {{
-                            const el = document.createElement('div');
-                            el.className = 'nav-item' + (room === 'channel_' + channel.name ? ' active' : '');
-                            el.innerHTML = `<i class="fas fa-hashtag"></i><span>${{channel.display_name || channel.name}}</span>`;
-                            el.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name || channel.name);
-                            channelsContainer.appendChild(el);
+                
+                function loadMessages(room) {{
+                    fetch('/get_messages/' + room)
+                        .then(r => r.json())
+                        .then(messages => {{
+                            const container = document.getElementById('message-container');
+                            container.innerHTML = '';
+                            
+                            if (messages && Array.isArray(messages)) {{
+                                messages.forEach(msg => {{
+                                    addMessage(msg);
+                                }});
+                            }}
+                            
+                            // Прокручиваем к последнему сообщению
+                            container.scrollTop = container.scrollHeight;
                         }});
+                }}
+                
+                function addMessage(data) {{
+                    const container = document.getElementById('message-container');
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `message ${{data.user === username ? 'own' : 'other'}}`;
+                    
+                    // Аватар
+                    const avatar = document.createElement('div');
+                    avatar.className = 'message-avatar';
+                    avatar.style.backgroundColor = data.color || '#6366f1';
+                    if (data.user !== username) {{
+                        avatar.textContent = data.user.slice(0, 2).toUpperCase();
                     }}
-                }});
-        }}
-        
-        function loadUsers() {{
-            fetch('/users')
-                .then(r => r.json())
-                .then(users => {{
-                    if (users && Array.isArray(users)) {{
-                        const usersContainer = document.getElementById('users');
-                        usersContainer.innerHTML = '';
+                    
+                    // Контент
+                    const content = document.createElement('div');
+                    content.className = 'message-content';
+                    
+                    // Отправитель (только для чужих сообщений)
+                    if (data.user !== username) {{
+                        const sender = document.createElement('div');
+                        sender.className = 'message-sender';
+                        sender.textContent = data.user;
+                        content.appendChild(sender);
+                    }}
+                    
+                    // Текст сообщения
+                    if (data.message) {{
+                        const text = document.createElement('div');
+                        text.className = 'message-text';
+                        text.textContent = data.message;
+                        content.appendChild(text);
+                    }}
+                    
+                    // Файл
+                    if (data.file) {{
+                        const fileDiv = document.createElement('div');
+                        fileDiv.className = 'message-file';
                         
-                        users.forEach(u => {{
-                            if (u.username !== user) {{
-                                const el = document.createElement('div');
-                                el.className = 'nav-item';
-                                el.innerHTML = `<i class="fas fa-user"></i><span>${{u.username}}</span>`;
-                                el.onclick = () => openRoom(
-                                    'private_' + [user, u.username].sort().join('_'),
-                                    'private',
-                                    u.username
-                                );
-                                usersContainer.appendChild(el);
+                        if (data.file.endsWith('.mp4') || data.file.endsWith('.webm')) {{
+                            const video = document.createElement('video');
+                            video.src = data.file;
+                            video.controls = true;
+                            video.style.maxWidth = '200px';
+                            video.style.maxHeight = '150px';
+                            fileDiv.appendChild(video);
+                        }} else {{
+                            const img = document.createElement('img');
+                            img.src = data.file;
+                            img.alt = 'Файл';
+                            img.style.maxWidth = '200px';
+                            img.style.maxHeight = '150px';
+                            img.onclick = () => window.open(data.file, '_blank');
+                            fileDiv.appendChild(img);
+                        }}
+                        
+                        content.appendChild(fileDiv);
+                    }}
+                    
+                    // Время
+                    const time = document.createElement('div');
+                    time.className = 'message-time';
+                    time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
+                    content.appendChild(time);
+                    
+                    // Собираем сообщение
+                    messageDiv.appendChild(avatar);
+                    messageDiv.appendChild(content);
+                    container.appendChild(messageDiv);
+                    
+                    // Прокручиваем к последнему сообщению
+                    container.scrollTop = container.scrollHeight;
+                }}
+                
+                function sendMessage() {{
+                    const input = document.getElementById('msg-input');
+                    const message = input.value.trim();
+                    
+                    if (!message) return;
+                    
+                    const messageData = {{
+                        message: message,
+                        room: currentRoom,
+                        user: username
+                    }};
+                    
+                    socket.emit('message', messageData);
+                    input.value = '';
+                    input.focus();
+                }}
+                
+                function handleKeydown(e) {{
+                    if (e.key === 'Enter' && !e.shiftKey) {{
+                        e.preventDefault();
+                        sendMessage();
+                    }}
+                }}
+                
+                function attachFile() {{
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*,video/*';
+                    input.onchange = (e) => {{
+                        const file = e.target.files[0];
+                        if (file) {{
+                            const reader = new FileReader();
+                            reader.onload = (e) => {{
+                                const messageData = {{
+                                    message: '',
+                                    room: currentRoom,
+                                    user: username,
+                                    file: e.target.result
+                                }};
+                                socket.emit('message', messageData);
+                            }};
+                            reader.readAsDataURL(file);
+                        }}
+                    }};
+                    input.click();
+                }}
+                
+                function toggleEmojiPicker() {{
+                    // Простая реализация эмодзи
+                    const emojis = ['😀', '😂', '🥰', '😎', '🤔', '👍', '❤️', '🔥', '🎉', '🚀'];
+                    const input = document.getElementById('msg-input');
+                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                    input.value += randomEmoji;
+                    input.focus();
+                }}
+                
+                function loadUsers() {{
+                    fetch('/users')
+                        .then(r => r.json())
+                        .then(users => {{
+                            const container = document.getElementById('users-list');
+                            container.innerHTML = '';
+                            
+                            if (users && Array.isArray(users)) {{
+                                users.forEach(user => {{
+                                    if (user.username !== username) {{
+                                        const userDiv = document.createElement('div');
+                                        userDiv.className = 'nav-item';
+                                        userDiv.onclick = () => openPrivateChat(user.username);
+                                        userDiv.innerHTML = `
+                                            <div class="message-avatar" style="background-color: ${{user.color || '#6366f1'}}; width: 24px; height: 24px; font-size: 0.8rem;">
+                                                ${{user.username.slice(0, 2).toUpperCase()}}
+                                            </div>
+                                            <span>${{user.username}}</span>
+                                            <span style="margin-left: auto; font-size: 0.7rem; color: ${{user.online ? '#10b981' : '#6b7280'}}">
+                                                ${{user.online ? '●' : '○'}}
+                                            </span>
+                                        `;
+                                        container.appendChild(userDiv);
+                                    }}
+                                }});
+                            }}
+                        }});
+                }}
+                
+                function openPrivateChat(otherUser) {{
+                    const roomName = ['private', username, otherUser].sort().join('_');
+                    currentRoom = roomName;
+                    document.getElementById('chat-title').textContent = otherUser;
+                    document.getElementById('chat-status').textContent = 'Приватный чат';
+                    loadMessages(roomName);
+                    socket.emit('leave', {{ room: currentRoom }});
+                    socket.emit('join', {{ room: roomName }});
+                    
+                    if (window.innerWidth <= 768) {{
+                        toggleSidebar();
+                    }}
+                }}
+                
+                function loadFavorites() {{
+                    // Загрузка избранного
+                    fetch('/get_favorites')
+                        .then(r => r.json())
+                        .then(data => {{
+                            if (data.success) {{
+                                const container = document.getElementById('favorites-list');
+                                container.innerHTML = '';
+                                
+                                data.favorites.forEach(favorite => {{
+                                    const favDiv = document.createElement('div');
+                                    favDiv.className = 'nav-item';
+                                    favDiv.innerHTML = `
+                                        <i class="fas fa-star"></i>
+                                        <span>${{favorite.content?.substring(0, 20) || 'Избранное'}}${{favorite.content?.length > 20 ? '...' : ''}}</span>
+                                    `;
+                                    container.appendChild(favDiv);
+                                }});
+                            }}
+                        }});
+                }}
+                
+                function addToFavorites() {{
+                    const content = prompt('Введите текст для избранного:');
+                    if (content) {{
+                        fetch('/add_to_favorites', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{ content: content }})
+                        }})
+                        .then(r => r.json())
+                        .then(data => {{
+                            if (data.success) {{
+                                loadFavorites();
+                                alert('Добавлено в избранное!');
                             }}
                         }});
                     }}
-                }});
-        }}
-        
-        function loadPersonalChats() {{
-            fetch('/personal_chats')
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        const pc = document.getElementById('personal-chats');
-                        pc.innerHTML = '';
-                        
-                        data.chats.forEach(chatUser => {{
-                            const el = document.createElement('div');
-                            el.className = 'nav-item';
-                            el.innerHTML = `<i class="fas fa-user-friends"></i><span>${{chatUser}}</span>`;
-                            el.onclick = () => openRoom(
-                                'private_' + [user, chatUser].sort().join('_'),
-                                'private',
-                                chatUser
-                            );
-                            pc.appendChild(el);
+                }}
+                
+                function openSettings() {{
+                    alert('Настройки будут реализованы позже');
+                }}
+                
+                function openAvatarModal() {{
+                    alert('Смена аватарки будет реализована позже');
+                }}
+                
+                function logout() {{
+                    fetch('/logout', {{ method: 'POST' }})
+                        .then(() => {{
+                            window.location.href = '/';
                         }});
+                }}
+                
+                // Socket event handlers
+                socket.on('connect', function() {{
+                    console.log('Connected to server');
+                }});
+                
+                socket.on('disconnect', function() {{
+                    console.log('Disconnected from server');
+                }});
+                
+                socket.on('message', function(data) {{
+                    if (data.room === currentRoom) {{
+                        addMessage(data);
                     }}
                 }});
-        }}
-        
-        function openRoom(r, t, title) {{
-            room = r;
-            roomType = t;
-            currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
-            
-            document.getElementById('chat-title').textContent = title;
-            document.getElementById('categories-filter').style.display = 'none';
-            document.getElementById('favorites-grid').style.display = 'none';
-            document.getElementById('channel-settings').style.display = 'none';
-            document.getElementById('chat-messages').style.display = 'block';
-            document.getElementById('input-area').style.display = 'flex';
-            
-            closeEmojiPicker();
-            
-            if (isMobile) {{
-                document.getElementById('sidebar').classList.add('hidden');
-                document.getElementById('chat-area').classList.add('active');
-            }}
-            
-            const chatMessages = document.getElementById('chat-messages');
-            chatMessages.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
-            
-            const channelActions = document.getElementById('channel-actions');
-            const channelAvatar = document.getElementById('channel-header-avatar');
-            if (t === 'channel') {{
-                channelActions.style.display = 'flex';
-                channelAvatar.style.display = 'flex';
-            }} else {{
-                channelActions.style.display = 'none';
-                channelAvatar.style.display = 'none';
-            }}
-            
-            loadMessages(r);
-            socket.emit('join', {{ room: r }});
-        }}
-        
-        function loadMessages(roomName) {{
-            fetch('/get_messages/' + roomName)
-                .then(r => r.json())
-                .then(messages => {{
-                    const messagesContainer = document.getElementById('chat-messages');
-                    messagesContainer.innerHTML = '';
-                    
-                    if (messages && Array.isArray(messages) && messages.length > 0) {{
-                        messages.forEach(msg => {{
-                            addMessageToChat(msg, roomName);
-                        }});
-                    }}
-                    
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+                // Автоматическое изменение высоты поля ввода
+                document.getElementById('msg-input').addEventListener('input', function() {{
+                    this.style.height = 'auto';
+                    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
                 }});
-        }}
-        
-        function addMessageToChat(data, roomName = '') {{
-            const messagesContainer = document.getElementById('chat-messages');
-            
-            const emptyChat = messagesContainer.querySelector('.empty-chat');
-            if (emptyChat) {{
-                emptyChat.remove();
-            }}
-            
-            const message = document.createElement('div');
-            message.className = `message ${{data.user === user ? 'own' : 'other'}}`;
-            
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.style.backgroundColor = data.color || '#6366F1';
-            if (data.user !== user) {{
-                avatar.textContent = data.user.slice(0, 2).toUpperCase();
-            }}
-            
-            const content = document.createElement('div');
-            content.className = 'message-content';
-            
-            if (data.user !== user) {{
-                const sender = document.createElement('div');
-                sender.className = 'message-sender';
-                sender.textContent = data.user;
-                content.appendChild(sender);
-            }}
-            
-            if (data.message) {{
-                const text = document.createElement('div');
-                text.className = 'message-text';
-                text.textContent = data.message;
-                content.appendChild(text);
-            }}
-            
-            if (data.file) {{
-                const fileContainer = document.createElement('div');
-                fileContainer.className = 'message-file';
                 
-                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
-                    const video = document.createElement('video');
-                    video.src = data.file;
-                    video.controls = true;
-                    fileContainer.appendChild(video);
-                }} else {{
-                    const img = document.createElement('img');
-                    img.src = data.file;
-                    img.alt = data.file_name || 'Файл';
-                    img.onclick = () => window.open(data.file, '_blank');
-                    fileContainer.appendChild(img);
-                }}
-                
-                content.appendChild(fileContainer);
-            }}
-            
-            const time = document.createElement('div');
-            time.className = 'message-time';
-            time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
-            content.appendChild(time);
-            
-            message.appendChild(avatar);
-            message.appendChild(content);
-            messagesContainer.appendChild(message);
-            
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }}
-        
-        async function sendMessage() {{
-            const input = document.getElementById('msg-input');
-            const msg = input.value.trim();
-            const fileInput = document.getElementById('file-input');
-            
-            if (!msg && !fileInput.files[0]) return;
-            
-            let fileData = null;
-            let fileName = null;
-            let fileType = null;
-            
-            if (fileInput.files[0]) {{
-                const formData = new FormData();
-                formData.append('file', fileInput.files[0]);
-                
-                try {{
-                    const response = await fetch('/upload_file', {{
-                        method: 'POST',
-                        body: formData
-                    }});
-                    
-                    const data = await response.json();
-                    if (data.success) {{
-                        fileData = data.path;
-                        fileName = data.filename;
-                        fileType = data.file_type;
-                    }} else {{
-                        alert('Ошибка загрузки файла: ' + data.error);
-                        return;
+                // Обработка изменения размера окна
+                window.addEventListener('resize', function() {{
+                    if (window.innerWidth > 768) {{
+                        document.getElementById('sidebar').classList.add('active');
                     }}
-                }} catch (error) {{
-                    alert('Ошибка соединения при загрузке файла');
-                    return;
-                }}
-            }}
-            
-            const messageData = {{
-                message: msg,
-                room: room,
-                type: roomType
-            }};
-            
-            if (fileData) {{
-                messageData.file = fileData;
-                messageData.fileName = fileName;
-                messageData.fileType = fileType;
-            }}
-            
-            socket.emit('message', messageData);
-            
-            input.value = '';
-            document.getElementById('file-preview').innerHTML = '';
-            fileInput.value = '';
-            closeEmojiPicker();
-        }}
-        
-        function handleKeydown(e) {{
-            if (e.key === 'Enter' && !e.shiftKey) {{
-                e.preventDefault();
-                sendMessage();
-            }}
-        }}
-        
-        function autoResizeTextarea() {{
-            const textarea = document.getElementById('msg-input');
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        }}
-        
-        document.getElementById('msg-input').addEventListener('input', autoResizeTextarea);
-        
-        function handleFileSelect(input) {{
-            const file = input.files[0];
-            if (file) {{
-                const reader = new FileReader();
-                reader.onload = (e) => {{
-                    const preview = document.getElementById('file-preview');
-                    if (file.type.startsWith('image/')) {{
-                        preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                                <img src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
-                                <div>
-                                    <div style="font-weight: 500;">${{file.name}}</div>
-                                    <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
-                                        <i class="fas fa-times"></i> Удалить
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }} else if (file.type.startsWith('video/')) {{
-                        preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                                <video src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;"></video>
-                                <div>
-                                    <div style="font-weight: 500;">${{file.name}}</div>
-                                    <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
-                                        <i class="fas fa-times"></i> Удалить
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }} else {{
-                        preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px; background: var(--bg); border-radius: 8px;">
-                                <i class="fas fa-file" style="font-size: 2rem; color: var(--accent);"></i>
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 500;">${{file.name}}</div>
-                                    <div style="font-size: 0.8rem; color: #666;">${{(file.size / 1024).toFixed(1)}} KB</div>
-                                </div>
-                                <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer;">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        `;
-                    }}
-                }};
-                reader.readAsDataURL(file);
-            }}
-        }}
-        
-        socket.on('message', (data) => {{
-            if (data.room === room) {{
-                addMessageToChat(data, room);
-            }}
-        }});
-        
-        function openAddFavoriteModal() {{
-            document.getElementById('add-favorite-modal').style.display = 'flex';
-            document.getElementById('favorite-file').addEventListener('change', function(e) {{
-                const file = e.target.files[0];
-                const preview = document.getElementById('favorite-file-preview');
-                
-                if (file) {{
-                    if (file.type.startsWith('image/')) {{
-                        const reader = new FileReader();
-                        reader.onload = (e) => {{
-                            preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 100%; border-radius: 8px;">`;
-                        }};
-                        reader.readAsDataURL(file);
-                    }} else if (file.type.startsWith('video/')) {{
-                        const reader = new FileReader();
-                        reader.onload = (e) => {{
-                            preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
-                        }};
-                        reader.readAsDataURL(file);
-                    }} else {{
-                        preview.innerHTML = `<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                            <i class="fas fa-file"></i> ${{file.name}}
-                        </div>`;
-                    }}
-                }}
-            }});
-        }}
-        
-        function closeAddFavoriteModal() {{
-            document.getElementById('add-favorite-modal').style.display = 'none';
-            document.getElementById('favorite-content').value = '';
-            document.getElementById('favorite-category').value = 'general';
-            document.getElementById('favorite-file').value = '';
-            document.getElementById('favorite-file-preview').innerHTML = '';
-        }}
-        
-        function saveFavorite() {{
-            const content = document.getElementById('favorite-content').value.trim();
-            const category = document.getElementById('favorite-category').value.trim() || 'general';
-            const fileInput = document.getElementById('favorite-file');
-            const file = fileInput.files[0];
-            
-            if (!content && !file) {{
-                alert('Добавьте текст или файл');
-                return;
-            }}
-            
-            const formData = new FormData();
-            formData.append('content', content);
-            formData.append('category', category);
-            
-            if (file) {{
-                formData.append('file', file);
-            }}
-            
-            fetch('/add_to_favorites', {{
-                method: 'POST',
-                body: formData
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    closeAddFavoriteModal();
-                    loadFavoritesCategories();
-                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                    alert('Добавлено в избранное!');
-                }} else {{
-                    alert(data.error || 'Ошибка при сохранении');
-                }}
-            }});
-        }}
-        
-        function deleteFavorite(favoriteId) {{
-            if (!confirm('Удалить эту заметку?')) return;
-            
-            fetch(`/delete_favorite/${{favoriteId}}`, {{
-                method: 'DELETE'
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    document.getElementById(`favorite-${{favoriteId}}`).remove();
-                    
-                    const grid = document.getElementById('favorites-grid');
-                    if (grid.children.length === 0) {{
-                        loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                    }}
-                }} else {{
-                    alert('Ошибка при удалении');
-                }}
-            }});
-        }}
-        
-        function togglePinFavorite(favoriteId) {{
-            fetch(`/toggle_pin_favorite/${{favoriteId}}`, {{
-                method: 'POST'
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    const item = document.getElementById(`favorite-${{favoriteId}}`);
-                    if (data.pinned) {{
-                        item.classList.add('pinned');
-                    }} else {{
-                        item.classList.remove('pinned');
-                    }}
-                    
-                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                }}
-            }});
-        }}
-        
-        function openFilePreview(filePath) {{
-            window.open(filePath, '_blank');
-        }}
-        
-        socket.on('connect', function() {{
-            console.log('Connected to server');
-        }});
-        
-        socket.on('disconnect', function() {{
-            console.log('Disconnected from server');
-        }});
-    </script>
-</body>
-</html>'''
+                }});
+            </script>
+        </body>
+        </html>'''
+
+    @app.route('/users')
+    def users_handler():
+        return jsonify(get_all_users())
 
     @app.route('/get_messages/<room>')
     def get_messages_handler(room):
@@ -3542,11 +2351,42 @@ def create_app():
         messages = get_messages_for_room(room)
         return jsonify(messages)
 
+    @app.route('/get_favorites')
+    def get_favorites_handler():
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        favorites = get_favorites(session['username'])
+        return jsonify({'success': True, 'favorites': favorites})
+
+    @app.route('/add_to_favorites', methods=['POST'])
+    def add_to_favorites_handler():
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        data = request.get_json()
+        content = data.get('content', '').strip()
+        
+        if not content:
+            return jsonify({'success': False, 'error': 'Введите текст'})
+        
+        favorite_id = add_to_favorites(session['username'], content)
+        if favorite_id:
+            return jsonify({'success': True, 'id': favorite_id})
+        return jsonify({'success': False, 'error': 'Не удалось добавить в избранное'})
+
+    @app.route('/logout', methods=['POST'])
+    def logout_handler():
+        if 'username' in session:
+            update_online(session['username'], False)
+            session.pop('username', None)
+        return jsonify({'success': True})
+
     # === SocketIO ===
     @socketio.on('connect')
     def on_connect():
         if 'username' in session:
-            join_room('channel_general')
+            join_room('general')
             update_online(session['username'], True)
 
     @socketio.on('disconnect')
@@ -3569,9 +2409,7 @@ def create_app():
         
         msg = data.get('message', '').strip()
         room = data.get('room')
-        file_path = data.get('file')
-        file_name = data.get('fileName')
-        file_type = data.get('fileType', 'text')
+        file = data.get('file')
         
         # Для приватных чатов
         recipient = None
@@ -3581,42 +2419,31 @@ def create_app():
                 user1, user2 = parts[1], parts[2]
                 recipient = user1 if user2 == session['username'] else user2
         
-        # Сохраняем сообщение в БД
+        # Сохраняем сообщение
         msg_id = save_message(
             session['username'], 
             msg, 
             room, 
             recipient, 
-            file_type, 
-            file_path,
-            file_name
+            'text', 
+            file,
+            None
         )
         
-        # Получаем информацию об отправителе
+        # Получаем цвет пользователя
         user_info = get_user(session['username'])
         user_color = user_info['avatar_color'] if user_info else '#6366F1'
-        user_avatar_path = user_info['avatar_path'] if user_info else None
         
-        # Подготавливаем данные для отправки
-        message_data = {
+        # Отправляем сообщение в комнату
+        emit('message', {
             'user': session['username'], 
             'message': msg, 
             'color': user_color,
-            'avatar_path': user_avatar_path,
             'timestamp': datetime.now().strftime('%H:%M'),
-            'room': room
-        }
-        
-        # Добавляем информацию о файле если есть
-        if file_path:
-            message_data['file'] = file_path
-            message_data['fileName'] = file_name
-            message_data['fileType'] = file_type
-        
-        # Отправляем сообщение всем в комнате
-        emit('message', message_data, room=room)
+            'room': room,
+            'file': file
+        }, room=room)
 
-    # Health check
     @app.route('/health')
     def health_check():
         return jsonify({'status': 'healthy', 'service': 'Tandau Messenger'})
