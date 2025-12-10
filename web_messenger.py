@@ -2319,7 +2319,7 @@ def create_app():
                                     </div>
                                 </div>
                                 
-                                <div class="glass-section">
+                                <div class="glass-section {
                                     <h3 class="section-title"><i class="fas fa-cookie-bite"></i> 5. Файлы cookie и технологии отслеживания</h3>
                                     <div class="section-content">
                                         <p>Мы используем минимальные технологии для улучшения опыта:</p>
@@ -2862,6 +2862,7 @@ def create_app():
             border-bottom: 1px solid var(--border);
         }}
         
+        /* УЛУЧШЕННЫЕ СТИЛИ ДЛЯ АВАТАРОК */
         .avatar {{
             width: 44px;
             height: 44px;
@@ -2877,7 +2878,14 @@ def create_app():
             background-size: cover;
             background-position: center;
             cursor: pointer;
-            border: 2px solid var(--accent);
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }}
+        
+        .avatar:hover {{
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }}
         
         .user-details {{
@@ -3061,7 +3069,7 @@ def create_app():
             -webkit-overflow-scrolling: touch;
         }}
         
-        /* Стили сообщений */
+        /* УЛУЧШЕННЫЕ СТИЛИ ДЛЯ СООБЩЕНИЙ С АВАТАРКАМИ */
         .message-container {{
             display: flex;
             flex-direction: column;
@@ -3081,8 +3089,8 @@ def create_app():
         }}
         
         .message-avatar {{
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background: var(--accent);
             color: white;
@@ -3094,6 +3102,19 @@ def create_app():
             flex-shrink: 0;
             background-size: cover;
             background-position: center;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transition: transform 0.2s ease;
+        }}
+        
+        .message-avatar:hover {{
+            transform: scale(1.1);
+        }}
+        
+        /* Аватарки для собственных сообщений имеют другой стиль */
+        .message.own .message-avatar {{
+            border-color: var(--accent);
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
         }}
         
         .message-content {{
@@ -3102,7 +3123,8 @@ def create_app():
             padding: 12px 16px;
             border-radius: 18px;
             border-top-left-radius: 4px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: relative;
         }}
         
         .message.own .message-content {{
@@ -3112,20 +3134,53 @@ def create_app():
             border-top-right-radius: 4px;
         }}
         
+        /* Индикатор треугольника у сообщения */
+        .message-content::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -8px;
+            width: 0;
+            height: 0;
+            border-top: 8px solid var(--input);
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+        }}
+        
+        .message.own .message-content::before {{
+            left: auto;
+            right: -8px;
+            border-top: 8px solid var(--accent);
+        }}
+        
         .message-sender {{
             font-weight: 600;
             font-size: 0.9rem;
             margin-bottom: 4px;
             color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }}
         
         .message.own .message-sender {{
+            color: white;
+            justify-content: flex-end;
+        }}
+        
+        .sender-name {{
+            color: var(--accent);
+            font-weight: 700;
+        }}
+        
+        .message.own .sender-name {{
             color: white;
         }}
         
         .message-text {{
             word-break: break-word;
             line-height: 1.4;
+            margin-top: 4px;
         }}
         
         .message-file {{
@@ -3503,6 +3558,7 @@ def create_app():
             background: rgba(255, 255, 255, 0.2);
         }}
         
+        /* ИСПРАВЛЕННЫЙ БЛОК ВВОДА СООБЩЕНИЙ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ */
         .msg-input {{
             flex: 1;
             padding: 12px 16px;
@@ -3964,14 +4020,72 @@ def create_app():
             opacity: 0.3;
         }}
         
-        /* Модальное окно настроек канала */
+        /* Модальное окно настроек канала с эффектом жидкого стекла */
         .channel-settings-modal .modal-content {{
             max-width: 600px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 
+                0 25px 60px rgba(0, 0, 0, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            position: relative;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
         }}
         
+        [data-theme="dark"] .channel-settings-modal .modal-content {{
+            background: rgba(30, 30, 40, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }}
+        
+        .channel-settings-modal .modal-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+            border-radius: 20px 20px 0 0;
+            position: relative;
+        }}
+        
+        .channel-settings-modal .modal-header::after {{
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #667eea, #764ba2, transparent);
+            border-radius: 2px;
+        }}
+        
+        .channel-settings-modal .modal-header h3 {{
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }}
+        
+        /* УДАЛЕН КРЕСТИК ИЗ НАСТРОЕК КАНАЛА (сохраняем кнопку закрытия в других модалках) */
+        .channel-settings-modal .close-modal {{
+            display: none; /* Убираем крестик */
+        }}
+        
+        /* УЛУЧШЕННЫЕ СТИЛИ ДЛЯ СЕКЦИЙ НАСТРОЕК КАНАЛА */
         .channel-avatar-section {{
             text-align: center;
             margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }}
         
         .channel-avatar-preview {{
@@ -3983,11 +4097,22 @@ def create_app():
             background-size: cover;
             background-position: center;
             cursor: pointer;
-            border: 3px solid var(--accent);
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }}
+        
+        .channel-avatar-preview:hover {{
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.3);
         }}
         
         .channel-info-section {{
             margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }}
         
         .channel-description {{
@@ -3996,22 +4121,51 @@ def create_app():
         
         .channel-description textarea {{
             width: 100%;
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: var(--bg);
-            color: var(--text);
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white;
             font-size: 1rem;
             resize: vertical;
-            min-height: 80px;
+            min-height: 100px;
+            transition: all 0.3s ease;
+        }}
+        
+        .channel-description textarea:focus {{
+            outline: none;
+            border-color: rgba(102, 126, 234, 0.6);
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 
+                inset 0 2px 4px rgba(0, 0, 0, 0.1),
+                0 0 0 3px rgba(102, 126, 234, 0.2);
         }}
         
         .channel-description .btn {{
-            margin-top: 10px;
+            margin-top: 15px;
+            padding: 12px 25px;
+            font-weight: 600;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            transition: all 0.3s ease;
+        }}
+        
+        .channel-description .btn:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
         }}
         
         .channel-members-section {{
             margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }}
         
         .member-actions-section {{
@@ -4020,7 +4174,7 @@ def create_app():
             margin-top: 5px;
         }}
         
-        /* Медиа запросы для мобильных устройств */
+        /* Медиа запросы для мобильных устройств - ИСПРАВЛЕНИЯ ДЛЯ БЛОКА ВВОДА */
         @media (max-width: 768px) {{
             .menu-toggle {{
                 display: block;
@@ -4079,40 +4233,74 @@ def create_app():
                 font-size: 0.8rem;
             }}
             
+            /* ИСПРАВЛЕННЫЙ БЛОК ВВОДА СООБЩЕНИЙ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ */
             .input-area {{
                 position: fixed;
                 bottom: 0;
                 left: 0;
                 right: 0;
                 padding: 12px 15px;
-                background: rgba(255, 255, 255, 0.9);
+                background: rgba(255, 255, 255, 0.95);
                 backdrop-filter: blur(15px);
                 -webkit-backdrop-filter: blur(15px);
                 border-top: 1px solid rgba(255, 255, 255, 0.3);
                 z-index: 1000;
                 box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.15);
+                display: flex !important; /* Важно: гарантируем отображение */
+                flex-direction: column;
             }}
             
             [data-theme="dark"] .input-area {{
-                background: rgba(45, 45, 45, 0.9);
+                background: rgba(45, 45, 45, 0.95);
                 border-top: 1px solid rgba(255, 255, 255, 0.1);
             }}
             
+            .input-row {{
+                display: flex;
+                gap: 8px;
+                width: 100%;
+                align-items: center;
+            }}
+            
             .msg-input {{
-                padding: 12px 14px;
+                flex: 1;
+                padding: 12px 16px;
                 font-size: 16px;
                 min-height: 44px;
-                background: rgba(255, 255, 255, 0.8);
+                max-height: 100px;
+                background: rgba(255, 255, 255, 0.9);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                margin: 0;
+                width: calc(100% - 104px); /* Рассчитываем ширину с учетом кнопок */
             }}
             
             [data-theme="dark"] .msg-input {{
                 background: rgba(255, 255, 255, 0.15);
+                color: white;
             }}
             
-            .attachment-btn, .send-btn {{
+            .attachment-btn, .send-btn, .emoji-btn {{
                 width: 44px;
                 height: 44px;
                 flex-shrink: 0;
+                margin: 0;
+            }}
+            
+            .emoji-btn {{
+                order: 1;
+            }}
+            
+            .attachment-btn {{
+                order: 2;
+            }}
+            
+            .msg-input {{
+                order: 3;
+                flex: 1;
+            }}
+            
+            .send-btn {{
+                order: 4;
             }}
             
             .messages {{
@@ -4147,6 +4335,23 @@ def create_app():
             .channel-avatar-preview {{
                 width: 100px;
                 height: 100px;
+            }}
+            
+            /* Дополнительные исправления для корректного отображения */
+            .emoji-container {{
+                bottom: 80px;
+                left: 10px;
+                right: 10px;
+            }}
+            
+            .emoji-picker {{
+                width: auto;
+                max-width: 100%;
+            }}
+            
+            .file-preview {{
+                margin-top: 8px;
+                padding: 8px;
             }}
         }}
         
@@ -4960,56 +5165,64 @@ def create_app():
         </div>
     </div>
 
-    <!-- Модальное окно настроек канала -->
+    <!-- Модальное окно настроек канала с эффектом жидкого стекла -->
     <div class="modal channel-settings-modal" id="channel-settings-modal">
         <div class="modal-content">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3>Настройки канала</h3>
-                <button class="close-modal" onclick="closeChannelSettingsModal()">
-                    <i class="fas fa-times"></i>
-                </button>
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Настройки канала</h3>
+                <!-- Крестик удален, закрытие будет через кнопку ниже -->
             </div>
             
             <div class="channel-avatar-section">
                 <div class="channel-avatar-preview" id="channel-avatar-preview" onclick="document.getElementById('channel-avatar-input').click()"></div>
                 <input type="file" id="channel-avatar-input" accept="image/*" style="display:none" onchange="previewChannelAvatar(this)">
-                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
-                    <button class="btn btn-primary" onclick="uploadChannelAvatar()">Загрузить аватарку</button>
-                    <button class="btn btn-secondary" onclick="removeChannelAvatar()">Удалить аватарку</button>
+                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="uploadChannelAvatar()" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none;">
+                        <i class="fas fa-upload"></i> Загрузить аватарку
+                    </button>
+                    <button class="btn btn-secondary" onclick="removeChannelAvatar()" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                        <i class="fas fa-trash-alt"></i> Удалить аватарку
+                    </button>
                 </div>
             </div>
             
             <div class="channel-info-section">
-                <h4 style="margin-bottom: 15px;">Информация о канале</h4>
+                <h4 style="margin-bottom: 15px; color: white;">Информация о канале</h4>
                 <div class="form-group">
-                    <label class="form-label">Название канала</label>
+                    <label class="form-label" style="color: white;">Название канала</label>
                     <div style="display: flex; gap: 10px;">
-                        <input type="text" class="form-control" id="channel-edit-name" placeholder="Название канала">
-                        <button class="btn btn-primary" onclick="renameChannelFromModal()">Изменить</button>
+                        <input type="text" class="glass-form-input" id="channel-edit-name" placeholder="Название канала" style="flex: 1;">
+                        <button class="btn btn-primary" onclick="renameChannelFromModal()" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none;">
+                            <i class="fas fa-edit"></i> Изменить
+                        </button>
                     </div>
                 </div>
                 
                 <div class="channel-description">
-                    <label class="form-label">Описание канала</label>
-                    <textarea class="form-control" id="channel-edit-description" placeholder="Добавьте описание канала..."></textarea>
-                    <button class="btn btn-primary" onclick="updateChannelDescription()">Сохранить описание</button>
+                    <label class="form-label" style="color: white;">Описание канала</label>
+                    <textarea class="glass-form-input glass-form-textarea" id="channel-edit-description" placeholder="Добавьте описание канала..."></textarea>
+                    <button class="btn btn-primary" onclick="updateChannelDescription()" style="margin-top: 15px; background: linear-gradient(135deg, #667eea, #764ba2); border: none;">
+                        <i class="fas fa-save"></i> Сохранить описание
+                    </button>
                 </div>
             </div>
             
             <div class="channel-members-section">
-                <h4 style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                    <span>Участники канала</span>
-                    <button class="btn btn-primary" onclick="openAddUserModalFromSettings()" style="padding: 5px 10px; font-size: 0.9rem;">
+                <h4 style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: white;">
+                    <span><i class="fas fa-users"></i> Участники канала</span>
+                    <button class="btn btn-primary" onclick="openAddUserModalFromSettings()" style="padding: 8px 15px; font-size: 0.9rem; background: linear-gradient(135deg, #667eea, #764ba2); border: none;">
                         <i class="fas fa-user-plus"></i> Добавить
                     </button>
                 </h4>
-                <div class="member-list" id="channel-members-list">
+                <div class="member-list" id="channel-members-list" style="background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1);">
                     <!-- Участники будут загружены динамически -->
                 </div>
             </div>
             
-            <div style="display: flex; gap: 10px; margin-top: 30px;">
-                <button class="btn btn-secondary" onclick="closeChannelSettingsModal()">Закрыть</button>
+            <div style="display: flex; gap: 10px; margin-top: 30px; justify-content: center;">
+                <button class="btn btn-secondary" onclick="closeChannelSettingsModal()" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); color: white; padding: 12px 30px;">
+                    <i class="fas fa-times"></i> Закрыть
+                </button>
             </div>
         </div>
     </div>
@@ -5976,23 +6189,23 @@ def create_app():
                                     <div class="member-avatar" style="background-color: ${{member.color}};">
                                         ${{member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}}
                                     </div>
-                                    <div class="member-name">
+                                    <div class="member-name" style="color: white;">
                                         ${{member.username}}
                                         ${{isCreator ? '<span class="member-role admin">Создатель</span>' : 
                                           member.is_admin ? '<span class="member-role admin">Админ</span>' : 
-                                          '<span class="member-role">Участник</span>'}}
+                                          '<span class="member-role" style="background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.8); border-color: rgba(255, 255, 255, 0.2);">Участник</span>'}}
                                     </div>
                                 </div>
                                 ${{canManage ? `
                                     <div class="member-actions-section">
                                         ${{!member.is_admin ? 
-                                            `<button class="action-btn admin" onclick="makeUserAdmin('${{member.username}}')" title="Назначить администратором">
+                                            `<button class="action-btn admin" onclick="makeUserAdmin('${{member.username}}')" title="Назначить администратором" style="background: #ffc107; color: #000; border-color: #ffc107;">
                                                 <i class="fas fa-user-shield"></i>
                                             </button>` : 
-                                            `<button class="action-btn" onclick="removeUserAdmin('${{member.username}}')" title="Снять права администратора">
+                                            `<button class="action-btn" onclick="removeUserAdmin('${{member.username}}')" title="Снять права администратора" style="background: rgba(255, 255, 255, 0.1); color: white; border-color: rgba(255, 255, 255, 0.3);">
                                                 <i class="fas fa-user-times"></i>
                                             </button>`}}
-                                        <button class="action-btn remove" onclick="removeUserFromChannel('${{member.username}}')" title="Удалить из канала">
+                                        <button class="action-btn remove" onclick="removeUserFromChannel('${{member.username}}')" title="Удалить из канала" style="background: #dc3545; color: white; border-color: #dc3545;">
                                             <i class="fas fa-user-minus"></i>
                                         </button>
                                     </div>
@@ -6243,7 +6456,7 @@ def create_app():
                 .catch(error => console.error('Error loading messages:', error));
         }}
 
-        // Добавление сообщения в чат (с поддержкой аватарок в личных чатах)
+        // УЛУЧШЕННАЯ ФУНКЦИЯ: Добавление сообщения в чат с красивыми аватарками
         function addMessageToChat(data, roomName = '') {{
             const messagesContainer = document.getElementById('chat-messages');
             
@@ -6260,27 +6473,29 @@ def create_app():
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
             
-            // Для личных чатов загружаем аватарку пользователя
-            if (data.user !== user && roomName.startsWith('private_')) {{
-                fetch('/user_info/' + data.user)
-                    .then(r => r.json())
-                    .then(userInfo => {{
-                        if (userInfo.success) {{
-                            if (userInfo.avatar_path) {{
-                                avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                                avatar.textContent = '';
-                            }} else {{
-                                avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#6366F1';
-                                avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                            }}
+            // Для всех пользователей загружаем их аватарки
+            fetch('/user_info/' + data.user)
+                .then(r => r.json())
+                .then(userInfo => {{
+                    if (userInfo.success) {{
+                        if (userInfo.avatar_path) {{
+                            avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                            avatar.textContent = '';
+                        }} else {{
+                            avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#6366F1';
+                            avatar.textContent = data.user.slice(0, 2).toUpperCase();
                         }}
-                    }});
-            }} else {{
-                avatar.style.backgroundColor = data.color || '#6366F1';
-                if (data.user !== user) {{
+                    }} else {{
+                        // Если не удалось получить информацию о пользователе
+                        avatar.style.backgroundColor = data.color || '#6366F1';
+                        avatar.textContent = data.user.slice(0, 2).toUpperCase();
+                    }}
+                }})
+                .catch(() => {{
+                    // В случае ошибки используем базовые данные
+                    avatar.style.backgroundColor = data.color || '#6366F1';
                     avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                }}
-            }}
+                }});
             
             // Создаем контент сообщения
             const content = document.createElement('div');
@@ -6290,7 +6505,12 @@ def create_app():
             if (data.user !== user) {{
                 const sender = document.createElement('div');
                 sender.className = 'message-sender';
-                sender.textContent = data.user;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'sender-name';
+                nameSpan.textContent = data.user;
+                sender.appendChild(nameSpan);
+                
                 content.appendChild(sender);
             }}
             
