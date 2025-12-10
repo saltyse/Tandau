@@ -46,7 +46,8 @@ def create_app():
                     is_online BOOLEAN DEFAULT FALSE,
                     avatar_color TEXT DEFAULT '#6366F1',
                     avatar_path TEXT,
-                    theme TEXT DEFAULT 'light'
+                    theme TEXT DEFAULT 'light',
+                    profile_description TEXT DEFAULT ''
                 )
             ''')
             c.execute('''
@@ -153,7 +154,8 @@ def create_app():
                     'is_online': row[4],
                     'avatar_color': row[5],
                     'avatar_path': row[6],
-                    'theme': row[7]
+                    'theme': row[7],
+                    'profile_description': row[8] or ''
                 }
             return None
 
@@ -200,6 +202,13 @@ def create_app():
             c = conn.cursor()
             c.execute('UPDATE users SET is_online = ? WHERE username = ?', (status, username))
             conn.commit()
+
+    def update_profile_description(username, description):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('UPDATE users SET profile_description = ? WHERE username = ?', (description, username))
+            conn.commit()
+            return c.rowcount > 0
 
     def save_message(user, msg, room, recipient=None, msg_type='text', file_path=None, file_name=None, is_favorite=False):
         with sqlite3.connect('messenger.db') as conn:
@@ -654,6 +663,17 @@ def create_app():
             return jsonify({'success': True, 'path': path})
         return jsonify({'success': False, 'error': 'Неверный формат файла'})
 
+    @app.route('/update_profile_description', methods=['POST'])
+    def update_profile_description_handler():
+        if 'username' not in session: 
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        description = request.json.get('description', '').strip()
+        success = update_profile_description(session['username'], description)
+        if success:
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': 'Ошибка обновления описания'})
+
     @app.route('/upload_channel_avatar', methods=['POST'])
     def upload_channel_avatar_handler():
         if 'username' not in session: 
@@ -911,7 +931,8 @@ def create_app():
                 'online': user['is_online'],
                 'avatar_color': user['avatar_color'],
                 'avatar_path': user['avatar_path'],
-                'theme': user['theme']
+                'theme': user['theme'],
+                'profile_description': user['profile_description']
             })
         return jsonify({'success': False, 'error': 'Пользователь не найден'})
 
@@ -3094,6 +3115,7 @@ def create_app():
             flex-shrink: 0;
             background-size: cover;
             background-position: center;
+            cursor: pointer;
         }}
         
         .message-content {{
@@ -4788,6 +4810,333 @@ def create_app():
         .close-btn-animation:hover {{
             transform: rotate(90deg);
         }}
+        
+        /* НОВЫЕ СТИЛИ ДЛЯ БЛОКА ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ */
+        .profile-modal-overlay {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 2001;
+            animation: fadeIn 0.3s ease-out;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }}
+        
+        .profile-modal-container {{
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 30px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            box-shadow: 
+                0 25px 60px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            position: relative;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        
+        [data-theme="dark"] .profile-modal-container {{
+            background: rgba(30, 30, 40, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }}
+        
+        .profile-modal-header {{
+            text-align: center;
+            margin-bottom: 25px;
+            position: relative;
+            padding-bottom: 20px;
+        }}
+        
+        .profile-modal-header::after {{
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 25%;
+            right: 25%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #667eea, #764ba2, transparent);
+            border-radius: 2px;
+        }}
+        
+        .profile-avatar-large {{
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 2rem;
+            background-size: cover;
+            background-position: center;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }}
+        
+        .profile-username {{
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+            color: #333;
+        }}
+        
+        [data-theme="dark"] .profile-username {{
+            color: white;
+        }}
+        
+        .profile-status {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }}
+        
+        [data-theme="dark"] .profile-status {{
+            color: #ccc;
+        }}
+        
+        .status-dot-large {{
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+        }}
+        
+        .profile-description {{
+            margin: 25px 0;
+            text-align: center;
+        }}
+        
+        .profile-description-label {{
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }}
+        
+        [data-theme="dark"] .profile-description-label {{
+            color: #ccc;
+        }}
+        
+        .profile-description-text {{
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 15px;
+            color: #333;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            min-height: 80px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }}
+        
+        [data-theme="dark"] .profile-description-text {{
+            background: rgba(255, 255, 255, 0.05);
+            color: #eee;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }}
+        
+        .profile-description-edit {{
+            display: none;
+        }}
+        
+        .profile-description-textarea {{
+            width: 100%;
+            padding: 15px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: #333;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            min-height: 100px;
+            resize: vertical;
+        }}
+        
+        [data-theme="dark"] .profile-description-textarea {{
+            background: rgba(255, 255, 255, 0.05);
+            color: #eee;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }}
+        
+        .profile-actions {{
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }}
+        
+        .profile-action-btn {{
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }}
+        
+        .profile-edit-btn {{
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+        }}
+        
+        .profile-edit-btn:hover {{
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }}
+        
+        .profile-save-btn {{
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }}
+        
+        .profile-save-btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }}
+        
+        .profile-cancel-btn {{
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: #dc3545;
+        }}
+        
+        .profile-cancel-btn:hover {{
+            background: rgba(220, 53, 69, 0.2);
+            transform: translateY(-2px);
+        }}
+        
+        .profile-close-btn {{
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #333;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }}
+        
+        [data-theme="dark"] .profile-close-btn {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }}
+        
+        .profile-close-btn:hover {{
+            background: rgba(255, 255, 255, 0.25);
+            transform: rotate(90deg);
+        }}
+        
+        /* Адаптивность для профиля */
+        @media (max-width: 768px) {{
+            .profile-modal-container {{
+                padding: 20px 15px;
+                margin: 10px;
+                max-height: 85vh;
+            }}
+            
+            .profile-avatar-large {{
+                width: 80px;
+                height: 80px;
+                font-size: 1.5rem;
+            }}
+            
+            .profile-username {{
+                font-size: 1.3rem;
+            }}
+            
+            .profile-actions {{
+                flex-direction: column;
+            }}
+            
+            .profile-action-btn {{
+                width: 100%;
+            }}
+        }}
+        
+        /* Стили для аватарок в личных чатах */
+        .private-chat-avatar {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+            cursor: pointer;
+        }}
+        
+        .private-chat-header {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .private-chat-info {{
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .private-chat-name {{
+            font-weight: 600;
+            font-size: 1rem;
+        }}
+        
+        .private-chat-status {{
+            font-size: 0.8rem;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+        
+        .private-chat-status-dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+        }}
     </style>
 </head>
 <body>
@@ -4861,10 +5210,8 @@ def create_app():
                 <button class="back-btn" onclick="goBack()">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <div class="channel-header-avatar" id="channel-header-avatar" onclick="openChannelSettingsModal()"></div>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600;" id="chat-title">Избранное</div>
-                    <div style="font-size: 0.8rem; color: #666;" id="channel-description"></div>
+                <div id="chat-header-content">
+                    <!-- Содержимое заголовка чата будет меняться -->
                 </div>
                 <div class="channel-actions" id="channel-actions" style="display: none;">
                     <button class="channel-btn" onclick="openChannelSettingsModal()">
@@ -4983,6 +5330,48 @@ def create_app():
                 </div>
             </div>
             <button class="btn btn-secondary" onclick="closeAvatarModal()">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- НОВОЕ МОДАЛЬНОЕ ОКНО ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ -->
+    <div class="profile-modal-overlay" id="profile-modal">
+        <div class="profile-modal-container">
+            <button class="profile-close-btn" onclick="closeProfileModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            
+            <div class="profile-modal-header">
+                <div class="profile-avatar-large" id="profile-avatar-large"></div>
+                <div class="profile-username" id="profile-username"></div>
+                <div class="profile-status">
+                    <div class="status-dot-large"></div>
+                    <span id="profile-status-text">Online</span>
+                </div>
+            </div>
+            
+            <div class="profile-description">
+                <div class="profile-description-label">О себе</div>
+                <div class="profile-description-text" id="profile-description-text">
+                    Пользователь еще не добавил информацию о себе
+                </div>
+                <div class="profile-description-edit" id="profile-description-edit">
+                    <textarea class="profile-description-textarea" id="profile-description-textarea" placeholder="Расскажите о себе..."></textarea>
+                    <div class="profile-actions" id="profile-edit-actions" style="display: none;">
+                        <button class="profile-action-btn profile-save-btn" onclick="saveProfileDescription()">
+                            <i class="fas fa-save"></i> Сохранить
+                        </button>
+                        <button class="profile-action-btn profile-cancel-btn" onclick="cancelProfileEdit()">
+                            <i class="fas fa-times"></i> Отмена
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="profile-actions" id="profile-view-actions">
+                <button class="profile-action-btn profile-edit-btn" onclick="editProfileDescription()" id="profile-edit-btn">
+                    <i class="fas fa-edit"></i> Редактировать описание
+                </button>
+            </div>
         </div>
     </div>
 
@@ -5206,6 +5595,7 @@ def create_app():
         let currentChannel = "";
         let currentCategory = "all";
         let isMobile = window.innerWidth <= 768;
+        let currentProfileUser = "";
 
         // Определение мобильного устройства
         function checkMobile() {{
@@ -5274,6 +5664,14 @@ def create_app():
                     !emojiBtn.contains(event.target)) {{
                     emojiFullContainer.style.display = 'none';
                     emojiBtn.classList.remove('active');
+                }}
+            }});
+            
+            // Скрываем профиль при клике вне блока
+            document.addEventListener('click', function(event) {{
+                const profileModal = document.getElementById('profile-modal');
+                if (profileModal.style.display === 'flex' && event.target === profileModal) {{
+                    closeProfileModal();
                 }}
             }});
         }};
@@ -5476,6 +5874,15 @@ def create_app():
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
             
+            // Обновляем заголовок чата
+            const chatHeader = document.getElementById('chat-header-content');
+            chatHeader.innerHTML = `
+                <div style="flex: 1;">
+                    <div style="font-weight: 600;" id="chat-title">Избранное</div>
+                    <div style="font-size: 0.8rem; color: #666;" id="channel-description"></div>
+                </div>
+            `;
+            
             // На мобильных устройствах переключаемся в режим чата
             if (isMobile) {{
                 document.getElementById('sidebar').classList.add('hidden');
@@ -5487,6 +5894,132 @@ def create_app():
             event.currentTarget.classList.add('active');
             
             loadFavorites(currentCategory === 'all' ? null : currentCategory);
+        }}
+
+        // НОВАЯ ФУНКЦИЯ: Открытие профиля пользователя
+        function openUserProfile(username) {{
+            currentProfileUser = username;
+            
+            fetch('/user_info/' + username)
+                .then(r => r.json())
+                .then(userInfo => {{
+                    if (userInfo.success) {{
+                        const profileModal = document.getElementById('profile-modal');
+                        const profileAvatar = document.getElementById('profile-avatar-large');
+                        const profileName = document.getElementById('profile-username');
+                        const statusText = document.getElementById('profile-status-text');
+                        const descriptionText = document.getElementById('profile-description-text');
+                        const descriptionEdit = document.getElementById('profile-description-edit');
+                        const profileEditBtn = document.getElementById('profile-edit-btn');
+                        
+                        // Устанавливаем аватарку
+                        if (userInfo.avatar_path) {{
+                            profileAvatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                            profileAvatar.textContent = '';
+                        }} else {{
+                            profileAvatar.style.backgroundImage = 'none';
+                            profileAvatar.style.backgroundColor = userInfo.avatar_color;
+                            profileAvatar.textContent = username.slice(0, 2).toUpperCase();
+                        }}
+                        
+                        // Устанавливаем имя пользователя
+                        profileName.textContent = username;
+                        
+                        // Устанавливаем статус
+                        statusText.textContent = userInfo.online ? 'Online' : 'Offline';
+                        
+                        // Устанавливаем описание профиля
+                        const description = userInfo.profile_description || 'Пользователь еще не добавил информацию о себе';
+                        descriptionText.textContent = description;
+                        
+                        // Показываем/скрываем кнопку редактирования
+                        if (username === user) {{
+                            profileEditBtn.style.display = 'flex';
+                        }} else {{
+                            profileEditBtn.style.display = 'none';
+                        }}
+                        
+                        // Скрываем редактор описания
+                        descriptionText.style.display = 'block';
+                        descriptionEdit.style.display = 'none';
+                        document.getElementById('profile-edit-actions').style.display = 'none';
+                        document.getElementById('profile-view-actions').style.display = 'flex';
+                        
+                        // Показываем модальное окно
+                        profileModal.style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                    }}
+                }});
+        }}
+
+        // НОВАЯ ФУНКЦИЯ: Закрытие профиля пользователя
+        function closeProfileModal() {{
+            const profileModal = document.getElementById('profile-modal');
+            profileModal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            currentProfileUser = "";
+        }}
+
+        // НОВАЯ ФУНКЦИЯ: Редактирование описания профиля
+        function editProfileDescription() {{
+            const descriptionText = document.getElementById('profile-description-text');
+            const descriptionEdit = document.getElementById('profile-description-edit');
+            const textarea = document.getElementById('profile-description-textarea');
+            
+            // Заполняем текстовое поле текущим описанием
+            textarea.value = descriptionText.textContent;
+            
+            // Переключаем на режим редактирования
+            descriptionText.style.display = 'none';
+            descriptionEdit.style.display = 'block';
+            document.getElementById('profile-edit-actions').style.display = 'flex';
+            document.getElementById('profile-view-actions').style.display = 'none';
+            
+            // Фокус на текстовое поле
+            setTimeout(() => {{
+                textarea.focus();
+            }}, 100);
+        }}
+
+        // НОВАЯ ФУНКЦИЯ: Отмена редактирования профиля
+        function cancelProfileEdit() {{
+            const descriptionText = document.getElementById('profile-description-text');
+            const descriptionEdit = document.getElementById('profile-description-edit');
+            
+            descriptionText.style.display = 'block';
+            descriptionEdit.style.display = 'none';
+            document.getElementById('profile-edit-actions').style.display = 'none';
+            document.getElementById('profile-view-actions').style.display = 'flex';
+        }}
+
+        // НОВАЯ ФУНКЦИЯ: Сохранение описания профиля
+        function saveProfileDescription() {{
+            const textarea = document.getElementById('profile-description-textarea');
+            const description = textarea.value.trim();
+            
+            fetch('/update_profile_description', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    description: description
+                }})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    // Обновляем текст описания
+                    const descriptionText = document.getElementById('profile-description-text');
+                    descriptionText.textContent = description || 'Пользователь еще не добавил информацию о себе';
+                    
+                    // Возвращаемся к виду просмотра
+                    cancelProfileEdit();
+                    
+                    // Показываем уведомление
+                    alert('Описание профиля обновлено!');
+                }} else {{
+                    alert(data.error || 'Ошибка при обновлении описания');
+                }}
+            }});
         }}
 
         // Функции для работы с аватарками
@@ -6085,21 +6618,29 @@ def create_app():
         }}
 
         function updateChannelAvatar(avatarPath) {{
-            const channelAvatar = document.getElementById('channel-header-avatar');
+            const channelAvatar = document.querySelector('.channel-header-avatar');
             const previewAvatar = document.getElementById('channel-avatar-preview');
             
-            if (avatarPath) {{
-                channelAvatar.style.backgroundImage = `url(${{avatarPath}})`;
-                channelAvatar.textContent = '';
-                previewAvatar.style.backgroundImage = `url(${{avatarPath}})`;
-                previewAvatar.textContent = '';
-            }} else {{
-                channelAvatar.style.backgroundImage = 'none';
-                channelAvatar.style.backgroundColor = '#667eea';
-                channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
-                previewAvatar.style.backgroundImage = 'none';
-                previewAvatar.style.backgroundColor = '#667eea';
-                previewAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
+            if (channelAvatar) {{
+                if (avatarPath) {{
+                    channelAvatar.style.backgroundImage = `url(${{avatarPath}})`;
+                    channelAvatar.textContent = '';
+                }} else {{
+                    channelAvatar.style.backgroundImage = 'none';
+                    channelAvatar.style.backgroundColor = '#667eea';
+                    channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
+                }}
+            }}
+            
+            if (previewAvatar) {{
+                if (avatarPath) {{
+                    previewAvatar.style.backgroundImage = `url(${{avatarPath}})`;
+                    previewAvatar.textContent = '';
+                }} else {{
+                    previewAvatar.style.backgroundImage = 'none';
+                    previewAvatar.style.backgroundColor = '#667eea';
+                    previewAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
+                }}
             }}
         }}
 
@@ -6330,12 +6871,66 @@ def create_app():
             roomType = t;
             currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
             
-            document.getElementById('chat-title').textContent = title;
             document.getElementById('categories-filter').style.display = 'none';
             document.getElementById('favorites-grid').style.display = 'none';
             document.getElementById('channel-settings').style.display = 'none';
             document.getElementById('chat-messages').style.display = 'block';
             document.getElementById('input-area').style.display = 'flex';
+            
+            // Обновляем заголовок чата в зависимости от типа комнаты
+            const chatHeader = document.getElementById('chat-header-content');
+            
+            if (t === 'channel') {{
+                // Для каналов
+                chatHeader.innerHTML = `
+                    <div class="channel-header-avatar" id="channel-header-avatar" onclick="openChannelSettingsModal()"></div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600;" id="chat-title">${{title}}</div>
+                        <div style="font-size: 0.8rem; color: #666;" id="channel-description"></div>
+                    </div>
+                `;
+                
+                // Показываем кнопки управления каналом
+                document.getElementById('channel-actions').style.display = 'flex';
+                loadChannelHeaderInfo();
+            }} else if (t === 'private') {{
+                // Для личных чатов
+                chatHeader.innerHTML = `
+                    <div class="private-chat-header">
+                        <div class="private-chat-avatar" id="private-chat-avatar" onclick="openUserProfile('${{title}}')"></div>
+                        <div class="private-chat-info">
+                            <div class="private-chat-name" id="chat-title">${{title}}</div>
+                            <div class="private-chat-status">
+                                <div class="private-chat-status-dot"></div>
+                                <span id="channel-description">Online</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Загружаем информацию о пользователе для заголовка
+                fetch('/user_info/' + title)
+                    .then(r => r.json())
+                    .then(userInfo => {{
+                        if (userInfo.success) {{
+                            const avatar = document.getElementById('private-chat-avatar');
+                            if (userInfo.avatar_path) {{
+                                avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                                avatar.textContent = '';
+                            }} else {{
+                                avatar.style.backgroundColor = userInfo.avatar_color;
+                                avatar.textContent = title.slice(0, 2).toUpperCase();
+                            }}
+                            
+                            // Обновляем статус
+                            const status = document.getElementById('channel-description');
+                            status.textContent = userInfo.online ? 'Online' : 'Offline';
+                        }}
+                    }});
+                
+                // Скрываем кнопки управления каналом
+                document.getElementById('channel-actions').style.display = 'none';
+            }}
             
             // На мобильных устройствах переключаемся в режим чата
             if (isMobile) {{
@@ -6364,19 +6959,6 @@ def create_app():
             const chatMessages = document.getElementById('chat-messages');
             chatMessages.innerHTML = '<div class="empty-chat"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
             
-            // Показываем/скрываем кнопки управления каналом
-            const channelActions = document.getElementById('channel-actions');
-            const channelAvatar = document.getElementById('channel-header-avatar');
-            if (t === 'channel') {{
-                channelActions.style.display = 'flex';
-                channelAvatar.style.display = 'flex';
-                loadChannelHeaderInfo();
-            }} else {{
-                channelActions.style.display = 'none';
-                channelAvatar.style.display = 'none';
-                document.getElementById('channel-description').textContent = '';
-            }}
-            
             // Загружаем историю
             loadMessages(r);
             
@@ -6393,13 +6975,15 @@ def create_app():
                         document.getElementById('channel-description').textContent = channelInfo.description || '';
                         
                         const channelAvatar = document.getElementById('channel-header-avatar');
-                        if (channelInfo.avatar_path) {{
-                            channelAvatar.style.backgroundImage = `url(${{channelInfo.avatar_path}})`;
-                            channelAvatar.textContent = '';
-                        }} else {{
-                            channelAvatar.style.backgroundImage = 'none';
-                            channelAvatar.style.backgroundColor = '#667eea';
-                            channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
+                        if (channelAvatar) {{
+                            if (channelInfo.avatar_path) {{
+                                channelAvatar.style.backgroundImage = `url(${{channelInfo.avatar_path}})`;
+                                channelAvatar.textContent = '';
+                            }} else {{
+                                channelAvatar.style.backgroundImage = 'none';
+                                channelAvatar.style.backgroundColor = '#667eea';
+                                channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
+                            }}
                         }}
                     }}
                 }});
@@ -6442,28 +7026,30 @@ def create_app():
             // Создаем аватарку
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
+            avatar.style.cursor = 'pointer';
+            avatar.onclick = () => openUserProfile(data.user);
             
-            // Для личных чатов загружаем аватарку пользователя
-            if (data.user !== user && roomName.startsWith('private_')) {{
-                fetch('/user_info/' + data.user)
-                    .then(r => r.json())
-                    .then(userInfo => {{
-                        if (userInfo.success) {{
-                            if (userInfo.avatar_path) {{
-                                avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
-                                avatar.textContent = '';
-                            }} else {{
-                                avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#6366F1';
-                                avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                            }}
+            // Загружаем информацию об отправителе для аватарки
+            fetch('/user_info/' + data.user)
+                .then(r => r.json())
+                .then(userInfo => {{
+                    if (userInfo.success) {{
+                        if (userInfo.avatar_path) {{
+                            avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                            avatar.textContent = '';
+                        }} else {{
+                            avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#6366F1';
+                            avatar.textContent = data.user.slice(0, 2).toUpperCase();
                         }}
-                    }});
-            }} else {{
-                avatar.style.backgroundColor = data.color || '#6366F1';
-                if (data.user !== user) {{
+                    }} else {{
+                        avatar.style.backgroundColor = data.color || '#6366F1';
+                        avatar.textContent = data.user.slice(0, 2).toUpperCase();
+                    }}
+                }})
+                .catch(() => {{
+                    avatar.style.backgroundColor = data.color || '#6366F1';
                     avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                }}
-            }}
+                }});
             
             // Создаем контент сообщения
             const content = document.createElement('div');
@@ -6988,12 +7574,18 @@ def create_app():
             if (event.target === glassModal) {{
                 closeCreateChannelGlassModal();
             }}
+            
+            const profileModal = document.getElementById('profile-modal');
+            if (event.target === profileModal) {{
+                closeProfileModal();
+            }}
         }});
         
         // Закрытие по клавише ESC
         document.addEventListener('keydown', function(event) {{
             if (event.key === 'Escape') {{
                 closeCreateChannelGlassModal();
+                closeProfileModal();
                 
                 // Также закрываем эмодзи
                 const emojiContainer = document.getElementById('emoji-container');
