@@ -1,5 +1,5 @@
 # web_messenger.py - AURA Messenger (единый файл)
-from flask import Flask, request, jsonify, session, redirect, send_from_directory
+from flask import Flask, request, jsonify, session, redirect, send_from_directory, render_template_string
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
 from datetime import datetime
@@ -1086,1188 +1086,1667 @@ def create_app():
         if 'username' in session: 
             return redirect('/chat')
         
-        # Страница входа/регистрации AURA
+        # Возвращаем HTML страницу с новым дизайном AURA
         return '''
         <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>AURA Messenger</title>
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                }
-                
-                :root {
-                    --primary: #667eea;
-                    --primary-dark: #5a67d8;
-                    --primary-light: #7c9bf2;
-                    --secondary: #8b5cf6;
-                    --accent: #10b981;
-                    --text: #ffffff;
-                    --text-light: #a0aec0;
-                    --bg: #0f0f23;
-                    --bg-light: #1a1a2e;
-                    --border: #2d2d4d;
-                    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
-                    --radius: 16px;
-                    --radius-sm: 10px;
-                    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-                
-                body {
-                    background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
-                    min-height: 100vh;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 20px;
-                    color: var(--text);
-                }
-                
-                .container {
-                    width: 100%;
-                    max-width: 440px;
-                }
-                
-                .logo-section {
-                    text-align: center;
-                    margin-bottom: 40px;
-                    animation: fadeInDown 0.8s ease-out;
-                }
-                
-                .logo-container {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 15px;
-                    background: rgba(255, 255, 255, 0.05);
-                    backdrop-filter: blur(10px);
-                    -webkit-backdrop-filter: blur(10px);
-                    padding: 20px 40px;
-                    border-radius: 24px;
-                    margin-bottom: 25px;
-                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                }
-                
-                .logo-placeholder {
-                    width: 60px;
-                    height: 60px;
-                    border-radius: 16px;
-                    background: linear-gradient(135deg, #667eea, #8b5cf6);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-size: 28px;
-                    font-weight: bold;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                }
-                
-                .app-title {
-                    color: white;
-                    font-size: 2.8rem;
-                    font-weight: 800;
-                    letter-spacing: -0.5px;
-                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-                }
-                
-                .app-subtitle {
-                    color: rgba(255, 255, 255, 0.7);
-                    font-size: 1.1rem;
-                    font-weight: 400;
-                    max-width: 300px;
-                    margin: 0 auto;
-                    line-height: 1.5;
-                }
-                
-                .auth-card {
-                    background: var(--bg-light);
-                    border-radius: var(--radius);
-                    box-shadow: var(--shadow);
-                    overflow: hidden;
-                    animation: fadeInUp 0.8s ease-out 0.2s both;
-                    border: 1px solid var(--border);
-                }
-                
-                .auth-header {
-                    display: flex;
-                    background: rgba(255, 255, 255, 0.03);
-                    border-bottom: 1px solid var(--border);
-                }
-                
-                .auth-tab {
-                    flex: 1;
-                    padding: 20px;
-                    text-align: center;
-                    font-weight: 600;
-                    font-size: 1.1rem;
-                    color: var(--text-light);
-                    cursor: pointer;
-                    transition: var(--transition);
-                    position: relative;
-                    user-select: none;
-                }
-                
-                .auth-tab:hover {
-                    color: var(--primary);
-                    background: rgba(102, 126, 234, 0.05);
-                }
-                
-                .auth-tab.active {
-                    color: var(--primary);
-                }
-                
-                .auth-tab.active::after {
-                    content: '';
-                    position: absolute;
-                    bottom: 0;
-                    left: 20%;
-                    right: 20%;
-                    height: 3px;
-                    background: var(--primary);
-                    border-radius: 3px;
-                }
-                
-                .auth-content {
-                    padding: 40px;
-                }
-                
-                .auth-form {
-                    display: none;
-                    animation: fadeIn 0.5s ease-out;
-                }
-                
-                .auth-form.active {
-                    display: block;
-                }
-                
-                .form-group {
-                    margin-bottom: 24px;
-                }
-                
-                .form-label {
-                    display: block;
-                    margin-bottom: 8px;
-                    color: var(--text);
-                    font-weight: 500;
-                    font-size: 0.95rem;
-                }
-                
-                .input-with-icon {
-                    position: relative;
-                }
-                
-                .input-icon {
-                    position: absolute;
-                    left: 16px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    color: var(--text-light);
-                    font-size: 1.1rem;
-                }
-                
-                .form-input {
-                    width: 100%;
-                    padding: 16px 16px 16px 48px;
-                    border: 2px solid var(--border);
-                    border-radius: var(--radius-sm);
-                    font-size: 1rem;
-                    transition: var(--transition);
-                    background: rgba(255, 255, 255, 0.05);
-                    color: var(--text);
-                }
-                
-                .form-input:focus {
-                    outline: none;
-                    border-color: var(--primary);
-                    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-                    background: rgba(255, 255, 255, 0.08);
-                }
-                
-                .form-input::placeholder {
-                    color: var(--text-light);
-                }
-                
-                .password-toggle {
-                    position: absolute;
-                    right: 16px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    background: none;
-                    border: none;
-                    color: var(--text-light);
-                    cursor: pointer;
-                    font-size: 1.1rem;
-                }
-                
-                .btn {
-                    width: 100%;
-                    padding: 16px;
-                    border: none;
-                    border-radius: var(--radius-sm);
-                    font-size: 1rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: var(--transition);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 10px;
-                }
-                
-                .btn-primary {
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    color: white;
-                }
-                
-                .btn-primary:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-                }
-                
-                .btn-primary:active {
-                    transform: translateY(0);
-                }
-                
-                .btn-google {
-                    background: rgba(255, 255, 255, 0.05);
-                    color: var(--text);
-                    border: 2px solid var(--border);
-                    margin-top: 16px;
-                }
-                
-                .btn-google:hover {
-                    background: rgba(255, 255, 255, 0.08);
-                    border-color: var(--text-light);
-                }
-                
-                .alert {
-                    padding: 14px 18px;
-                    border-radius: var(--radius-sm);
-                    margin-bottom: 24px;
-                    display: none;
-                    animation: slideIn 0.3s ease-out;
-                }
-                
-                .alert-error {
-                    background: rgba(220, 53, 69, 0.1);
-                    color: #ff6b6b;
-                    border-left: 4px solid #ff6b6b;
-                }
-                
-                .alert-success {
-                    background: rgba(16, 185, 129, 0.1);
-                    color: #51cf66;
-                    border-left: 4px solid #51cf66;
-                }
-                
-                .terms {
-                    text-align: center;
-                    margin-top: 24px;
-                    color: var(--text-light);
-                    font-size: 0.9rem;
-                }
-                
-                .terms a {
-                    color: var(--primary-light);
-                    text-decoration: none;
-                    cursor: pointer;
-                }
-                
-                .terms a:hover {
-                    text-decoration: underline;
-                }
-                
-                .modal-overlay {
-                    display: none;
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0, 0, 0, 0.8);
-                    backdrop-filter: blur(8px);
-                    -webkit-backdrop-filter: blur(8px);
-                    z-index: 1000;
-                    animation: fadeIn 0.3s ease-out;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 20px;
-                }
-                
-                .terms-modal {
-                    background: var(--bg-light);
-                    border-radius: var(--radius);
-                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-                    max-width: 800px;
-                    width: 100%;
-                    max-height: 85vh;
-                    overflow: hidden;
-                    animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-                    border: 1px solid var(--border);
-                }
-                
-                .modal-header {
-                    padding: 24px 30px;
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                
-                .modal-header h2 {
-                    font-size: 1.5rem;
-                    font-weight: 700;
-                    margin: 0;
-                }
-                
-                .close-modal {
-                    background: rgba(255, 255, 255, 0.2);
-                    border: none;
-                    color: white;
-                    width: 36px;
-                    height: 36px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-                
-                .close-modal:hover {
-                    background: rgba(255, 255, 255, 0.3);
-                    transform: rotate(90deg);
-                }
-                
-                .modal-content {
-                    padding: 30px;
-                    overflow-y: auto;
-                    max-height: calc(85vh - 100px);
-                }
-                
-                .glass-terms-container {
-                    background: rgba(255, 255, 255, 0.03);
-                    backdrop-filter: blur(20px);
-                    -webkit-backdrop-filter: blur(20px);
-                    border-radius: 24px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    padding: 40px;
-                    margin: 20px 0;
-                    box-shadow: 
-                        0 20px 60px rgba(0, 0, 0, 0.2),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .glass-terms-container::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    height: 1px;
-                    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-                }
-                
-                .glass-header {
-                    text-align: center;
-                    margin-bottom: 40px;
-                    position: relative;
-                    padding-bottom: 30px;
-                }
-                
-                .glass-header::after {
-                    content: '';
-                    position: absolute;
-                    bottom: 0;
-                    left: 25%;
-                    right: 25%;
-                    height: 2px;
-                    background: linear-gradient(90deg, transparent, var(--primary), var(--secondary), transparent);
-                    border-radius: 2px;
-                }
-                
-                .glass-icon {
-                    width: 80px;
-                    height: 80px;
-                    margin: 0 auto 25px;
-                    background: rgba(102, 126, 234, 0.1);
-                    backdrop-filter: blur(10px);
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-                }
-                
-                .glass-icon i {
-                    font-size: 36px;
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                }
-                
-                .glass-title {
-                    font-size: 2.2rem;
-                    font-weight: 800;
-                    margin-bottom: 10px;
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                    letter-spacing: -0.5px;
-                }
-                
-                .glass-subtitle {
-                    color: var(--text-light);
-                    font-size: 1.1rem;
-                    font-weight: 500;
-                }
-                
-                .glass-content {
-                    margin-bottom: 40px;
-                }
-                
-                .glass-section {
-                    background: rgba(255, 255, 255, 0.02);
-                    backdrop-filter: blur(10px);
-                    border-radius: 20px;
-                    padding: 30px;
-                    margin-bottom: 25px;
-                    border: 1px solid var(--border);
-                    transition: all 0.3s ease;
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .glass-section:hover {
-                    background: rgba(255, 255, 255, 0.03);
-                    border-color: var(--primary);
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-                }
-                
-                .section-title {
-                    font-size: 1.4rem;
-                    margin-bottom: 20px;
-                    color: var(--text);
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                    font-weight: 700;
-                }
-                
-                .section-title i {
-                    color: var(--primary);
-                    font-size: 1.3rem;
-                }
-                
-                .section-content {
-                    color: var(--text);
-                    line-height: 1.7;
-                    opacity: 0.9;
-                }
-                
-                .section-content p {
-                    margin-bottom: 20px;
-                }
-                
-                .glass-list {
-                    margin: 25px 0;
-                }
-                
-                .glass-list.negative .list-icon {
-                    background: rgba(220, 53, 69, 0.1);
-                    border-color: rgba(220, 53, 69, 0.3);
-                }
-                
-                .glass-list.negative .list-icon i {
-                    background: linear-gradient(135deg, #dc3545, #e35d6a);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                }
-                
-                .list-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 20px;
-                    margin-bottom: 18px;
-                    padding: 15px 20px;
-                    background: rgba(255, 255, 255, 0.01);
-                    border-radius: 16px;
-                    border: 1px solid var(--border);
-                    transition: all 0.3s ease;
-                }
-                
-                .list-item:hover {
-                    background: rgba(255, 255, 255, 0.02);
-                    border-color: var(--primary);
-                    transform: translateX(5px);
-                }
-                
-                .list-icon {
-                    width: 50px;
-                    height: 50px;
-                    min-width: 50px;
-                    background: rgba(102, 126, 234, 0.1);
-                    backdrop-filter: blur(5px);
-                    border-radius: 14px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 1px solid var(--border);
-                }
-                
-                .list-icon i {
-                    font-size: 22px;
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                }
-                
-                .list-text {
-                    flex: 1;
-                    font-size: 1.05rem;
-                    color: var(--text);
-                    line-height: 1.5;
-                }
-                
-                .highlight {
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    color: white;
-                    padding: 2px 8px;
-                    border-radius: 8px;
-                    font-weight: 700;
-                    border: 1px solid var(--border);
-                }
-                
-                .glass-link {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 12px;
-                    padding: 16px 28px;
-                    background: rgba(255, 255, 255, 0.03);
-                    backdrop-filter: blur(10px);
-                    border-radius: 16px;
-                    color: var(--text);
-                    text-decoration: none;
-                    font-weight: 600;
-                    border: 1px solid var(--border);
-                    transition: all 0.3s ease;
-                    margin: 15px 0;
-                }
-                
-                .glass-link:hover {
-                    background: rgba(255, 255, 255, 0.05);
-                    border-color: var(--primary);
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-                }
-                
-                .glass-link i {
-                    font-size: 1.3rem;
-                    color: var(--primary);
-                }
-                
-                .contact-link {
-                    background: rgba(0, 119, 255, 0.1);
-                    border-color: rgba(0, 119, 255, 0.3);
-                }
-                
-                .contact-link i {
-                    color: #0077ff;
-                }
-                
-                .contact-note {
-                    font-size: 0.95rem;
-                    color: var(--text-light);
-                    margin-top: 15px;
-                    padding-left: 20px;
-                    border-left: 3px solid var(--primary);
-                }
-                
-                .version-info {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 12px;
-                    padding: 12px 24px;
-                    background: rgba(102, 126, 234, 0.1);
-                    border-radius: 12px;
-                    border: 1px solid var(--primary);
-                    margin-top: 20px;
-                }
-                
-                .version-info i {
-                    color: var(--primary);
-                    font-size: 1.2rem;
-                }
-                
-                .version-info span {
-                    color: var(--text);
-                    font-weight: 500;
-                }
-                
-                .glass-footer {
-                    padding-top: 40px;
-                    border-top: 1px solid var(--border);
-                }
-                
-                .accept-terms {
-                    margin-bottom: 40px;
-                }
-                
-                .checkbox-container {
-                    display: flex;
-                    align-items: center;
-                    cursor: pointer;
-                    font-size: 1.1rem;
-                    color: var(--text);
-                    user-select: none;
-                    padding: 20px;
-                    background: rgba(255, 255, 255, 0.02);
-                    border-radius: 16px;
-                    border: 2px solid var(--border);
-                    transition: all 0.3s ease;
-                }
-                
-                .checkbox-container:hover {
-                    background: rgba(255, 255, 255, 0.03);
-                    border-color: var(--primary);
-                }
-                
-                .checkbox-container input {
-                    position: absolute;
-                    opacity: 0;
-                    cursor: pointer;
-                    height: 0;
-                    width: 0;
-                }
-                
-                .checkmark {
-                    position: relative;
-                    height: 28px;
-                    width: 28px;
-                    min-width: 28px;
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 8px;
-                    margin-right: 20px;
-                    border: 2px solid var(--border);
-                    transition: all 0.3s ease;
-                }
-                
-                .checkbox-container:hover .checkmark {
-                    background: rgba(102, 126, 234, 0.1);
-                    border-color: var(--primary);
-                }
-                
-                .checkbox-container input:checked ~ .checkmark {
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    border-color: transparent;
-                }
-                
-                .checkmark::after {
-                    content: '';
-                    position: absolute;
-                    display: none;
-                    left: 9px;
-                    top: 4px;
-                    width: 8px;
-                    height: 14px;
-                    border: solid white;
-                    border-width: 0 3px 3px 0;
-                    transform: rotate(45deg);
-                }
-                
-                .checkbox-container input:checked ~ .checkmark::after {
-                    display: block;
-                }
-                
-                .checkbox-text {
-                    flex: 1;
-                    font-weight: 500;
-                }
-                
-                .glass-download {
-                    background: rgba(102, 126, 234, 0.05);
-                    backdrop-filter: blur(10px);
-                    border: 2px dashed var(--primary);
-                    padding: 30px;
-                    border-radius: 20px;
-                    text-align: center;
-                }
-                
-                .glass-download p {
-                    color: var(--text);
-                    font-size: 1.1rem;
-                    margin-bottom: 20px;
-                    font-weight: 500;
-                }
-                
-                .glass-btn {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 15px;
-                    padding: 18px 40px;
-                    background: linear-gradient(135deg, var(--primary), var(--secondary));
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 16px;
-                    font-weight: 700;
-                    font-size: 1.1rem;
-                    transition: all 0.3s ease;
-                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-                    border: none;
-                    cursor: pointer;
-                }
-                
-                .glass-btn:hover {
-                    transform: translateY(-3px);
-                    box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
-                }
-                
-                .glass-btn:active {
-                    transform: translateY(-1px);
-                }
-                
-                @keyframes fadeInUp {
-                    from {
-                        opacity: 0;
-                        transform: translateY(30px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-                
-                @keyframes fadeInDown {
-                    from {
-                        opacity: 0;
-                        transform: translateY(-20px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-                
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                
-                @keyframes slideIn {
-                    from {
-                        opacity: 0;
-                        transform: translateX(-10px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateX(0);
-                    }
-                }
-                
-                @keyframes slideUp {
-                    from {
-                        opacity: 0;
-                        transform: translateY(30px) scale(0.95);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0) scale(1);
-                    }
-                }
-                
-                @media (max-width: 768px) {
-                    .container {
-                        max-width: 100%;
-                    }
-                    
-                    .auth-content {
-                        padding: 30px 20px;
-                    }
-                    
-                    .app-title {
-                        font-size: 2.2rem;
-                    }
-                    
-                    .logo-container {
-                        padding: 15px 30px;
-                    }
-                    
-                    .modal-content {
-                        padding: 20px;
-                    }
-                    
-                    .modal-header {
-                        padding: 20px;
-                    }
-                    
-                    .terms-modal {
-                        max-height: 90vh;
-                    }
-                    
-                    .glass-terms-container {
-                        padding: 25px 20px;
-                        margin: 20px 0;
-                        border-radius: 20px;
-                    }
-                    
-                    .glass-title {
-                        font-size: 1.8rem;
-                    }
-                    
-                    .glass-icon {
-                        width: 60px;
-                        height: 60px;
-                    }
-                    
-                    .glass-icon i {
-                        font-size: 28px;
-                    }
-                    
-                    .glass-section {
-                        padding: 20px;
-                    }
-                    
-                    .section-title {
-                        font-size: 1.2rem;
-                    }
-                    
-                    .list-item {
-                        flex-direction: column;
-                        text-align: center;
-                        gap: 15px;
-                        padding: 20px;
-                    }
-                    
-                    .list-icon {
-                        width: 60px;
-                        height: 60px;
-                    }
-                    
-                    .glass-link {
-                        padding: 14px 20px;
-                        font-size: 0.95rem;
-                    }
-                    
-                    .glass-btn {
-                        padding: 16px 30px;
-                        font-size: 1rem;
-                    }
-                    
-                    .checkbox-text {
-                        font-size: 1rem;
-                    }
-                }
-                
-                .loader {
-                    display: inline-block;
-                    width: 20px;
-                    height: 20px;
-                    border: 3px solid rgba(255, 255, 255, 0.3);
-                    border-radius: 50%;
-                    border-top-color: white;
-                    animation: spin 1s ease-in-out infinite;
-                }
-                
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="logo-section">
-                    <div class="logo-container">
-                        <div class="logo-placeholder">
-                            <i class="fas fa-bolt"></i>
-                        </div>
-                        <h1 class="app-title">AURA</h1>
-                    </div>
-                    <p class="app-subtitle">Быстрый и современный мессенджер для общения</p>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA Messenger</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        :root {
+            --primary: #7c3aed;
+            --primary-dark: #6d28d9;
+            --primary-light: #8b5cf6;
+            --secondary: #a78bfa;
+            --accent: #10b981;
+            --aura-glow: rgba(124, 58, 237, 0.3);
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --bg: #f9fafb;
+            --bg-light: #ffffff;
+            --border: #e5e7eb;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 440px;
+        }
+        
+        .logo-section {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+        
+        .logo-container {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            padding: 22px 45px;
+            border-radius: 28px;
+            margin-bottom: 25px;
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.15),
+                0 0 0 1px rgba(255, 255, 255, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .logo-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--aura-glow) 0%, transparent 70%);
+            animation: auraPulse 4s ease-in-out infinite;
+            z-index: 0;
+        }
+        
+        .logo-placeholder {
+            width: 65px;
+            height: 65px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            box-shadow: 
+                0 4px 15px rgba(124, 58, 237, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            position: relative;
+            z-index: 1;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .app-title {
+            color: white;
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            text-shadow: 
+                0 2px 10px rgba(0, 0, 0, 0.3),
+                0 0 20px rgba(124, 58, 237, 0.4);
+            position: relative;
+            z-index: 1;
+            background: linear-gradient(135deg, #ffffff, #e0e7ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .app-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.15rem;
+            font-weight: 400;
+            max-width: 320px;
+            margin: 0 auto;
+            line-height: 1.5;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        
+        .auth-card {
+            background: var(--bg-light);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+        
+        .auth-header {
+            display: flex;
+            background: white;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .auth-tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            user-select: none;
+        }
+        
+        .auth-tab:hover {
+            color: var(--primary);
+            background: rgba(124, 58, 237, 0.05);
+        }
+        
+        .auth-tab.active {
+            color: var(--primary);
+        }
+        
+        .auth-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+            border-radius: 3px;
+        }
+        
+        .auth-content {
+            padding: 40px;
+        }
+        
+        .auth-form {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .auth-form.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text);
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+        
+        .input-with-icon {
+            position: relative;
+        }
+        
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 16px 16px 16px 48px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            transition: var(--transition);
+            background: white;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }
+        
+        .password-toggle {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-dark), #5b21b6);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        
+        .btn-google {
+            background: white;
+            color: var(--text);
+            border: 2px solid var(--border);
+            margin-top: 16px;
+        }
+        
+        .btn-google:hover {
+            background: var(--bg);
+            border-color: var(--text-light);
+        }
+        
+        .alert {
+            padding: 14px 18px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 24px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .alert-error {
+            background: #fee;
+            color: #c33;
+            border-left: 4px solid #c33;
+        }
+        
+        .alert-success {
+            background: #efe;
+            color: #363;
+            border-left: 4px solid #363;
+        }
+        
+        .terms {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+        
+        .terms a {
+            color: var(--primary);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .terms a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Стили для модального окна */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease-out;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .terms-modal {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            max-height: 85vh;
+            overflow: hidden;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .modal-header {
+            padding: 24px 30px;
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .close-modal {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .close-modal:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+        
+        .modal-content {
+            padding: 30px;
+            overflow-y: auto;
+            max-height: calc(85vh - 100px);
+        }
+        
+        /* Стили для блока "жидкое стекло" - Условия использования */
+        .glass-terms-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 40px;
+            margin: 20px 0;
+            box-shadow: 
+                0 20px 60px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .glass-terms-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+        }
+        
+        .glass-header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+            padding-bottom: 30px;
+        }
+        
+        .glass-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 25%;
+            right: 25%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #7c3aed, #a78bfa, transparent);
+            border-radius: 2px;
+        }
+        
+        .glass-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 25px;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(167, 139, 250, 0.2));
+            backdrop-filter: blur(10px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-icon i {
+            font-size: 36px;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .glass-title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+        
+        .glass-subtitle {
+            color: rgba(0, 0, 0, 0.7);
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        .glass-content {
+            margin-bottom: 40px;
+        }
+        
+        .glass-section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .glass-section:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(124, 58, 237, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .section-title {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-weight: 700;
+        }
+        
+        .section-title i {
+            color: #7c3aed;
+            font-size: 1.3rem;
+        }
+        
+        .section-content {
+            color: rgba(0, 0, 0, 0.9);
+            line-height: 1.7;
+        }
+        
+        .section-content p {
+            margin-bottom: 20px;
+        }
+        
+        .glass-list {
+            margin: 25px 0;
+        }
+        
+        .glass-list.negative .list-icon {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.2), rgba(220, 53, 69, 0.1));
+            border-color: rgba(220, 53, 69, 0.3);
+        }
+        
+        .glass-list.negative .list-icon i {
+            background: linear-gradient(135deg, #dc3545, #e35d6a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .list-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 18px;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .list-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(0, 0, 0, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .list-icon {
+            width: 50px;
+            height: 50px;
+            min-width: 50px;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(167, 139, 250, 0.2));
+            backdrop-filter: blur(5px);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .list-icon i {
+            font-size: 22px;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .list-text {
+            flex: 1;
+            font-size: 1.05rem;
+            color: rgba(0, 0, 0, 0.9);
+            line-height: 1.5;
+        }
+        
+        .highlight {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.3), rgba(167, 139, 250, 0.3));
+            color: white;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-weight: 700;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+        }
+        
+        .glass-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 28px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            color: #333;
+            text-decoration: none;
+            font-weight: 600;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            margin: 15px 0;
+        }
+        
+        .glass-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(124, 58, 237, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .glass-link i {
+            font-size: 1.3rem;
+            color: #7c3aed;
+        }
+        
+        .contact-link {
+            background: linear-gradient(135deg, rgba(0, 119, 255, 0.2), rgba(0, 91, 187, 0.2));
+            border-color: rgba(0, 119, 255, 0.3);
+        }
+        
+        .contact-link i {
+            color: #0077ff;
+        }
+        
+        .contact-note {
+            font-size: 0.95rem;
+            color: rgba(0, 0, 0, 0.7);
+            margin-top: 15px;
+            padding-left: 20px;
+            border-left: 3px solid rgba(124, 58, 237, 0.5);
+        }
+        
+        .version-info {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            background: rgba(124, 58, 237, 0.1);
+            border-radius: 12px;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            margin-top: 20px;
+        }
+        
+        .version-info i {
+            color: #7c3aed;
+            font-size: 1.2rem;
+        }
+        
+        .version-info span {
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .glass-footer {
+            padding-top: 40px;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .accept-terms {
+            margin-bottom: 40px;
+        }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 1.1rem;
+            color: #333;
+            user-select: none;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .checkbox-container:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(124, 58, 237, 0.4);
+        }
+        
+        .checkbox-container input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+        
+        .checkmark {
+            position: relative;
+            height: 28px;
+            width: 28px;
+            min-width: 28px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            margin-right: 20px;
+            border: 2px solid rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .checkbox-container:hover .checkmark {
+            background: rgba(124, 58, 237, 0.2);
+            border-color: rgba(124, 58, 237, 0.5);
+        }
+        
+        .checkbox-container input:checked ~ .checkmark {
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            border-color: transparent;
+        }
+        
+        .checkmark::after {
+            content: '';
+            position: absolute;
+            display: none;
+            left: 9px;
+            top: 4px;
+            width: 8px;
+            height: 14px;
+            border: solid white;
+            border-width: 0 3px 3px 0;
+            transform: rotate(45deg);
+        }
+        
+        .checkbox-container input:checked ~ .checkmark::after {
+            display: block;
+        }
+        
+        .checkbox-text {
+            flex: 1;
+            font-weight: 500;
+        }
+        
+        .glass-download {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(167, 139, 250, 0.1));
+            backdrop-filter: blur(10px);
+            border: 2px dashed rgba(124, 58, 237, 0.4);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+        }
+        
+        .glass-download p {
+            color: #333;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .glass-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 18px 40px;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            color: white;
+            text-decoration: none;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3);
+            border: none;
+            cursor: pointer;
+        }
+        
+        .glass-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(124, 58, 237, 0.4);
+        }
+        
+        .glass-btn:active {
+            transform: translateY(-1px);
+        }
+        
+        .glass-btn i:first-child {
+            font-size: 1.5rem;
+        }
+        
+        .glass-btn i:last-child {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        /* Анимации */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        @keyframes auraPulse {
+            0%, 100% {
+                opacity: 0.5;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.1);
+            }
+        }
+        
+        .glass-terms-container {
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .container {
+                max-width: 100%;
+            }
+            
+            .auth-content {
+                padding: 30px 20px;
+            }
+            
+            .app-title {
+                font-size: 2.5rem;
+            }
+            
+            .logo-container {
+                padding: 18px 35px;
+            }
+            
+            .modal-content {
+                padding: 20px;
+            }
+            
+            .modal-header {
+                padding: 20px;
+            }
+            
+            .terms-modal {
+                max-height: 90vh;
+            }
+            
+            .glass-terms-container {
+                padding: 25px 20px;
+                margin: 20px 0;
+                border-radius: 20px;
+            }
+            
+            .glass-title {
+                font-size: 1.8rem;
+            }
+            
+            .glass-icon {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .glass-icon i {
+                font-size: 28px;
+            }
+            
+            .glass-section {
+                padding: 20px;
+            }
+            
+            .section-title {
+                font-size: 1.2rem;
+            }
+            
+            .list-item {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+                padding: 20px;
+            }
+            
+            .list-icon {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .glass-link {
+                padding: 14px 20px;
+                font-size: 0.95rem;
+            }
+            
+            .glass-btn {
+                padding: 16px 30px;
+                font-size: 1rem;
+            }
+            
+            .checkbox-text {
+                font-size: 1rem;
+            }
+        }
+        
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo-section">
+            <div class="logo-container">
+                <div class="logo-placeholder">
+                    <i class="fas fa-aura"></i>
                 </div>
+                <h1 class="app-title">AURA</h1>
+            </div>
+            <p class="app-subtitle">Интуитивный и безопасный мессенджер для команд и личного общения</p>
+        </div>
+        
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="auth-tab active" onclick="showTab('login')">
+                    Вход
+                </div>
+                <div class="auth-tab" onclick="showTab('register')">
+                    Регистрация
+                </div>
+            </div>
+            
+            <div class="auth-content">
+                <div id="alert" class="alert"></div>
                 
-                <div class="auth-card">
-                    <div class="auth-header">
-                        <div class="auth-tab active" onclick="showTab('login')">
-                            Вход
-                        </div>
-                        <div class="auth-tab" onclick="showTab('register')">
-                            Регистрация
+                <form id="login-form" class="auth-form active">
+                    <div class="form-group">
+                        <label class="form-label">Логин</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-user input-icon"></i>
+                            <input type="text" class="form-input" id="login-username" placeholder="Введите ваш логин" required>
                         </div>
                     </div>
                     
-                    <div class="auth-content">
-                        <div id="alert" class="alert"></div>
-                        
-                        <form id="login-form" class="auth-form active">
-                            <div class="form-group">
-                                <label class="form-label">Логин</label>
-                                <div class="input-with-icon">
-                                    <i class="fas fa-user input-icon"></i>
-                                    <input type="text" class="form-input" id="login-username" placeholder="Введите ваш логин" required>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Пароль</label>
-                                <div class="input-with-icon">
-                                    <i class="fas fa-lock input-icon"></i>
-                                    <input type="password" class="form-input" id="login-password" placeholder="Введите пароль" required>
-                                    <button type="button" class="password-toggle" onclick="togglePassword('login-password')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <button type="button" class="btn btn-primary" onclick="login()" id="login-btn">
-                                <i class="fas fa-sign-in-alt"></i>
-                                Войти в аккаунт
+                    <div class="form-group">
+                        <label class="form-label">Пароль</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input type="password" class="form-input" id="login-password" placeholder="Введите пароль" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword('login-password')">
+                                <i class="fas fa-eye"></i>
                             </button>
-                            
-                            <div class="terms">
-                                Входя в систему, вы соглашаетесь с нашими <a href="#" onclick="openTermsModal(); return false;">Условиями использования</a>
-                            </div>
-                        </form>
-                        
-                        <form id="register-form" class="auth-form">
-                            <div class="form-group">
-                                <label class="form-label">Придумайте логин</label>
-                                <div class="input-with-icon">
-                                    <i class="fas fa-user-plus input-icon"></i>
-                                    <input type="text" class="form-input" id="register-username" placeholder="От 3 до 20 символов" required>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Придумайте пароль</label>
-                                <div class="input-with-icon">
-                                    <i class="fas fa-lock input-icon"></i>
-                                    <input type="password" class="form-input" id="register-password" placeholder="Не менее 4 символов" required>
-                                    <button type="button" class="password-toggle" onclick="togglePassword('register-password')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Повторите пароль</label>
-                                <div class="input-with-icon">
-                                    <i class="fas fa-lock input-icon"></i>
-                                    <input type="password" class="form-input" id="register-confirm" placeholder="Повторите пароль" required>
-                                    <button type="button" class="password-toggle" onclick="togglePassword('register-confirm')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <button type="button" class="btn btn-primary" onclick="register()" id="register-btn">
-                                <i class="fas fa-user-plus"></i>
-                                Создать аккаунт
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary" onclick="login()" id="login-btn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Войти в аккаунт
+                    </button>
+                    
+                    <div class="terms">
+                        Входя в систему, вы соглашаетесь с нашими <a href="#" onclick="openTermsModal(); return false;">Условиями использования</a>
+                    </div>
+                </form>
+                
+                <form id="register-form" class="auth-form">
+                    <div class="form-group">
+                        <label class="form-label">Придумайте логин</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-user-plus input-icon"></i>
+                            <input type="text" class="form-input" id="register-username" placeholder="От 3 до 20 символов" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Придумайте пароль</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input type="password" class="form-input" id="register-password" placeholder="Не менее 4 символов" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword('register-password')">
+                                <i class="fas fa-eye"></i>
                             </button>
-                            
-                            <div class="terms">
-                                Регистрируясь, вы соглашаетесь с нашими <a href="#" onclick="openTermsModal(); return false;">Условиями использования</a>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Повторите пароль</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input type="password" class="form-input" id="register-confirm" placeholder="Повторите пароль" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword('register-confirm')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary" onclick="register()" id="register-btn">
+                        <i class="fas fa-user-plus"></i>
+                        Создать аккаунт
+                    </button>
+                    
+                    <div class="terms">
+                        Регистрируясь, вы соглашаетесь с нашими <a href="#" onclick="openTermsModal(); return false;">Условиями использования</a> и <a href="#" onclick="openPrivacyModal(); return false;">Политикой конфиденциальности</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно Условий использования -->
+    <div class="modal-overlay" id="terms-modal">
+        <div class="terms-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-contract"></i> Условия использования</h2>
+                <button class="close-modal" onclick="closeTermsModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-content">
+                <!-- Блок "Условия использования" в стиле жидкое стекло -->
+                <div class="glass-terms-container">
+                    <div class="glass-header">
+                        <div class="glass-icon">
+                            <i class="fas fa-file-contract"></i>
+                        </div>
+                        <h2 class="glass-title">Условия использования AURA Messenger</h2>
+                        <div class="glass-subtitle">Дата вступления в силу: 6 декабря 2025 г.</div>
+                    </div>
+                    
+                    <div class="glass-content">
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-user-check"></i> Регистрация и учетная запись</h3>
+                            <div class="section-content">
+                                <p>Регистрируясь в AURA Messenger, вы подтверждаете что:</p>
+                                <div class="glass-list">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-birthday-cake"></i></div>
+                                        <div class="list-text">Вы достигли возраста <span class="highlight">14 лет</span> на момент регистрации</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-user-shield"></i></div>
+                                        <div class="list-text">Предоставленная информация является точной и достоверной</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-key"></i></div>
+                                        <div class="list-text">Вы несете ответственность за сохранность учетных данных</div>
+                                    </div>
+                                </div>
                             </div>
-                        </form>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-comments"></i> Правила общения</h3>
+                            <div class="section-content">
+                                <p>В AURA Messenger запрещается:</p>
+                                <div class="glass-list negative">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                        <div class="list-text">Распространение спама и вредоносного контента</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                        <div class="list-text">Нарушение прав других пользователей</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                        <div class="list-text">Использование для противоправной деятельности</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                        <div class="list-text">Создание фишинговых или мошеннических аккаунтов</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-lock"></i> Конфиденциальность</h3>
+                            <div class="section-content">
+                                <p>Ваша конфиденциальность важна для нас. Подробная информация о защите данных:</p>
+                                <a href="#" class="glass-link" onclick="openPrivacyModal(); closeTermsModal(); return false;">
+                                    <i class="fas fa-shield-alt"></i> Политика конфиденциальности
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-headset"></i> Контактная информация</h3>
+                            <div class="section-content">
+                                <p>По всем вопросам, связанным с условиями использования:</p>
+                                <a href="https://vk.com/rsaltyyt" target="_blank" class="glass-link contact-link">
+                                    <i class="fab fa-vk"></i> https://vk.com/rsaltyyt
+                                </a>
+                                <p class="contact-note">Обращайтесь по указанной ссылке для получения поддержки и ответов на вопросы</p>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-sync-alt"></i> Изменения условий</h3>
+                            <div class="section-content">
+                                <p>Мы оставляем за собой право вносить изменения в Условия использования. Актуальная версия всегда доступна на этой странице.</p>
+                                <div class="version-info">
+                                    <i class="fas fa-history"></i>
+                                    <span>Последнее обновление: 6 декабря 2025 года</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-footer">
+                        <div class="accept-terms">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="accept-terms-checkbox">
+                                <span class="checkmark"></span>
+                                <span class="checkbox-text">Я прочитал(а) и принимаю Условия использования</span>
+                            </label>
+                        </div>
+                        
+                        <div class="download-section glass-download">
+                            <p>Полная версия документа:</p>
+                            <a href="/static/docs/terms_of_use.pdf" class="download-btn glass-btn" download="AURA_Условия_использования.pdf">
+                                <i class="fas fa-file-pdf"></i>
+                                Скачать PDF (156 KB)
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <script>
-                let isLoading = false;
-                
-                function showAlert(message, type = 'error') {
-                    const alert = document.getElementById('alert');
-                    alert.textContent = message;
-                    alert.className = `alert alert-${type}`;
-                    alert.style.display = 'block';
+    <!-- Модальное окно Политики конфиденциальности -->
+    <div class="modal-overlay" id="privacy-modal">
+        <div class="terms-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-shield-alt"></i> Политика конфиденциальности</h2>
+                <button class="close-modal" onclick="closePrivacyModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-content">
+                <!-- Блок "Политика конфиденциальности" в стиле жидкое стекло -->
+                <div class="glass-terms-container">
+                    <div class="glass-header">
+                        <div class="glass-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h2 class="glass-title">Политика конфиденциальности AURA Messenger</h2>
+                        <div class="glass-subtitle">Дата вступления в силу: 6 декабря 2025 г.</div>
+                    </div>
                     
+                    <div class="glass-content">
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-database"></i> 1. Сбор информации</h3>
+                            <div class="section-content">
+                                <p>Мы собираем ограниченную информацию для обеспечения работы сервиса:</p>
+                                <div class="glass-list">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-user-circle"></i></div>
+                                        <div class="list-text"><span class="highlight">Учетные данные</span>: имя пользователя и хэш пароля</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-comment-alt"></i></div>
+                                        <div class="list-text"><span class="highlight">Контент сообщений</span>: текст, медиафайлы и файлы</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-network-wired"></i></div>
+                                        <div class="list-text"><span class="highlight">Технические данные</span>: IP-адрес, тип устройства, версия браузера</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-history"></i></div>
+                                        <div class="list-text"><span class="highlight">Активность</span>: время входа, активные сессии, использование функций</div>
+                                    </div>
+                                </div>
+                                <p class="contact-note">Мы не собираем избыточные персональные данные. Вся информация используется строго для работы сервиса.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-cogs"></i> 2. Использование информации</h3>
+                            <div class="section-content">
+                                <p>Собранная информация используется исключительно для:</p>
+                                <div class="glass-list">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-rocket"></i></div>
+                                        <div class="list-text"><span class="highlight">Работа сервиса</span>: доставка сообщений, синхронизация чатов</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-shield"></i></div>
+                                        <div class="list-text"><span class="highlight">Безопасность</span>: защита от злоупотреблений и мошенничества</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-wrench"></i></div>
+                                        <div class="list-text"><span class="highlight">Техподдержка</span>: решение технических проблем пользователей</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-chart-line"></i></div>
+                                        <div class="list-text"><span class="highlight">Аналитика</span>: улучшение пользовательского опыта (анонимно)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-lock"></i> 3. Защита данных</h3>
+                            <div class="section-content">
+                                <p>Мы применяем многоуровневую защиту ваших данных:</p>
+                                <div class="glass-list">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-key"></i></div>
+                                        <div class="list-text"><span class="highlight">Шифрование</span>: все сообщения шифруются при передаче</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-server"></i></div>
+                                        <div class="list-text"><span class="highlight">Безопасное хранение</span>: данные хранятся на защищенных серверах</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-user-shield"></i></div>
+                                        <div class="list-text"><span class="highlight">Контроль доступа</span>: строгий доступ к данным только для технического персонала</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-sync-alt"></i></div>
+                                        <div class="list-text"><span class="highlight">Регулярные аудиты</span>: периодическая проверка систем безопасности</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-user-check"></i> 4. Права пользователей</h3>
+                            <div class="section-content">
+                                <p>Вы имеете полный контроль над своими данными:</p>
+                                <div class="glass-list">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-eye"></i></div>
+                                        <div class="list-text"><span class="highlight">Право на доступ</span>: запрос информации о хранящихся данных</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-edit"></i></div>
+                                        <div class="list-text"><span class="highlight">Право на исправление</span>: обновление неточной информации</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-trash-alt"></i></div>
+                                        <div class="list-text"><span class="highlight">Право на удаление</span>: полное удаление учетной записи и данных</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-ban"></i></div>
+                                        <div class="list-text"><span class="highlight">Право на отзыв согласия</span>: прекращение обработки данных</div>
+                                    </div>
+                                </div>
+                                <p class="contact-note">Для реализации этих прав обратитесь в поддержку через контактные данные ниже.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-cookie-bite"></i> 5. Файлы cookie и технологии отслеживания</h3>
+                            <div class="section-content">
+                                <p>Мы используем минимальные технологии для улучшения опыта:</p>
+                                <div class="glass-list">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-cookie"></i></div>
+                                        <div class="list-text"><span class="highlight">Сессионные куки</span>: только для поддержания входа в систему</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-tachometer-alt"></i></div>
+                                        <div class="list-text"><span class="highlight">Аналитические куки</span>: анонимная статистика использования</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-sliders-h"></i></div>
+                                        <div class="list-text"><span class="highlight">Настройки</span>: сохранение предпочтений пользователя</div>
+                                    </div>
+                                </div>
+                                <p>Вы можете отключить cookies в настройках браузера, но это может ограничить функциональность.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-users"></i> 6. Третьи стороны</h3>
+                            <div class="section-content">
+                                <p>Мы не продаем и не передаем ваши данные третьим лицам.</p>
+                                <div class="glass-list negative">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-handshake-slash"></i></div>
+                                        <div class="list-text"><span class="highlight">Нет продажи данных</span>: мы никогда не продаем пользовательские данные</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-user-friends"></i></div>
+                                        <div class="list-text"><span class="highlight">Ограниченный доступ</span>: данные доступны только необходимым техническим службам</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-gavel"></i></div>
+                                        <div class="list-text"><span class="highlight">Исключения по закону</span>: передача данных только по официальным запросам правоохранительных органов</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-sync-alt"></i> 7. Изменения политики</h3>
+                            <div class="section-content">
+                                <p>Мы уведомляем пользователей о всех значительных изменениях:</p>
+                                <div class="glass-list">
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-bell"></i></div>
+                                        <div class="list-text"><span class="highlight">Уведомление в приложении</span>: сообщение о важных изменениях</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-envelope"></i></div>
+                                        <div class="list-text"><span class="highlight">Электронная почта</span>: рассылка при серьезных изменениях</div>
+                                    </div>
+                                    <div class="list-item">
+                                        <div class="list-icon"><i class="fas fa-calendar-alt"></i></div>
+                                        <div class="list-text"><span class="highlight">Дата вступления в силу</span>: четкое указание времени изменений</div>
+                                    </div>
+                                </div>
+                                <p>Продолжая использовать сервис после изменений, вы соглашаетесь с новой версией политики.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-section">
+                            <h3 class="section-title"><i class="fas fa-headset"></i> 8. Контактная информация</h3>
+                            <div class="section-content">
+                                <p>По вопросам конфиденциальности и защиты данных:</p>
+                                <a href="https://vk.com/rsaltyyt" target="_blank" class="glass-link contact-link">
+                                    <i class="fab fa-vk"></i> https://vk.com/rsaltyyt
+                                </a>
+                                <p class="contact-note">Мы отвечаем на запросы в течение 7 рабочих дней. Для срочных вопросов используйте вышеуказанную ссылку.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-footer">
+                        <div class="version-info">
+                            <i class="fas fa-history"></i>
+                            <span>Актуальная версия: 2.1 (6 декабря 2025 г.)</span>
+                        </div>
+                        
+                        <div class="download-section glass-download">
+                            <p>Полная версия документа для сохранения:</p>
+                            <a href="/static/docs/privacy_policy.pdf" class="download-btn glass-btn" download="AURA_Политика_конфиденциальности.pdf">
+                                <i class="fas fa-file-pdf"></i>
+                                Скачать PDF (198 KB)
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isLoading = false;
+        
+        function showAlert(message, type = 'error') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showTab(tabName) {
+            if (isLoading) return;
+            
+            document.querySelectorAll('.auth-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.auth-form').forEach(form => form.classList.remove('active'));
+            
+            document.querySelector(`.auth-tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(`${tabName}-form`).classList.add('active');
+        }
+        
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const button = input.nextElementSibling;
+            const icon = button.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+        
+        function setLoading(buttonId, loading) {
+            isLoading = loading;
+            const button = document.getElementById(buttonId);
+            const icon = button.querySelector('i');
+            
+            if (loading) {
+                button.disabled = true;
+                button.innerHTML = '<div class="loader"></div> Загрузка...';
+            } else {
+                button.disabled = false;
+                if (buttonId === 'login-btn') {
+                    button.innerHTML = '<i class="fas fa-sign-in-alt"></i> Войти в аккаунт';
+                } else {
+                    button.innerHTML = '<i class="fas fa-user-plus"></i> Создать аккаунт';
+                }
+            }
+        }
+        
+        async function login() {
+            if (isLoading) return;
+            
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            
+            if (!username || !password) {
+                return showAlert('Заполните все поля');
+            }
+            
+            setLoading('login-btn', true);
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('Успешный вход! Перенаправляем...', 'success');
                     setTimeout(() => {
-                        alert.style.display = 'none';
-                    }, 5000);
+                        window.location.href = '/chat';
+                    }, 1000);
+                } else {
+                    showAlert(data.error || 'Неверный логин или пароль');
                 }
+            } catch (error) {
+                showAlert('Ошибка соединения. Проверьте интернет');
+                console.error('Login error:', error);
+            } finally {
+                setLoading('login-btn', false);
+            }
+        }
+        
+        async function register() {
+            if (isLoading) return;
+            
+            const username = document.getElementById('register-username').value.trim();
+            const password = document.getElementById('register-password').value;
+            const confirm = document.getElementById('register-confirm').value;
+            
+            if (!username || !password || !confirm) {
+                return showAlert('Заполните все поля');
+            }
+            
+            if (username.length < 3) {
+                return showAlert('Логин должен быть не менее 3 символов');
+            }
+            
+            if (username.length > 20) {
+                return showAlert('Логин должен быть не более 20 символов');
+            }
+            
+            if (password.length < 4) {
+                return showAlert('Пароль должен быть не менее 4 символов');
+            }
+            
+            if (password !== confirm) {
+                return showAlert('Пароли не совпадают');
+            }
+            
+            setLoading('register-btn', true);
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ username, password })
+                });
                 
-                function showTab(tabName) {
-                    if (isLoading) return;
-                    
-                    document.querySelectorAll('.auth-tab').forEach(tab => tab.classList.remove('active'));
-                    document.querySelectorAll('.auth-form').forEach(form => form.classList.remove('active'));
-                    
-                    document.querySelector(`.auth-tab[onclick="showTab('${tabName}')"]`).classList.add('active');
-                    document.getElementById(`${tabName}-form`).classList.add('active');
-                }
+                const data = await response.json();
                 
-                function togglePassword(inputId) {
-                    const input = document.getElementById(inputId);
-                    const button = input.nextElementSibling;
-                    const icon = button.querySelector('i');
+                if (data.success) {
+                    showAlert('Аккаунт создан! Входим...', 'success');
                     
-                    if (input.type === 'password') {
-                        input.type = 'text';
-                        icon.className = 'fas fa-eye-slash';
-                    } else {
-                        input.type = 'password';
-                        icon.className = 'fas fa-eye';
-                    }
-                }
-                
-                function setLoading(buttonId, loading) {
-                    isLoading = loading;
-                    const button = document.getElementById(buttonId);
-                    const icon = button.querySelector('i');
-                    
-                    if (loading) {
-                        button.disabled = true;
-                        button.innerHTML = '<div class="loader"></div> Загрузка...';
-                    } else {
-                        button.disabled = false;
-                        if (buttonId === 'login-btn') {
-                            button.innerHTML = '<i class="fas fa-sign-in-alt"></i> Войти в аккаунт';
-                        } else {
-                            button.innerHTML = '<i class="fas fa-user-plus"></i> Создать аккаунт';
-                        }
-                    }
-                }
-                
-                async function login() {
-                    if (isLoading) return;
-                    
-                    const username = document.getElementById('login-username').value.trim();
-                    const password = document.getElementById('login-password').value;
-                    
-                    if (!username || !password) {
-                        return showAlert('Заполните все поля');
-                    }
-                    
-                    setLoading('login-btn', true);
-                    
-                    try {
-                        const response = await fetch('/login', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                            },
-                            body: new URLSearchParams({ username, password })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            showAlert('Успешный вход! Перенаправляем...', 'success');
-                            setTimeout(() => {
-                                window.location.href = '/chat';
-                            }, 1000);
-                        } else {
-                            showAlert(data.error || 'Неверный логин или пароль');
-                        }
-                    } catch (error) {
-                        showAlert('Ошибка соединения. Проверьте интернет');
-                        console.error('Login error:', error);
-                    } finally {
-                        setLoading('login-btn', false);
-                    }
-                }
-                
-                async function register() {
-                    if (isLoading) return;
-                    
-                    const username = document.getElementById('register-username').value.trim();
-                    const password = document.getElementById('register-password').value;
-                    const confirm = document.getElementById('register-confirm').value;
-                    
-                    if (!username || !password || !confirm) {
-                        return showAlert('Заполните все поля');
-                    }
-                    
-                    if (username.length < 3) {
-                        return showAlert('Логин должен быть не менее 3 символов');
-                    }
-                    
-                    if (username.length > 20) {
-                        return showAlert('Логин должен быть не более 20 символов');
-                    }
-                    
-                    if (password.length < 4) {
-                        return showAlert('Пароль должен быть не менее 4 символов');
-                    }
-                    
-                    if (password !== confirm) {
-                        return showAlert('Пароли не совпадают');
-                    }
-                    
-                    setLoading('register-btn', true);
-                    
-                    try {
-                        const response = await fetch('/register', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                            },
-                            body: new URLSearchParams({ username, password })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            showAlert('Аккаунт создан! Входим...', 'success');
+                    setTimeout(async () => {
+                        try {
+                            const loginResponse = await fetch('/login', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                                body: new URLSearchParams({ username, password })
+                            });
                             
-                            setTimeout(async () => {
-                                try {
-                                    const loginResponse = await fetch('/login', {
-                                        method: 'POST',
-                                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                                        body: new URLSearchParams({ username, password })
-                                    });
-                                    
-                                    const loginData = await loginResponse.json();
-                                    
-                                    if (loginData.success) {
-                                        window.location.href = '/chat';
-                                    } else {
-                                        showAlert('Автоматический вход не удался. Войдите вручную.');
-                                        showTab('login');
-                                    }
-                                } catch (error) {
-                                    showAlert('Ошибка автоматического входа. Войдите вручную.');
-                                    showTab('login');
-                                }
-                            }, 1500);
-                        } else {
-                            showAlert(data.error || 'Ошибка регистрации');
+                            const loginData = await loginResponse.json();
+                            
+                            if (loginData.success) {
+                                window.location.href = '/chat';
+                            } else {
+                                showAlert('Автоматический вход не удался. Войдите вручную.');
+                                showTab('login');
+                            }
+                        } catch (error) {
+                            showAlert('Ошибка автоматического входа. Войдите вручную.');
+                            showTab('login');
                         }
-                    } catch (error) {
-                        showAlert('Ошибка соединения. Проверьте интернет');
-                        console.error('Register error:', error);
-                    } finally {
-                        setLoading('register-btn', false);
-                    }
+                    }, 1500);
+                } else {
+                    showAlert(data.error || 'Ошибка регистрации');
                 }
+            } catch (error) {
+                showAlert('Ошибка соединения. Проверьте интернет');
+                console.error('Register error:', error);
+            } finally {
+                setLoading('register-btn', false);
+            }
+        }
+        
+        // Функции для модальных окон
+        function openTermsModal() {
+            document.getElementById('terms-modal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeTermsModal() {
+            document.getElementById('terms-modal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        function openPrivacyModal() {
+            document.getElementById('privacy-modal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closePrivacyModal() {
+            document.getElementById('privacy-modal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        // Закрытие модальных окон при клике вне их
+        document.addEventListener('click', function(event) {
+            const termsModal = document.getElementById('terms-modal');
+            const privacyModal = document.getElementById('privacy-modal');
+            
+            if (event.target === termsModal) {
+                closeTermsModal();
+            }
+            if (event.target === privacyModal) {
+                closePrivacyModal();
+            }
+        });
+        
+        // Закрытие модальных окон по клавише ESC
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeTermsModal();
+                closePrivacyModal();
+            }
+        });
+        
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const activeForm = document.querySelector('.auth-form.active');
+                if (activeForm.id === 'login-form') login();
+                if (activeForm.id === 'register-form') register();
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('.form-input');
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    this.parentElement.style.transform = 'translateY(-2px)';
+                });
                 
-                document.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        const activeForm = document.querySelector('.auth-form.active');
-                        if (activeForm.id === 'login-form') login();
-                        if (activeForm.id === 'register-form') register();
+                input.addEventListener('blur', function() {
+                    this.parentElement.style.transform = 'translateY(0)';
+                });
+            });
+            
+            // Создаем папку для документов и пример PDF файлов
+            fetch('/create_docs_folder', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Documents folder created');
                     }
                 });
-            </script>
-        </body>
-        </html>
+            
+            // Инициализация чекбокса принятия условий
+            const termsCheckbox = document.getElementById('accept-terms-checkbox');
+            if (termsCheckbox) {
+                termsCheckbox.addEventListener('change', function() {
+                    const registerBtn = document.getElementById('register-btn');
+                    const loginBtn = document.getElementById('login-btn');
+                    
+                    if (registerBtn) {
+                        registerBtn.disabled = !this.checked;
+                    }
+                    if (loginBtn) {
+                        loginBtn.disabled = !this.checked;
+                    }
+                });
+                
+                // По умолчанию активируем кнопки
+                termsCheckbox.checked = true;
+                termsCheckbox.dispatchEvent(new Event('change'));
+            }
+        });
+    </script>
+</body>
+</html>
         '''
 
     @app.route('/login', methods=['POST'])
@@ -2325,17 +2804,17 @@ def create_app():
         theme = user['theme']
         
         # Генерируем HTML с дизайном AURA
-        return f'''
+        return render_template_string('''
 <!DOCTYPE html>
-<html lang="ru" data-theme="{theme}">
+<html lang="ru" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA Messenger - {username}</title>
+    <title>AURA Messenger - {{ username }}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         /* ОСНОВНЫЕ СТИЛИ AURA */
-        :root {{
+        :root {
             --bg: #0f0f23;
             --text: #ffffff;
             --input: #1a1a2e;
@@ -2348,41 +2827,41 @@ def create_app():
             --primary-light: #7c9bf2;
             --secondary: #8b5cf6;
             --success: #10b981;
-        }}
+        }
         
-        [data-theme="light"] {{
+        [data-theme="light"] {
             --bg: #f8f9fa;
             --text: #1a1a2e;
             --input: #ffffff;
             --border: #e5e7eb;
             --accent: #667eea;
-        }}
+        }
         
-        * {{
+        * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
-        }}
+        }
         
-        body {{
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg);
             color: var(--text);
             height: 100vh;
             overflow: hidden;
             touch-action: manipulation;
-        }}
+        }
         
         /* Основной контейнер AURA */
-        .app-container {{
+        .app-container {
             display: flex;
             height: 100vh;
             position: relative;
-        }}
+        }
         
         /* Сайдбар AURA - левая панель */
-        .sidebar {{
+        .sidebar {
             width: 100%;
             background: var(--input);
             display: flex;
@@ -2394,14 +2873,14 @@ def create_app():
             z-index: 1000;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border-right: 1px solid var(--border);
-        }}
+        }
         
-        .sidebar.hidden {{
+        .sidebar.hidden {
             transform: translateX(-100%);
-        }}
+        }
         
         /* Заголовок AURA */
-        .sidebar-header {{
+        .sidebar-header {
             padding: 25px 20px;
             background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
             text-align: center;
@@ -2412,9 +2891,9 @@ def create_app():
             gap: 12px;
             position: relative;
             border-bottom: 1px solid var(--border);
-        }}
+        }
         
-        .menu-toggle {{
+        .menu-toggle {
             position: absolute;
             left: 20px;
             background: none;
@@ -2423,9 +2902,9 @@ def create_app():
             font-size: 1.2rem;
             cursor: pointer;
             display: none;
-        }}
+        }
         
-        .logo-placeholder {{
+        .logo-placeholder {
             width: 40px;
             height: 40px;
             border-radius: 12px;
@@ -2436,26 +2915,26 @@ def create_app():
             font-size: 20px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }}
+        }
         
-        .app-title {{
+        .app-title {
             color: white;
             font-size: 2rem;
             font-weight: 800;
             letter-spacing: -0.5px;
-        }}
+        }
         
         /* ПОИСК AURA */
-        .search-container {{
+        .search-container {
             padding: 20px;
             border-bottom: 1px solid var(--border);
-        }}
+        }
         
-        .search-box {{
+        .search-box {
             position: relative;
-        }}
+        }
         
-        .search-input {{
+        .search-input {
             width: 100%;
             padding: 12px 16px 12px 44px;
             border: 1px solid var(--border);
@@ -2464,33 +2943,33 @@ def create_app():
             color: var(--text);
             font-size: 0.95rem;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .search-input:focus {{
+        .search-input:focus {
             outline: none;
             border-color: var(--accent);
             background: rgba(255, 255, 255, 0.08);
-        }}
+        }
         
-        .search-icon {{
+        .search-icon {
             position: absolute;
             left: 16px;
             top: 50%;
             transform: translateY(-50%);
             color: var(--text-light);
             font-size: 1rem;
-        }}
+        }
         
         /* Навигационные категории AURA */
-        .nav-categories {{
+        .nav-categories {
             display: flex;
             padding: 0 20px;
             border-bottom: 1px solid var(--border);
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-        }}
+        }
         
-        .nav-category {{
+        .nav-category {
             padding: 12px 16px;
             font-size: 0.85rem;
             font-weight: 500;
@@ -2499,27 +2978,27 @@ def create_app():
             transition: all 0.2s ease;
             white-space: nowrap;
             border-bottom: 2px solid transparent;
-        }}
+        }
         
-        .nav-category:hover {{
+        .nav-category:hover {
             color: var(--text);
-        }}
+        }
         
-        .nav-category.active {{
+        .nav-category.active {
             color: var(--accent);
             border-bottom-color: var(--accent);
-        }}
+        }
         
         /* Информация о пользователе AURA */
-        .user-info {{
+        .user-info {
             padding: 20px;
             display: flex;
             gap: 15px;
             align-items: center;
             border-bottom: 1px solid var(--border);
-        }}
+        }
         
-        .avatar {{
+        .avatar {
             width: 48px;
             height: 48px;
             border-radius: 50%;
@@ -2535,42 +3014,42 @@ def create_app():
             background-position: center;
             cursor: pointer;
             border: 2px solid var(--accent);
-        }}
+        }
         
-        .user-details {{
+        .user-details {
             flex: 1;
-        }}
+        }
         
-        .user-details strong {{
+        .user-details strong {
             display: block;
             font-size: 1.1rem;
             margin-bottom: 4px;
-        }}
+        }
         
-        .user-status {{
+        .user-status {
             font-size: 0.85rem;
             opacity: 0.8;
             display: flex;
             align-items: center;
             gap: 6px;
-        }}
+        }
         
-        .status-dot {{
+        .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background: var(--success);
-        }}
+        }
         
         /* Основная навигация AURA */
-        .nav {{
+        .nav {
             flex: 1;
             overflow-y: auto;
             padding: 15px;
             -webkit-overflow-scrolling: touch;
-        }}
+        }
         
-        .nav-title {{
+        .nav-title {
             padding: 12px 15px;
             font-size: 0.8rem;
             color: var(--text-light);
@@ -2580,9 +3059,9 @@ def create_app():
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }}
+        }
         
-        .nav-item {{
+        .nav-item {
             padding: 12px 15px;
             cursor: pointer;
             border-radius: 10px;
@@ -2594,26 +3073,26 @@ def create_app():
             user-select: none;
             background: transparent;
             border: 1px solid transparent;
-        }}
+        }
         
-        .nav-item:hover {{
+        .nav-item:hover {
             background: rgba(255, 255, 255, 0.05);
             border-color: var(--border);
-        }}
+        }
         
-        .nav-item.active {{
+        .nav-item.active {
             background: rgba(var(--primary-rgb), 0.1);
             border-color: var(--accent);
             color: var(--accent);
-        }}
+        }
         
-        .nav-item i {{
+        .nav-item i {
             width: 20px;
             text-align: center;
             font-size: 1rem;
-        }}
+        }
         
-        .add-btn {{
+        .add-btn {
             background: none;
             border: none;
             color: var(--text-light);
@@ -2624,29 +3103,29 @@ def create_app():
             align-items: center;
             justify-content: center;
             font-size: 0.9rem;
-        }}
+        }
         
-        .add-btn:hover {{
+        .add-btn:hover {
             color: var(--text);
             background: rgba(255, 255, 255, 0.05);
-        }}
+        }
         
         /* Каналы AURA с информацией о подписчиках */
-        .channel-item {{
+        .channel-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
             width: 100%;
-        }}
+        }
         
-        .channel-info {{
+        .channel-info {
             display: flex;
             align-items: center;
             gap: 12px;
             flex: 1;
-        }}
+        }
         
-        .channel-avatar {{
+        .channel-avatar {
             width: 36px;
             height: 36px;
             border-radius: 50%;
@@ -2660,28 +3139,28 @@ def create_app():
             background-size: cover;
             background-position: center;
             flex-shrink: 0;
-        }}
+        }
         
-        .channel-name {{
+        .channel-name {
             flex: 1;
             font-size: 0.95rem;
-        }}
+        }
         
-        .channel-stats {{
+        .channel-stats {
             display: flex;
             align-items: center;
             gap: 8px;
             font-size: 0.8rem;
             color: var(--text-light);
-        }}
+        }
         
-        .subscriber-count {{
+        .subscriber-count {
             display: flex;
             align-items: center;
             gap: 4px;
-        }}
+        }
         
-        .join-btn {{
+        .join-btn {
             padding: 6px 12px;
             background: var(--accent);
             color: white;
@@ -2691,15 +3170,15 @@ def create_app():
             cursor: pointer;
             transition: all 0.2s ease;
             font-weight: 500;
-        }}
+        }
         
-        .join-btn:hover {{
+        .join-btn:hover {
             background: var(--primary-dark);
             transform: translateY(-1px);
-        }}
+        }
         
         /* Личные чаты AURA */
-        .chat-item {{
+        .chat-item {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -2708,13 +3187,13 @@ def create_app():
             border-radius: 10px;
             margin: 4px 0;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .chat-item:hover {{
+        .chat-item:hover {
             background: rgba(255, 255, 255, 0.05);
-        }}
+        }
         
-        .chat-avatar {{
+        .chat-avatar {
             width: 40px;
             height: 40px;
             border-radius: 50%;
@@ -2728,29 +3207,29 @@ def create_app():
             background-size: cover;
             background-position: center;
             flex-shrink: 0;
-        }}
+        }
         
-        .chat-info {{
+        .chat-info {
             flex: 1;
             min-width: 0;
-        }}
+        }
         
-        .chat-name {{
+        .chat-name {
             font-size: 0.95rem;
             font-weight: 500;
             margin-bottom: 2px;
-        }}
+        }
         
-        .chat-last-message {{
+        .chat-last-message {
             font-size: 0.85rem;
             color: var(--text-light);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }}
+        }
         
         /* Кнопка выхода AURA */
-        .logout-btn {{
+        .logout-btn {
             margin: 20px;
             padding: 12px;
             background: rgba(220, 53, 69, 0.1);
@@ -2764,15 +3243,15 @@ def create_app():
             justify-content: center;
             gap: 8px;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .logout-btn:hover {{
+        .logout-btn:hover {
             background: rgba(220, 53, 69, 0.2);
             transform: translateY(-1px);
-        }}
+        }
         
         /* Область чата AURA */
-        .chat-area {{
+        .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -2785,14 +3264,14 @@ def create_app():
             z-index: 900;
             transform: translateX(100%);
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }}
+        }
         
-        .chat-area.active {{
+        .chat-area.active {
             transform: translateX(0);
-        }}
+        }
         
         /* Заголовок чата AURA */
-        .chat-header {{
+        .chat-header {
             padding: 20px;
             background: var(--input);
             border-bottom: 1px solid var(--border);
@@ -2800,9 +3279,9 @@ def create_app():
             align-items: center;
             gap: 15px;
             position: relative;
-        }}
+        }
         
-        .back-btn {{
+        .back-btn {
             background: none;
             border: none;
             color: var(--text);
@@ -2811,9 +3290,9 @@ def create_app():
             padding: 5px;
             margin-right: 5px;
             display: none;
-        }}
+        }
         
-        .chat-header-avatar {{
+        .chat-header-avatar {
             width: 44px;
             height: 44px;
             border-radius: 50%;
@@ -2828,30 +3307,30 @@ def create_app():
             background-size: cover;
             background-position: center;
             cursor: pointer;
-        }}
+        }
         
-        .chat-header-info {{
+        .chat-header-info {
             flex: 1;
-        }}
+        }
         
-        .chat-title {{
+        .chat-title {
             font-size: 1.2rem;
             font-weight: 600;
             margin-bottom: 4px;
-        }}
+        }
         
-        .chat-subtitle {{
+        .chat-subtitle {
             font-size: 0.9rem;
             color: var(--text-light);
-        }}
+        }
         
-        .channel-actions {{
+        .channel-actions {
             margin-left: auto;
             display: flex;
             gap: 10px;
-        }}
+        }
         
-        .channel-btn {{
+        .channel-btn {
             background: none;
             border: none;
             color: var(--text);
@@ -2862,15 +3341,15 @@ def create_app():
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .channel-btn:hover {{
+        .channel-btn:hover {
             background: rgba(255, 255, 255, 0.05);
             color: var(--accent);
-        }}
+        }
         
         /* Сообщения AURA */
-        .messages {{
+        .messages {
             flex: 1;
             padding: 20px;
             overflow-y: auto;
@@ -2878,22 +3357,22 @@ def create_app():
             flex-direction: column;
             gap: 16px;
             -webkit-overflow-scrolling: touch;
-        }}
+        }
         
-        .message {{
+        .message {
             display: flex;
             align-items: flex-start;
             gap: 12px;
             max-width: 85%;
             animation: fadeIn 0.3s ease;
-        }}
+        }
         
-        .message.own {{
+        .message.own {
             align-self: flex-end;
             flex-direction: row-reverse;
-        }}
+        }
         
-        .message-avatar {{
+        .message-avatar {
             width: 36px;
             height: 36px;
             border-radius: 50%;
@@ -2908,9 +3387,9 @@ def create_app():
             background-size: cover;
             background-position: center;
             cursor: pointer;
-        }}
+        }
         
-        .message-content {{
+        .message-content {
             background: var(--input);
             padding: 12px 16px;
             border-radius: 18px;
@@ -2918,82 +3397,82 @@ def create_app():
             max-width: 100%;
             word-wrap: break-word;
             border: 1px solid var(--border);
-        }}
+        }
         
-        .message.own .message-content {{
+        .message.own .message-content {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
             border-top-left-radius: 18px;
             border-top-right-radius: 4px;
             border: none;
-        }}
+        }
         
-        .message-sender {{
+        .message-sender {
             font-weight: 600;
             font-size: 0.9rem;
             margin-bottom: 6px;
             color: var(--text);
-        }}
+        }
         
-        .message.own .message-sender {{
+        .message.own .message-sender {
             color: rgba(255, 255, 255, 0.9);
-        }}
+        }
         
-        .message-text {{
+        .message-text {
             line-height: 1.4;
             font-size: 0.95rem;
-        }}
+        }
         
-        .message-file {{
+        .message-file {
             margin-top: 8px;
             border-radius: 12px;
             overflow: hidden;
             max-width: 100%;
-        }}
+        }
         
-        .message-file img {{
+        .message-file img {
             max-width: 100%;
             max-height: 300px;
             border-radius: 8px;
             cursor: pointer;
             transition: transform 0.2s;
-        }}
+        }
         
-        .message-file img:hover {{
+        .message-file img:hover {
             transform: scale(1.02);
-        }}
+        }
         
-        .message-file video {{
+        .message-file video {
             max-width: 100%;
             max-height: 300px;
             border-radius: 8px;
-        }}
+        }
         
-        .message-time {{
+        .message-time {
             font-size: 0.75rem;
             color: var(--text-light);
             margin-top: 6px;
             text-align: right;
-        }}
+        }
         
-        .message.own .message-time {{
+        .message.own .message-time {
             color: rgba(255, 255, 255, 0.7);
-        }}
+        }
         
         /* Поле ввода AURA */
-        .input-area {{
+        .input-area {
             padding: 20px;
             background: var(--input);
             border-top: 1px solid var(--border);
-        }}
+        }
         
-        .input-row {{
+        .input-row {
             display: flex;
             gap: 10px;
             align-items: flex-end;
-        }}
+        }
         
-        .attachment-btn {{
+        .attachment-btn {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
             color: var(--text);
@@ -3008,15 +3487,15 @@ def create_app():
             justify-content: center;
             flex-shrink: 0;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .attachment-btn:hover {{
+        .attachment-btn:hover {
             background: rgba(255, 255, 255, 0.1);
             border-color: var(--accent);
             color: var(--accent);
-        }}
+        }
         
-        .emoji-btn {{
+        .emoji-btn {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
             color: var(--text);
@@ -3031,21 +3510,21 @@ def create_app():
             justify-content: center;
             flex-shrink: 0;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .emoji-btn:hover {{
+        .emoji-btn:hover {
             background: rgba(255, 255, 255, 0.1);
             border-color: var(--accent);
             color: var(--accent);
-        }}
+        }
         
-        .emoji-btn.active {{
+        .emoji-btn.active {
             background: var(--accent);
             color: white;
             border-color: var(--accent);
-        }}
+        }
         
-        .msg-input {{
+        .msg-input {
             flex: 1;
             padding: 14px 18px;
             border: 1px solid var(--border);
@@ -3058,15 +3537,15 @@ def create_app():
             min-height: 48px;
             line-height: 1.4;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .msg-input:focus {{
+        .msg-input:focus {
             outline: none;
             border-color: var(--accent);
             background: rgba(255, 255, 255, 0.08);
-        }}
+        }
         
-        .send-btn {{
+        .send-btn {
             width: 48px;
             height: 48px;
             border-radius: 50%;
@@ -3080,28 +3559,28 @@ def create_app():
             flex-shrink: 0;
             transition: all 0.2s ease;
             font-size: 1.2rem;
-        }}
+        }
         
-        .send-btn:hover {{
+        .send-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }}
+        }
         
-        .send-btn:active {{
+        .send-btn:active {
             transform: translateY(0);
-        }}
+        }
         
         /* Блок эмодзи AURA */
-        .emoji-container {{
+        .emoji-container {
             display: none;
             position: absolute;
             bottom: 80px;
             left: 20px;
             z-index: 1001;
             animation: fadeInUp 0.2s ease-out;
-        }}
+        }
         
-        .emoji-picker {{
+        .emoji-picker {
             background: var(--input);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -3113,24 +3592,24 @@ def create_app():
             max-height: 400px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-        }}
+        }
         
-        .emoji-header {{
+        .emoji-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
             padding-bottom: 10px;
             border-bottom: 1px solid var(--border);
-        }}
+        }
         
-        .emoji-title {{
+        .emoji-title {
             font-weight: 600;
             font-size: 0.9rem;
             color: var(--text);
-        }}
+        }
         
-        .emoji-search {{
+        .emoji-search {
             width: 100%;
             padding: 8px 12px;
             border: 1px solid var(--border);
@@ -3139,20 +3618,20 @@ def create_app():
             margin-bottom: 10px;
             font-size: 0.9rem;
             color: var(--text);
-        }}
+        }
         
-        .emoji-search:focus {{
+        .emoji-search:focus {
             outline: none;
             border-color: var(--accent);
-        }}
+        }
         
-        .emoji-grid {{
+        .emoji-grid {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
             gap: 8px;
-        }}
+        }
         
-        .emoji-item {{
+        .emoji-item {
             font-size: 1.5rem;
             width: 36px;
             height: 36px;
@@ -3163,71 +3642,71 @@ def create_app():
             border-radius: 10px;
             transition: all 0.2s ease;
             user-select: none;
-        }}
+        }
         
-        .emoji-item:hover {{
+        .emoji-item:hover {
             background: rgba(var(--primary-rgb), 0.2);
             transform: scale(1.1);
-        }}
+        }
         
         /* Избранное AURA (Все заметки) */
-        .favorites-grid {{
+        .favorites-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 20px;
             padding: 20px;
-        }}
+        }
         
-        .favorite-item {{
+        .favorite-item {
             background: var(--input);
             border-radius: 16px;
             padding: 20px;
             border: 1px solid var(--border);
             position: relative;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .favorite-item:hover {{
+        .favorite-item:hover {
             transform: translateY(-4px);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             border-color: var(--accent);
-        }}
+        }
         
-        .favorite-item.pinned {{
+        .favorite-item.pinned {
             border-left: 4px solid var(--favorite-color);
-        }}
+        }
         
-        .favorite-content {{
+        .favorite-content {
             margin-bottom: 15px;
             word-break: break-word;
             font-size: 0.95rem;
             line-height: 1.5;
-        }}
+        }
         
-        .favorite-file {{
+        .favorite-file {
             max-width: 100%;
             border-radius: 12px;
             overflow: hidden;
             margin-bottom: 15px;
-        }}
+        }
         
-        .favorite-file img, .favorite-file video {{
+        .favorite-file img, .favorite-file video {
             width: 100%;
             height: auto;
             display: block;
             border-radius: 12px;
-        }}
+        }
         
-        .favorite-meta {{
+        .favorite-meta {
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-size: 0.8rem;
             color: var(--text-light);
             margin-top: 15px;
-        }}
+        }
         
-        .favorite-actions {{
+        .favorite-actions {
             position: absolute;
             top: 15px;
             right: 15px;
@@ -3235,13 +3714,13 @@ def create_app():
             gap: 8px;
             opacity: 0;
             transition: opacity 0.2s ease;
-        }}
+        }
         
-        .favorite-item:hover .favorite-actions {{
+        .favorite-item:hover .favorite-actions {
             opacity: 1;
-        }}
+        }
         
-        .favorite-action-btn {{
+        .favorite-action-btn {
             background: rgba(0, 0, 0, 0.5);
             color: white;
             border: none;
@@ -3254,14 +3733,14 @@ def create_app():
             cursor: pointer;
             font-size: 0.9rem;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .favorite-action-btn:hover {{
+        .favorite-action-btn:hover {
             background: var(--accent);
             transform: scale(1.1);
-        }}
+        }
         
-        .category-badge {{
+        .category-badge {
             display: inline-block;
             padding: 4px 10px;
             background: rgba(var(--primary-rgb), 0.1);
@@ -3270,10 +3749,10 @@ def create_app():
             font-size: 0.75rem;
             font-weight: 500;
             border: 1px solid rgba(var(--primary-rgb), 0.3);
-        }}
+        }
         
         /* Категории избранного AURA */
-        .categories-filter {{
+        .categories-filter {
             display: flex;
             gap: 10px;
             padding: 20px;
@@ -3282,9 +3761,9 @@ def create_app():
             flex-wrap: wrap;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-        }}
+        }
         
-        .category-filter-btn {{
+        .category-filter-btn {
             padding: 8px 16px;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
@@ -3294,47 +3773,47 @@ def create_app():
             transition: all 0.2s ease;
             white-space: nowrap;
             color: var(--text);
-        }}
+        }
         
-        .category-filter-btn:hover {{
+        .category-filter-btn:hover {
             background: rgba(255, 255, 255, 0.1);
             border-color: var(--accent);
-        }}
+        }
         
-        .category-filter-btn.active {{
+        .category-filter-btn.active {
             background: var(--accent);
             color: white;
             border-color: var(--accent);
-        }}
+        }
         
         /* Пустые состояния AURA */
-        .empty-state {{
+        .empty-state {
             text-align: center;
             padding: 60px 20px;
             color: var(--text-light);
-        }}
+        }
         
-        .empty-state i {{
+        .empty-state i {
             font-size: 3rem;
             margin-bottom: 20px;
             color: var(--border);
-        }}
+        }
         
-        .empty-state h3 {{
+        .empty-state h3 {
             font-size: 1.3rem;
             margin-bottom: 10px;
             color: var(--text);
-        }}
+        }
         
-        .empty-state p {{
+        .empty-state p {
             font-size: 0.95rem;
             max-width: 300px;
             margin: 0 auto 20px;
             line-height: 1.5;
-        }}
+        }
         
         /* Модальные окна AURA */
-        .modal {{
+        .modal {
             display: none;
             position: fixed;
             top: 0;
@@ -3348,9 +3827,9 @@ def create_app():
             align-items: center;
             justify-content: center;
             padding: 20px;
-        }}
+        }
         
-        .modal-content {{
+        .modal-content {
             background: var(--input);
             padding: 30px;
             border-radius: 20px;
@@ -3361,21 +3840,21 @@ def create_app():
             -webkit-overflow-scrolling: touch;
             border: 1px solid var(--border);
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
-        }}
+        }
         
-        .form-group {{
+        .form-group {
             margin-bottom: 20px;
-        }}
+        }
         
-        .form-label {{
+        .form-label {
             display: block;
             margin-bottom: 8px;
             font-weight: 500;
             color: var(--text);
             font-size: 0.95rem;
-        }}
+        }
         
-        .form-control {{
+        .form-control {
             width: 100%;
             padding: 12px 16px;
             border: 1px solid var(--border);
@@ -3384,15 +3863,15 @@ def create_app():
             color: var(--text);
             font-size: 1rem;
             transition: all 0.2s ease;
-        }}
+        }
         
-        .form-control:focus {{
+        .form-control:focus {
             outline: none;
             border-color: var(--accent);
             background: rgba(255, 255, 255, 0.08);
-        }}
+        }
         
-        .btn {{
+        .btn {
             padding: 12px 24px;
             border: none;
             border-radius: 12px;
@@ -3404,37 +3883,37 @@ def create_app():
             align-items: center;
             justify-content: center;
             gap: 8px;
-        }}
+        }
         
-        .btn-primary {{
+        .btn-primary {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
-        }}
+        }
         
-        .btn-primary:hover {{
+        .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-        }}
+        }
         
-        .btn-secondary {{
+        .btn-secondary {
             background: rgba(255, 255, 255, 0.05);
             color: var(--text);
             border: 1px solid var(--border);
-        }}
+        }
         
-        .btn-secondary:hover {{
+        .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.1);
             border-color: var(--accent);
-        }}
+        }
         
         /* Настройки темы AURA */
-        .theme-buttons {{
+        .theme-buttons {
             display: flex;
             gap: 10px;
             margin-top: 15px;
-        }}
+        }
         
-        .theme-btn {{
+        .theme-btn {
             flex: 1;
             padding: 15px;
             border: none;
@@ -3445,26 +3924,26 @@ def create_app():
             color: var(--text);
             border: 1px solid var(--border);
             transition: all 0.2s ease;
-        }}
+        }
         
-        .theme-btn:hover {{
+        .theme-btn:hover {
             background: rgba(255, 255, 255, 0.1);
             transform: translateY(-2px);
-        }}
+        }
         
-        .theme-btn.active {{
+        .theme-btn.active {
             background: var(--accent);
             color: white;
             border-color: var(--accent);
-        }}
+        }
         
         /* Аватары AURA */
-        .avatar-upload {{
+        .avatar-upload {
             text-align: center;
             margin: 20px 0;
-        }}
+        }
         
-        .avatar-preview {{
+        .avatar-preview {
             width: 120px;
             height: 120px;
             border-radius: 50%;
@@ -3480,10 +3959,10 @@ def create_app():
             color: white;
             font-weight: bold;
             font-size: 2rem;
-        }}
+        }
         
         /* Создание канала AURA */
-        .glass-modal-overlay {{
+        .glass-modal-overlay {
             display: none;
             position: fixed;
             top: 0;
@@ -3498,9 +3977,9 @@ def create_app():
             align-items: center;
             justify-content: center;
             padding: 20px;
-        }}
+        }
         
-        .glass-modal-container {{
+        .glass-modal-container {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -3515,16 +3994,16 @@ def create_app():
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
             position: relative;
             animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }}
+        }
         
-        .glass-modal-header {{
+        .glass-modal-header {
             text-align: center;
             margin-bottom: 30px;
             position: relative;
             padding-bottom: 20px;
-        }}
+        }
         
-        .glass-modal-header::after {{
+        .glass-modal-header::after {
             content: '';
             position: absolute;
             bottom: 0;
@@ -3533,9 +4012,9 @@ def create_app():
             height: 2px;
             background: linear-gradient(90deg, transparent, var(--primary), var(--secondary), transparent);
             border-radius: 2px;
-        }}
+        }
         
-        .glass-modal-icon {{
+        .glass-modal-icon {
             width: 70px;
             height: 70px;
             margin: 0 auto 20px;
@@ -3547,17 +4026,17 @@ def create_app():
             justify-content: center;
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }}
+        }
         
-        .glass-modal-icon i {{
+        .glass-modal-icon i {
             font-size: 32px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-        }}
+        }
         
-        .glass-modal-title {{
+        .glass-modal-title {
             font-size: 1.8rem;
             font-weight: 800;
             margin-bottom: 8px;
@@ -3566,19 +4045,19 @@ def create_app():
             -webkit-text-fill-color: transparent;
             background-clip: text;
             letter-spacing: -0.5px;
-        }}
+        }
         
-        .glass-modal-subtitle {{
+        .glass-modal-subtitle {
             color: var(--text-light);
             font-size: 1rem;
             font-weight: 400;
-        }}
+        }
         
-        .glass-form-group {{
+        .glass-form-group {
             margin-bottom: 25px;
-        }}
+        }
         
-        .glass-form-label {{
+        .glass-form-label {
             display: block;
             margin-bottom: 10px;
             font-weight: 600;
@@ -3587,14 +4066,14 @@ def create_app():
             display: flex;
             align-items: center;
             gap: 10px;
-        }}
+        }
         
-        .glass-form-label i {{
+        .glass-form-label i {
             font-size: 1.1rem;
             color: var(--primary);
-        }}
+        }
         
-        .glass-form-input {{
+        .glass-form-input {
             width: 100%;
             padding: 16px 20px;
             border: 1px solid var(--border);
@@ -3603,25 +4082,25 @@ def create_app():
             color: var(--text);
             font-size: 1rem;
             transition: all 0.3s ease;
-        }}
+        }
         
-        .glass-form-input:focus {{
+        .glass-form-input:focus {
             outline: none;
             border-color: var(--accent);
             background: rgba(255, 255, 255, 0.08);
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }}
+        }
         
-        .glass-form-input::placeholder {{
+        .glass-form-input::placeholder {
             color: var(--text-light);
-        }}
+        }
         
-        .glass-form-textarea {{
+        .glass-form-textarea {
             min-height: 100px;
             resize: vertical;
-        }}
+        }
         
-        .glass-form-checkbox {{
+        .glass-form-checkbox {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -3632,14 +4111,14 @@ def create_app():
             border-radius: 14px;
             border: 1px solid var(--border);
             transition: all 0.3s ease;
-        }}
+        }
         
-        .glass-form-checkbox:hover {{
+        .glass-form-checkbox:hover {
             background: rgba(255, 255, 255, 0.05);
             border-color: var(--accent);
-        }}
+        }
         
-        .glass-form-checkbox input {{
+        .glass-form-checkbox input {
             width: 20px;
             height: 20px;
             border-radius: 6px;
@@ -3649,14 +4128,14 @@ def create_app():
             position: relative;
             appearance: none;
             -webkit-appearance: none;
-        }}
+        }
         
-        .glass-form-checkbox input:checked {{
+        .glass-form-checkbox input:checked {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             border-color: transparent;
-        }}
+        }
         
-        .glass-form-checkbox input:checked::after {{
+        .glass-form-checkbox input:checked::after {
             content: '✓';
             position: absolute;
             top: 50%;
@@ -3665,21 +4144,21 @@ def create_app():
             color: white;
             font-size: 12px;
             font-weight: bold;
-        }}
+        }
         
-        .glass-form-checkbox-text {{
+        .glass-form-checkbox-text {
             flex: 1;
             color: var(--text);
             font-weight: 500;
-        }}
+        }
         
-        .glass-modal-buttons {{
+        .glass-modal-buttons {
             display: flex;
             gap: 15px;
             margin-top: 30px;
-        }}
+        }
         
-        .glass-btn {{
+        .glass-btn {
             flex: 1;
             padding: 18px;
             border: none;
@@ -3692,31 +4171,31 @@ def create_app():
             align-items: center;
             justify-content: center;
             gap: 12px;
-        }}
+        }
         
-        .glass-btn-primary {{
+        .glass-btn-primary {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-        }}
+        }
         
-        .glass-btn-primary:hover {{
+        .glass-btn-primary:hover {
             transform: translateY(-3px);
             box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
-        }}
+        }
         
-        .glass-btn-secondary {{
+        .glass-btn-secondary {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
             color: var(--text);
-        }}
+        }
         
-        .glass-btn-secondary:hover {{
+        .glass-btn-secondary:hover {
             background: rgba(255, 255, 255, 0.1);
             transform: translateY(-2px);
-        }}
+        }
         
-        .glass-close-btn {{
+        .glass-close-btn {
             position: absolute;
             top: 20px;
             right: 20px;
@@ -3732,112 +4211,112 @@ def create_app():
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 10;
-        }}
+        }
         
-        .glass-close-btn:hover {{
+        .glass-close-btn:hover {
             background: rgba(255, 255, 255, 0.1);
             transform: rotate(90deg);
-        }}
+        }
         
         /* Анимации */
-        @keyframes fadeIn {{
-            from {{ opacity: 0; }}
-            to {{ opacity: 1; }}
-        }}
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
         
-        @keyframes fadeInUp {{
-            from {{
+        @keyframes fadeInUp {
+            from {
                 opacity: 0;
                 transform: translateY(20px);
-            }}
-            to {{
+            }
+            to {
                 opacity: 1;
                 transform: translateY(0);
-            }}
-        }}
+            }
+        }
         
-        @keyframes slideUp {{
-            from {{
+        @keyframes slideUp {
+            from {
                 opacity: 0;
                 transform: translateY(30px) scale(0.95);
-            }}
-            to {{
+            }
+            to {
                 opacity: 1;
                 transform: translateY(0) scale(1);
-            }}
-        }}
+            }
+        }
         
         /* Скроллбар */
-        ::-webkit-scrollbar {{
+        ::-webkit-scrollbar {
             width: 8px;
-        }}
+        }
         
-        ::-webkit-scrollbar-track {{
+        ::-webkit-scrollbar-track {
             background: transparent;
-        }}
+        }
         
-        ::-webkit-scrollbar-thumb {{
+        ::-webkit-scrollbar-thumb {
             background: var(--border);
             border-radius: 4px;
-        }}
+        }
         
-        ::-webkit-scrollbar-thumb:hover {{
+        ::-webkit-scrollbar-thumb:hover {
             background: var(--accent);
-        }}
+        }
         
         /* Медиа-запросы для мобильных */
-        @media (max-width: 768px) {{
-            .menu-toggle {{
+        @media (max-width: 768px) {
+            .menu-toggle {
                 display: block;
-            }}
+            }
             
-            .back-btn {{
+            .back-btn {
                 display: block;
-            }}
+            }
             
-            .sidebar-header {{
+            .sidebar-header {
                 padding: 20px;
-            }}
+            }
             
-            .app-title {{
+            .app-title {
                 font-size: 1.8rem;
-            }}
+            }
             
-            .nav-categories {{
+            .nav-categories {
                 padding: 0 15px;
-            }}
+            }
             
-            .nav-category {{
+            .nav-category {
                 padding: 10px 12px;
                 font-size: 0.8rem;
-            }}
+            }
             
-            .user-info {{
+            .user-info {
                 padding: 15px;
-            }}
+            }
             
-            .avatar {{
+            .avatar {
                 width: 44px;
                 height: 44px;
                 font-size: 1.1rem;
-            }}
+            }
             
-            .favorites-grid {{
+            .favorites-grid {
                 grid-template-columns: 1fr;
                 gap: 15px;
                 padding: 15px;
-            }}
+            }
             
-            .message-content {{
+            .message-content {
                 max-width: 90%;
-            }}
+            }
             
-            .modal-content {{
+            .modal-content {
                 padding: 20px;
                 margin: 10px;
-            }}
+            }
             
-            .input-area {{
+            .input-area {
                 position: fixed;
                 bottom: 0;
                 left: 0;
@@ -3846,62 +4325,62 @@ def create_app():
                 background: var(--input);
                 border-top: 1px solid var(--border);
                 z-index: 1000;
-            }}
+            }
             
-            .msg-input {{
+            .msg-input {
                 padding: 12px 16px;
                 font-size: 16px;
-            }}
+            }
             
-            .messages {{
+            .messages {
                 padding-bottom: 80px;
-            }}
+            }
             
-            .chat-header {{
+            .chat-header {
                 padding: 15px;
-            }}
+            }
             
-            .glass-modal-container {{
+            .glass-modal-container {
                 padding: 25px 20px;
-            }}
+            }
             
-            .glass-modal-title {{
+            .glass-modal-title {
                 font-size: 1.5rem;
-            }}
+            }
             
-            .glass-modal-icon {{
+            .glass-modal-icon {
                 width: 60px;
                 height: 60px;
-            }}
+            }
             
-            .glass-modal-icon i {{
+            .glass-modal-icon i {
                 font-size: 26px;
-            }}
-        }}
+            }
+        }
         
-        @media (min-width: 769px) {{
-            .sidebar {{
+        @media (min-width: 769px) {
+            .sidebar {
                 width: var(--sidebar-width);
                 position: relative;
                 transform: none !important;
-            }}
+            }
             
-            .chat-area {{
+            .chat-area {
                 position: relative;
                 transform: none !important;
-            }}
+            }
             
-            .menu-toggle {{
+            .menu-toggle {
                 display: none;
-            }}
+            }
             
-            .back-btn {{
+            .back-btn {
                 display: none;
-            }}
-        }}
+            }
+        }
         
         /* Профиль пользователя AURA */
-        .profile-modal-overlay {{
+        .profile-modal-overlay {
             display: none;
             position: fixed;
             top: 0;
@@ -3916,9 +4395,9 @@ def create_app():
             align-items: center;
             justify-content: center;
             padding: 20px;
-        }}
+        }
         
-        .profile-modal-container {{
+        .profile-modal-container {
             background: var(--input);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -3933,16 +4412,16 @@ def create_app():
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
             position: relative;
             animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }}
+        }
         
-        .profile-modal-header {{
+        .profile-modal-header {
             text-align: center;
             margin-bottom: 25px;
             position: relative;
             padding-bottom: 20px;
-        }}
+        }
         
-        .profile-modal-header::after {{
+        .profile-modal-header::after {
             content: '';
             position: absolute;
             bottom: 0;
@@ -3951,9 +4430,9 @@ def create_app():
             height: 2px;
             background: linear-gradient(90deg, transparent, var(--primary), var(--secondary), transparent);
             border-radius: 2px;
-        }}
+        }
         
-        .profile-avatar-large {{
+        .profile-avatar-large {
             width: 100px;
             height: 100px;
             margin: 0 auto 20px;
@@ -3969,16 +4448,16 @@ def create_app():
             background-position: center;
             border: 4px solid var(--accent);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-        }}
+        }
         
-        .profile-username {{
+        .profile-username {
             font-size: 1.5rem;
             font-weight: 800;
             margin-bottom: 5px;
             color: var(--text);
-        }}
+        }
         
-        .profile-status {{
+        .profile-status {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -3986,28 +4465,28 @@ def create_app():
             color: var(--text-light);
             font-size: 0.9rem;
             margin-bottom: 5px;
-        }}
+        }
         
-        .status-dot-large {{
+        .status-dot-large {
             width: 10px;
             height: 10px;
             border-radius: 50%;
             background: var(--success);
-        }}
+        }
         
-        .profile-description {{
+        .profile-description {
             margin: 25px 0;
             text-align: center;
-        }}
+        }
         
-        .profile-description-label {{
+        .profile-description-label {
             font-size: 0.9rem;
             color: var(--text-light);
             margin-bottom: 10px;
             font-weight: 600;
-        }}
+        }
         
-        .profile-description-text {{
+        .profile-description-text {
             background: rgba(255, 255, 255, 0.02);
             backdrop-filter: blur(10px);
             border-radius: 12px;
@@ -4017,9 +4496,9 @@ def create_app():
             line-height: 1.5;
             min-height: 80px;
             border: 1px solid var(--border);
-        }}
+        }
         
-        .profile-close-btn {{
+        .profile-close-btn {
             position: absolute;
             top: 15px;
             right: 15px;
@@ -4035,44 +4514,44 @@ def create_app():
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 10;
-        }}
+        }
         
-        .profile-close-btn:hover {{
+        .profile-close-btn:hover {
             background: rgba(255, 255, 255, 0.1);
             transform: rotate(90deg);
-        }}
+        }
         
         /* Поддержка AURA */
-        .support-content {{
+        .support-content {
             padding: 30px;
             max-width: 600px;
             margin: 0 auto;
-        }}
+        }
         
-        .support-section {{
+        .support-section {
             background: var(--input);
             border-radius: 16px;
             padding: 25px;
             margin-bottom: 20px;
             border: 1px solid var(--border);
-        }}
+        }
         
-        .support-section h3 {{
+        .support-section h3 {
             font-size: 1.2rem;
             margin-bottom: 15px;
             color: var(--text);
             display: flex;
             align-items: center;
             gap: 10px;
-        }}
+        }
         
-        .support-section p {{
+        .support-section p {
             color: var(--text-light);
             line-height: 1.6;
             margin-bottom: 15px;
-        }}
+        }
         
-        .support-contact {{
+        .support-contact {
             display: flex;
             align-items: center;
             gap: 15px;
@@ -4081,62 +4560,62 @@ def create_app():
             border-radius: 12px;
             border: 1px solid var(--border);
             margin-top: 15px;
-        }}
+        }
         
-        .support-contact i {{
+        .support-contact i {
             font-size: 1.5rem;
             color: var(--accent);
-        }}
+        }
         
-        .support-contact a {{
+        .support-contact a {
             color: var(--accent);
             text-decoration: none;
             font-weight: 500;
-        }}
+        }
         
-        .support-contact a:hover {{
+        .support-contact a:hover {
             text-decoration: underline;
-        }}
+        }
         
         /* Утилитарные классы */
-        .hidden {{
+        .hidden {
             display: none !important;
-        }}
+        }
         
-        .text-center {{
+        .text-center {
             text-align: center;
-        }}
+        }
         
-        .mt-2 {{ margin-top: 8px; }}
-        .mt-3 {{ margin-top: 12px; }}
-        .mt-4 {{ margin-top: 16px; }}
-        .mb-2 {{ margin-bottom: 8px; }}
-        .mb-3 {{ margin-bottom: 12px; }}
-        .mb-4 {{ margin-bottom: 16px; }}
+        .mt-2 { margin-top: 8px; }
+        .mt-3 { margin-top: 12px; }
+        .mt-4 { margin-top: 16px; }
+        .mb-2 { margin-bottom: 8px; }
+        .mb-3 { margin-bottom: 12px; }
+        .mb-4 { margin-bottom: 16px; }
         
-        .flex {{
+        .flex {
             display: flex;
-        }}
+        }
         
-        .flex-col {{
+        .flex-col {
             flex-direction: column;
-        }}
+        }
         
-        .items-center {{
+        .items-center {
             align-items: center;
-        }}
+        }
         
-        .justify-between {{
+        .justify-between {
             justify-content: space-between;
-        }}
+        }
         
-        .gap-2 {{ gap: 8px; }}
-        .gap-3 {{ gap: 12px; }}
-        .gap-4 {{ gap: 16px; }}
+        .gap-2 { gap: 8px; }
+        .gap-3 { gap: 12px; }
+        .gap-4 { gap: 16px; }
         
-        .w-full {{
+        .w-full {
             width: 100%;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -4148,7 +4627,7 @@ def create_app():
                     <i class="fas fa-bars"></i>
                 </button>
                 <div class="logo-placeholder">
-                    <i class="fas fa-bolt"></i>
+                    <i class="fas fa-aura"></i>
                 </div>
                 <h1 class="app-title">AURA</h1>
             </div>
@@ -4172,9 +4651,9 @@ def create_app():
             
             <!-- Информация о пользователе AURA -->
             <div class="user-info">
-                <div class="avatar" id="user-avatar" onclick="openUserProfile('{username}')"></div>
+                <div class="avatar" id="user-avatar" onclick="openUserProfile('{{ username }}')"></div>
                 <div class="user-details">
-                    <strong>{username}</strong>
+                    <strong>{{ username }}</strong>
                     <div class="user-status">
                         <div class="status-dot"></div>
                         Online
@@ -4475,7 +4954,7 @@ def create_app():
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
         const socket = io();
-        const user = "{username}";
+        const user = "{{ username }}";
         let room = "favorites";
         let roomType = "favorites";
         let currentChannel = "";
@@ -4491,47 +4970,47 @@ def create_app():
         ];
 
         // Определение мобильного устройства
-        function checkMobile() {{
+        function checkMobile() {
             isMobile = window.innerWidth <= 768;
-            if (!isMobile) {{
+            if (!isMobile) {
                 document.getElementById('sidebar').classList.remove('hidden');
                 document.getElementById('chat-area').classList.add('active');
-            }}
-        }}
+            }
+        }
 
         // Переключение сайдбара
-        function toggleSidebar() {{
+        function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('hidden');
-        }}
+        }
 
         // Возврат к списку
-        function goBack() {{
-            if (isMobile) {{
+        function goBack() {
+            if (isMobile) {
                 document.getElementById('sidebar').classList.remove('hidden');
                 document.getElementById('chat-area').classList.remove('active');
-            }}
-        }}
+            }
+        }
 
         // Показать категорию навигации
-        function showNavCategory(category) {{
+        function showNavCategory(category) {
             currentNavCategory = category;
             
             // Обновляем активные кнопки
-            document.querySelectorAll('.nav-category').forEach(btn => {{
+            document.querySelectorAll('.nav-category').forEach(btn => {
                 btn.classList.remove('active');
-            }});
+            });
             event?.currentTarget.classList.add('active');
             
             // Загружаем соответствующее содержимое
             loadNavContent(category);
-        }}
+        }
 
         // Загрузка содержимого навигации
-        function loadNavContent(category) {{
+        function loadNavContent(category) {
             const navContent = document.getElementById('nav-content');
             
-            switch(category) {{
+            switch(category) {
                 case 'all':
                     loadAllContent();
                     break;
@@ -4547,11 +5026,11 @@ def create_app():
                 case 'favorites':
                     loadFavoritesNav();
                     break;
-            }}
-        }}
+            }
+        }
 
         // Загрузка всего содержимого
-        function loadAllContent() {{
+        function loadAllContent() {
             const navContent = document.getElementById('nav-content');
             navContent.innerHTML = `
                 <div class="nav-title">
@@ -4594,83 +5073,83 @@ def create_app():
             loadFavoritesNav();
             loadAllChannels();
             loadAllChats();
-        }}
+        }
 
         // Инициализация при загрузке
-        window.onload = function() {{
+        window.onload = function() {
             checkMobile();
             loadUserAvatar();
             loadNavContent('all');
             initEmojis();
             
             // На мобильных устройствах показываем только сайдбар
-            if (isMobile) {{
+            if (isMobile) {
                 document.getElementById('chat-area').classList.remove('active');
-            }} else {{
+            } else {
                 openFavorites();
-            }}
+            }
             
             window.addEventListener('resize', checkMobile);
             
             // Скрываем эмодзи при клике вне блока
-            document.addEventListener('click', function(event) {{
+            document.addEventListener('click', function(event) {
                 const emojiContainer = document.getElementById('emoji-container');
                 const emojiBtn = document.querySelector('.emoji-btn');
                 
                 if (emojiContainer.style.display === 'block' && 
                     !emojiContainer.contains(event.target) && 
-                    !emojiBtn.contains(event.target)) {{
+                    !emojiBtn.contains(event.target)) {
                     emojiContainer.style.display = 'none';
                     emojiBtn.classList.remove('active');
-                }}
-            }});
-        }};
+                }
+            });
+        };
 
         // Загрузка аватарки пользователя
-        function loadUserAvatar() {{
+        function loadUserAvatar() {
             fetch('/user_info/' + user)
                 .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.success) {{
+                .then(userInfo => {
+                    if (userInfo.success) {
                         const avatar = document.getElementById('user-avatar');
-                        if (userInfo.avatar_path) {{
-                            avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                        if (userInfo.avatar_path) {
+                            avatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
                             avatar.textContent = '';
-                        }} else {{
+                        } else {
                             avatar.style.backgroundImage = 'none';
                             avatar.style.backgroundColor = userInfo.avatar_color;
                             avatar.textContent = user.slice(0, 2).toUpperCase();
-                        }}
-                    }}
-                }});
-        }}
+                        }
+                    }
+                });
+        }
 
         // Загрузка всех каналов
-        function loadAllChannels() {{
+        function loadAllChannels() {
             fetch('/user_channels')
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const container = document.getElementById('all-channels-list');
-                        if (container) {{
+                        if (container) {
                             container.innerHTML = '';
-                            data.channels.forEach(channel => {{
+                            data.channels.forEach(channel => {
                                 const el = document.createElement('div');
                                 el.className = 'nav-item';
                                 el.innerHTML = `
                                     <div class="channel-item">
                                         <div class="channel-info">
                                             <div class="channel-avatar" style="background-color: #667eea;">
-                                                ${{channel.avatar_path ? '' : (channel.display_name || channel.name).slice(0, 2).toUpperCase()}}
+                                                ${channel.avatar_path ? '' : (channel.display_name || channel.name).slice(0, 2).toUpperCase()}
                                             </div>
-                                            <div class="channel-name">${{channel.display_name || channel.name}}</div>
+                                            <div class="channel-name">${channel.display_name || channel.name}</div>
                                         </div>
                                         <div class="channel-stats">
                                             <span class="subscriber-count">
                                                 <i class="fas fa-user"></i>
-                                                ${{channel.subscriber_count || 0}}
+                                                ${channel.subscriber_count || 0}
                                             </span>
-                                            <button class="join-btn" onclick="joinChannel('${{channel.name}}')">
+                                            <button class="join-btn" onclick="joinChannel('${channel.name}')">
                                                 вступить
                                             </button>
                                         </div>
@@ -4678,29 +5157,29 @@ def create_app():
                                 `;
                                 
                                 // Загружаем аватарку если есть
-                                if (channel.avatar_path) {{
+                                if (channel.avatar_path) {
                                     const avatar = el.querySelector('.channel-avatar');
-                                    avatar.style.backgroundImage = `url(${{channel.avatar_path}})`;
+                                    avatar.style.backgroundImage = `url(${channel.avatar_path})`;
                                     avatar.textContent = '';
-                                }}
+                                }
                                 
                                 container.appendChild(el);
-                            }});
-                        }}
-                    }}
-                }});
-        }}
+                            });
+                        }
+                    }
+                });
+        }
 
         // Загрузка всех чатов
-        function loadAllChats() {{
+        function loadAllChats() {
             fetch('/personal_chats')
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const container = document.getElementById('all-chats-list');
-                        if (container) {{
+                        if (container) {
                             container.innerHTML = '';
-                            data.chats.forEach(chatUser => {{
+                            data.chats.forEach(chatUser => {
                                 const el = document.createElement('div');
                                 el.className = 'chat-item';
                                 el.onclick = () => openRoom(
@@ -4712,74 +5191,74 @@ def create_app():
                                 // Получаем информацию о пользователе
                                 fetch('/user_info/' + chatUser)
                                     .then(r => r.json())
-                                    .then(userInfo => {{
-                                        if (userInfo.success) {{
+                                    .then(userInfo => {
+                                        if (userInfo.success) {
                                             el.innerHTML = `
-                                                <div class="chat-avatar" style="background-color: ${{userInfo.avatar_color}};">
-                                                    ${{userInfo.avatar_path ? '' : chatUser.slice(0, 2).toUpperCase()}}
+                                                <div class="chat-avatar" style="background-color: ${userInfo.avatar_color};">
+                                                    ${userInfo.avatar_path ? '' : chatUser.slice(0, 2).toUpperCase()}
                                                 </div>
                                                 <div class="chat-info">
-                                                    <div class="chat-name">${{chatUser}}</div>
+                                                    <div class="chat-name">${chatUser}</div>
                                                     <div class="chat-last-message">Начните общение</div>
                                                 </div>
                                             `;
                                             
-                                            if (userInfo.avatar_path) {{
+                                            if (userInfo.avatar_path) {
                                                 const avatar = el.querySelector('.chat-avatar');
-                                                avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                                                avatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
                                                 avatar.textContent = '';
-                                            }}
-                                        }}
-                                    }});
+                                            }
+                                        }
+                                    });
                                 
                                 container.appendChild(el);
-                            }});
-                        }}
-                    }}
-                }});
-        }}
+                            });
+                        }
+                    }
+                });
+        }
 
         // Загрузка избранного в навигацию
-        function loadFavoritesNav() {{
+        function loadFavoritesNav() {
             fetch('/get_favorites')
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const container = document.getElementById('all-notes-list');
-                        if (container) {{
-                            if (data.favorites.length === 0) {{
+                        if (container) {
+                            if (data.favorites.length === 0) {
                                 container.innerHTML = '<div class="nav-item">Нет заметок</div>';
-                            }} else {{
+                            } else {
                                 container.innerHTML = '';
-                                data.favorites.slice(0, 5).forEach(favorite => {{
+                                data.favorites.slice(0, 5).forEach(favorite => {
                                     const el = document.createElement('div');
                                     el.className = 'nav-item';
                                     el.onclick = () => openFavorites();
                                     el.innerHTML = `
                                         <i class="fas fa-star"></i>
-                                        <span>${{favorite.content ? favorite.content.substring(0, 30) : 'Файл'}}${{favorite.content && favorite.content.length > 30 ? '...' : ''}}</span>
+                                        <span>${favorite.content ? favorite.content.substring(0, 30) : 'Файл'}${favorite.content && favorite.content.length > 30 ? '...' : ''}</span>
                                     `;
                                     container.appendChild(el);
-                                }});
+                                });
                                 
-                                if (data.favorites.length > 5) {{
+                                if (data.favorites.length > 5) {
                                     const moreEl = document.createElement('div');
                                     moreEl.className = 'nav-item';
                                     moreEl.onclick = () => openFavorites();
                                     moreEl.innerHTML = `
                                         <i class="fas fa-ellipsis-h"></i>
-                                        <span>Еще ${{data.favorites.length - 5}} заметок</span>
+                                        <span>Еще ${data.favorites.length - 5} заметок</span>
                                     `;
                                     container.appendChild(moreEl);
-                                }}
-                            }}
-                        }}
-                    }}
-                }});
-        }}
+                                }
+                            }
+                        }
+                    }
+                });
+        }
 
         // Загрузка поддержки
-        function loadSupportContent() {{
+        function loadSupportContent() {
             const navContent = document.getElementById('nav-content');
             navContent.innerHTML = `
                 <div class="nav-title">
@@ -4798,10 +5277,10 @@ def create_app():
                     <span>Связаться с нами</span>
                 </div>
             `;
-        }}
+        }
 
         // Открытие поддержки
-        function openSupport() {{
+        function openSupport() {
             room = "support";
             roomType = "support";
             
@@ -4851,14 +5330,14 @@ def create_app():
                 </div>
             `;
             
-            if (isMobile) {{
+            if (isMobile) {
                 document.getElementById('sidebar').classList.add('hidden');
                 document.getElementById('chat-area').classList.add('active');
-            }}
-        }}
+            }
+        }
 
         // Открытие избранного (Все заметки)
-        function openFavorites() {{
+        function openFavorites() {
             room = "favorites";
             roomType = "favorites";
             
@@ -4881,21 +5360,21 @@ def create_app():
                 </div>
             `;
             
-            if (isMobile) {{
+            if (isMobile) {
                 document.getElementById('sidebar').classList.add('hidden');
                 document.getElementById('chat-area').classList.add('active');
-            }}
+            }
             
             loadFavoritesCategories();
             loadFavorites(currentCategory);
-        }}
+        }
 
         // Загрузка категорий избранного
-        function loadFavoritesCategories() {{
+        function loadFavoritesCategories() {
             fetch('/get_favorite_categories')
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const filterContainer = document.getElementById('categories-filter');
                         filterContainer.innerHTML = '';
                         
@@ -4905,31 +5384,31 @@ def create_app():
                         allBtn.onclick = () => filterFavorites('all');
                         filterContainer.appendChild(allBtn);
                         
-                        data.categories.forEach(category => {{
+                        data.categories.forEach(category => {
                             const btn = document.createElement('button');
                             btn.className = 'category-filter-btn';
                             btn.textContent = category || 'Без категории';
                             btn.onclick = () => filterFavorites(category);
                             filterContainer.appendChild(btn);
-                        }});
-                    }}
-                }});
-        }}
+                        });
+                    }
+                });
+        }
 
         // Загрузка избранного
-        function loadFavorites(category = null) {{
+        function loadFavorites(category = null) {
             let url = '/get_favorites';
-            if (category && category !== 'all') {{
-                url += `?category=${{encodeURIComponent(category)}}`;
-            }}
+            if (category && category !== 'all') {
+                url += `?category=${encodeURIComponent(category)}`;
+            }
             
             fetch(url)
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const grid = document.getElementById('favorites-grid');
                         
-                        if (data.favorites.length === 0) {{
+                        if (data.favorites.length === 0) {
                             grid.innerHTML = `
                                 <div class="empty-state" style="grid-column: 1 / -1;">
                                     <i class="fas fa-star"></i>
@@ -4940,113 +5419,113 @@ def create_app():
                                     </button>
                                 </div>
                             `;
-                        }} else {{
+                        } else {
                             grid.innerHTML = '';
-                            data.favorites.forEach(favorite => {{
+                            data.favorites.forEach(favorite => {
                                 const item = createFavoriteItem(favorite);
                                 grid.appendChild(item);
-                            }});
-                        }}
-                    }}
-                }});
-        }}
+                            });
+                        }
+                    }
+                });
+        }
 
         // Создание элемента избранного
-        function createFavoriteItem(favorite) {{
+        function createFavoriteItem(favorite) {
             const item = document.createElement('div');
-            item.className = `favorite-item ${{favorite.is_pinned ? 'pinned' : ''}}`;
-            item.id = `favorite-${{favorite.id}}`;
+            item.className = `favorite-item ${favorite.is_pinned ? 'pinned' : ''}`;
+            item.id = `favorite-${favorite.id}`;
             
             let contentHTML = '';
             
-            if (favorite.content) {{
-                contentHTML += `<div class="favorite-content">${{favorite.content}}</div>`;
-            }}
+            if (favorite.content) {
+                contentHTML += `<div class="favorite-content">${favorite.content}</div>`;
+            }
             
-            if (favorite.file_path) {{
-                if (favorite.file_type === 'image' || favorite.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {{
+            if (favorite.file_path) {
+                if (favorite.file_type === 'image' || favorite.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                     contentHTML += `
                         <div class="favorite-file">
-                            <img src="${{favorite.file_path}}" alt="${{favorite.file_name}}" onclick="openFilePreview('${{favorite.file_path}}')">
+                            <img src="${favorite.file_path}" alt="${favorite.file_name}" onclick="openFilePreview('${favorite.file_path}')">
                         </div>
                     `;
-                }} else if (favorite.file_type === 'video' || favorite.file_name.match(/\.(mp4|webm|mov)$/i)) {{
+                } else if (favorite.file_type === 'video' || favorite.file_name.match(/\.(mp4|webm|mov)$/i)) {
                     contentHTML += `
                         <div class="favorite-file">
-                            <video src="${{favorite.file_path}}" controls></video>
+                            <video src="${favorite.file_path}" controls></video>
                         </div>
                     `;
-                }} else {{
+                } else {
                     contentHTML += `
                         <div class="favorite-content">
-                            <i class="fas fa-file"></i> ${{favorite.file_name}}
+                            <i class="fas fa-file"></i> ${favorite.file_name}
                             <br>
-                            <a href="${{favorite.file_path}}" target="_blank" style="font-size: 0.8rem; color: var(--accent);">Скачать</a>
+                            <a href="${favorite.file_path}" target="_blank" style="font-size: 0.8rem; color: var(--accent);">Скачать</a>
                         </div>
                     `;
-                }}
-            }}
+                }
+            }
             
             const category = favorite.category && favorite.category !== 'general' ? 
-                `<span class="category-badge">${{favorite.category}}</span>` : '';
+                `<span class="category-badge">${favorite.category}</span>` : '';
             
-            const date = new Date(favorite.created_at).toLocaleDateString('ru-RU', {{
+            const date = new Date(favorite.created_at).toLocaleDateString('ru-RU', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric'
-            }});
+            });
             
             item.innerHTML = `
                 <div class="favorite-actions">
-                    <button class="favorite-action-btn" onclick="togglePinFavorite(${{favorite.id}})" title="${{favorite.is_pinned ? 'Открепить' : 'Закрепить'}}">
+                    <button class="favorite-action-btn" onclick="togglePinFavorite(${favorite.id})" title="${favorite.is_pinned ? 'Открепить' : 'Закрепить'}">
                         <i class="fas fa-thumbtack"></i>
                     </button>
-                    <button class="favorite-action-btn" onclick="deleteFavorite(${{favorite.id}})" title="Удалить">
+                    <button class="favorite-action-btn" onclick="deleteFavorite(${favorite.id})" title="Удалить">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
-                ${{contentHTML}}
+                ${contentHTML}
                 <div class="favorite-meta">
-                    <span>${{date}}</span>
-                    ${{category}}
+                    <span>${date}</span>
+                    ${category}
                 </div>
             `;
             
             return item;
-        }}
+        }
 
         // Фильтрация избранного
-        function filterFavorites(category) {{
+        function filterFavorites(category) {
             currentCategory = category;
             
-            document.querySelectorAll('.category-filter-btn').forEach(btn => {{
+            document.querySelectorAll('.category-filter-btn').forEach(btn => {
                 btn.classList.remove('active');
-            }});
+            });
             event?.currentTarget.classList.add('active');
             
             loadFavorites(category === 'all' ? null : category);
-        }}
+        }
 
         // Открытие профиля пользователя
-        function openUserProfile(username) {{
+        function openUserProfile(username) {
             fetch('/user_info/' + username)
                 .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.success) {{
+                .then(userInfo => {
+                    if (userInfo.success) {
                         const profileModal = document.getElementById('profile-modal');
                         const profileAvatar = document.getElementById('profile-avatar-large');
                         const profileName = document.getElementById('profile-username');
                         const statusText = document.getElementById('profile-status-text');
                         const descriptionText = document.getElementById('profile-description-text');
                         
-                        if (userInfo.avatar_path) {{
-                            profileAvatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                        if (userInfo.avatar_path) {
+                            profileAvatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
                             profileAvatar.textContent = '';
-                        }} else {{
+                        } else {
                             profileAvatar.style.backgroundImage = 'none';
                             profileAvatar.style.backgroundColor = userInfo.avatar_color;
                             profileAvatar.textContent = username.slice(0, 2).toUpperCase();
-                        }}
+                        }
                         
                         profileName.textContent = username;
                         statusText.textContent = userInfo.online ? 'Online' : 'Offline';
@@ -5054,200 +5533,200 @@ def create_app():
                         
                         profileModal.style.display = 'flex';
                         document.body.style.overflow = 'hidden';
-                    }}
-                }});
-        }}
+                    }
+                });
+        }
 
-        function closeProfileModal() {{
+        function closeProfileModal() {
             document.getElementById('profile-modal').style.display = 'none';
             document.body.style.overflow = 'auto';
-        }}
+        }
 
         // Функции для аватара
-        function openAvatarModal() {{
+        function openAvatarModal() {
             document.getElementById('avatar-modal').style.display = 'flex';
             const preview = document.getElementById('avatar-preview');
             fetch('/user_info/' + user)
                 .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.success) {{
-                        if (userInfo.avatar_path) {{
-                            preview.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                .then(userInfo => {
+                    if (userInfo.success) {
+                        if (userInfo.avatar_path) {
+                            preview.style.backgroundImage = `url(${userInfo.avatar_path})`;
                             preview.textContent = '';
-                        }} else {{
+                        } else {
                             preview.style.backgroundImage = 'none';
                             preview.style.backgroundColor = userInfo.avatar_color;
                             preview.textContent = user.slice(0, 2).toUpperCase();
-                        }}
-                    }}
-                }});
-        }}
+                        }
+                    }
+                });
+        }
 
-        function closeAvatarModal() {{
+        function closeAvatarModal() {
             document.getElementById('avatar-modal').style.display = 'none';
-        }}
+        }
 
-        function previewAvatar(input) {{
+        function previewAvatar(input) {
             const file = input.files[0];
-            if (file) {{
+            if (file) {
                 const reader = new FileReader();
-                reader.onload = (e) => {{
+                reader.onload = (e) => {
                     const preview = document.getElementById('avatar-preview');
-                    preview.style.backgroundImage = `url(${{e.target.result}})`;
+                    preview.style.backgroundImage = `url(${e.target.result})`;
                     preview.textContent = '';
-                }};
+                };
                 reader.readAsDataURL(file);
-            }}
-        }}
+            }
+        }
 
-        function uploadAvatar() {{
+        function uploadAvatar() {
             const fileInput = document.getElementById('avatar-input');
             const file = fileInput.files[0];
             
-            if (file) {{
+            if (file) {
                 const formData = new FormData();
                 formData.append('avatar', file);
                 
-                fetch('/upload_avatar', {{
+                fetch('/upload_avatar', {
                     method: 'POST',
                     body: formData
-                }})
+                })
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         loadUserAvatar();
                         closeAvatarModal();
                         alert('Аватарка обновлена!');
-                    }} else {{
+                    } else {
                         alert(data.error || 'Ошибка загрузки аватарки');
-                    }}
-                }});
-            }} else {{
+                    }
+                });
+            } else {
                 alert('Выберите файл');
-            }}
-        }}
+            }
+        }
 
-        function removeAvatar() {{
-            fetch('/delete_avatar', {{ method: 'POST' }})
+        function removeAvatar() {
+            fetch('/delete_avatar', { method: 'POST' })
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         loadUserAvatar();
                         closeAvatarModal();
                         alert('Аватарка удалена!');
-                    }}
-                }});
-        }}
+                    }
+                });
+        }
 
         // Функции для темы
-        function openThemeModal() {{
+        function openThemeModal() {
             document.getElementById('theme-modal').style.display = 'flex';
-        }}
+        }
 
-        function closeThemeModal() {{
+        function closeThemeModal() {
             document.getElementById('theme-modal').style.display = 'none';
-        }}
+        }
 
-        function setTheme(theme) {{
-            fetch('/set_theme', {{
+        function setTheme(theme) {
+            fetch('/set_theme', {
                 method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ theme: theme }})
-            }})
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme: theme })
+            })
             .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
+            .then(data => {
+                if (data.success) {
                     document.documentElement.setAttribute('data-theme', theme);
                     closeThemeModal();
-                }}
-            }});
-        }}
+                }
+            });
+        }
 
         // Функции для каналов
-        function openCreateChannelGlassModal() {{
+        function openCreateChannelGlassModal() {
             document.getElementById('create-channel-glass-modal').style.display = 'flex';
             document.body.style.overflow = 'hidden';
-        }}
+        }
 
-        function closeCreateChannelGlassModal() {{
+        function closeCreateChannelGlassModal() {
             document.getElementById('create-channel-glass-modal').style.display = 'none';
             document.body.style.overflow = 'auto';
-        }}
+        }
 
-        function createChannelGlass() {{
+        function createChannelGlass() {
             const name = document.getElementById('glass-channel-name').value.trim();
             const displayName = document.getElementById('glass-channel-display-name').value.trim();
             const description = document.getElementById('glass-channel-description').value.trim();
             const isPrivate = document.getElementById('glass-channel-private').checked;
             
-            if (!name) {{
+            if (!name) {
                 alert('Введите идентификатор канала');
                 document.getElementById('glass-channel-name').focus();
                 return;
-            }}
+            }
             
-            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
+            if (!/^[a-zA-Z0-9_]+$/.test(name)) {
                 alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
                 document.getElementById('glass-channel-name').focus();
                 return;
-            }}
+            }
             
             const btn = document.getElementById('create-channel-glass-btn');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Создание...';
             btn.disabled = true;
             
-            fetch('/create_channel', {{
+            fetch('/create_channel', {
                 method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     name: name,
                     display_name: displayName || name,
                     description: description,
                     is_private: isPrivate
-                }})
-            }})
+                })
+            })
             .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
+            .then(data => {
+                if (data.success) {
                     closeCreateChannelGlassModal();
                     loadAllChannels();
                     alert('Канал создан успешно!');
                     
-                    setTimeout(() => {{
+                    setTimeout(() => {
                         const channelName = data.channel_name;
                         openRoom('channel_' + channelName, 'channel', data.display_name);
-                    }}, 1000);
-                }} else {{
+                    }, 1000);
+                } else {
                     alert(data.error || 'Ошибка при создании канала');
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                }}
-            }});
-        }}
+                }
+            });
+        }
 
-        function joinChannel(channelName) {{
-            fetch('/add_user_to_channel', {{
+        function joinChannel(channelName) {
+            fetch('/add_user_to_channel', {
                 method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     channel_name: channelName,
                     username: user
-                }})
-            }})
+                })
+            })
             .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
+            .then(data => {
+                if (data.success) {
                     alert('Вы присоединились к каналу!');
                     loadAllChannels();
-                }} else {{
+                } else {
                     alert(data.message || 'Ошибка при присоединении к каналу');
-                }}
-            }});
-        }}
+                }
+            });
+        }
 
         // Открытие комнаты
-        function openRoom(r, t, title) {{
+        function openRoom(r, t, title) {
             room = r;
             roomType = t;
             currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
@@ -5260,113 +5739,113 @@ def create_app():
             
             const chatHeader = document.getElementById('chat-header-content');
             
-            if (t === 'channel') {{
+            if (t === 'channel') {
                 chatHeader.innerHTML = `
                     <div class="chat-header-avatar" id="channel-header-avatar"></div>
                     <div class="chat-header-info">
-                        <div class="chat-title" id="chat-title">${{title}}</div>
+                        <div class="chat-title" id="chat-title">${title}</div>
                         <div class="chat-subtitle" id="channel-description"></div>
                     </div>
                 `;
                 
                 document.getElementById('channel-actions').style.display = 'flex';
                 loadChannelHeaderInfo();
-            }} else if (t === 'private') {{
+            } else if (t === 'private') {
                 chatHeader.innerHTML = `
                     <div class="chat-header-avatar" id="private-chat-avatar"></div>
                     <div class="chat-header-info">
-                        <div class="chat-title" id="chat-title">${{title}}</div>
+                        <div class="chat-title" id="chat-title">${title}</div>
                         <div class="chat-subtitle" id="channel-description">Online</div>
                     </div>
                 `;
                 
                 fetch('/user_info/' + title)
                     .then(r => r.json())
-                    .then(userInfo => {{
-                        if (userInfo.success) {{
+                    .then(userInfo => {
+                        if (userInfo.success) {
                             const avatar = document.getElementById('private-chat-avatar');
-                            if (userInfo.avatar_path) {{
-                                avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                            if (userInfo.avatar_path) {
+                                avatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
                                 avatar.textContent = '';
-                            }} else {{
+                            } else {
                                 avatar.style.backgroundColor = userInfo.avatar_color;
                                 avatar.textContent = title.slice(0, 2).toUpperCase();
-                            }}
+                            }
                             
                             const status = document.getElementById('channel-description');
                             status.textContent = userInfo.online ? 'Online' : 'Offline';
-                        }}
-                    }});
+                        }
+                    });
                 
                 document.getElementById('channel-actions').style.display = 'none';
-            }}
+            }
             
-            if (isMobile) {{
+            if (isMobile) {
                 document.getElementById('sidebar').classList.add('hidden');
                 document.getElementById('chat-area').classList.add('active');
-            }}
+            }
             
             const chatMessages = document.getElementById('chat-messages');
             chatMessages.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
             
             loadMessages(r);
-            socket.emit('join', {{ room: r }});
-        }}
+            socket.emit('join', { room: r });
+        }
 
-        function loadChannelHeaderInfo() {{
-            fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
+        function loadChannelHeaderInfo() {
+            fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const channelInfo = data.data;
                         document.getElementById('channel-description').textContent = channelInfo.description || '';
                         
                         const channelAvatar = document.getElementById('channel-header-avatar');
-                        if (channelAvatar) {{
-                            if (channelInfo.avatar_path) {{
-                                channelAvatar.style.backgroundImage = `url(${{channelInfo.avatar_path}})`;
+                        if (channelAvatar) {
+                            if (channelInfo.avatar_path) {
+                                channelAvatar.style.backgroundImage = `url(${channelInfo.avatar_path})`;
                                 channelAvatar.textContent = '';
-                            }} else {{
+                            } else {
                                 channelAvatar.style.backgroundImage = 'none';
                                 channelAvatar.style.backgroundColor = '#667eea';
                                 channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
-                            }}
-                        }}
-                    }}
-                }});
-        }}
+                            }
+                        }
+                    }
+                });
+        }
 
         // Загрузка сообщений
-        function loadMessages(roomName) {{
+        function loadMessages(roomName) {
             fetch('/get_messages/' + roomName)
                 .then(r => r.json())
-                .then(messages => {{
+                .then(messages => {
                     const messagesContainer = document.getElementById('chat-messages');
                     messagesContainer.innerHTML = '';
                     
-                    if (messages && Array.isArray(messages) && messages.length > 0) {{
-                        messages.forEach(msg => {{
+                    if (messages && Array.isArray(messages) && messages.length > 0) {
+                        messages.forEach(msg => {
                             addMessageToChat(msg, roomName);
-                        }});
-                    }} else {{
+                        });
+                    } else {
                         messagesContainer.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
-                    }}
+                    }
                     
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                }});
-        }}
+                });
+        }
 
         // Добавление сообщения в чат
-        function addMessageToChat(data, roomName = '') {{
+        function addMessageToChat(data, roomName = '') {
             const messagesContainer = document.getElementById('chat-messages');
             
             const emptyChat = messagesContainer.querySelector('.empty-state');
-            if (emptyChat) {{
+            if (emptyChat) {
                 emptyChat.remove();
-            }}
+            }
             
             const message = document.createElement('div');
-            message.className = `message ${{data.user === user ? 'own' : 'other'}}`;
+            message.className = `message ${data.user === user ? 'own' : 'other'}`;
             
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
@@ -5375,71 +5854,71 @@ def create_app():
             
             fetch('/user_info/' + data.user)
                 .then(r => r.json())
-                .then(userInfo => {{
-                    if (userInfo.success) {{
-                        if (userInfo.avatar_path) {{
-                            avatar.style.backgroundImage = `url(${{userInfo.avatar_path}})`;
+                .then(userInfo => {
+                    if (userInfo.success) {
+                        if (userInfo.avatar_path) {
+                            avatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
                             avatar.textContent = '';
-                        }} else {{
+                        } else {
                             avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#667eea';
                             avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                        }}
-                    }} else {{
+                        }
+                    } else {
                         avatar.style.backgroundColor = data.color || '#667eea';
                         avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                    }}
-                }});
+                    }
+                });
             
             const content = document.createElement('div');
             content.className = 'message-content';
             
-            if (data.user !== user) {{
+            if (data.user !== user) {
                 const sender = document.createElement('div');
                 sender.className = 'message-sender';
                 sender.textContent = data.user;
                 content.appendChild(sender);
-            }}
+            }
             
-            if (data.message) {{
+            if (data.message) {
                 const text = document.createElement('div');
                 text.className = 'message-text';
                 text.innerHTML = data.message.replace(/\\n/g, '<br>');
                 content.appendChild(text);
-            }}
+            }
             
-            if (data.file) {{
+            if (data.file) {
                 const fileContainer = document.createElement('div');
                 fileContainer.className = 'message-file';
                 
-                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {{
+                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {
                     const video = document.createElement('video');
                     video.src = data.file;
                     video.controls = true;
                     fileContainer.appendChild(video);
-                }} else {{
+                } else {
                     const img = document.createElement('img');
                     img.src = data.file;
                     img.alt = data.file_name || 'Файл';
                     img.onclick = () => window.open(data.file, '_blank');
                     fileContainer.appendChild(img);
-                }}
+                }
                 
                 content.appendChild(fileContainer);
-            }}
+            }
             
             const time = document.createElement('div');
             time.className = 'message-time';
-            time.textContent = data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
+            time.textContent = data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             content.appendChild(time);
             
             message.appendChild(avatar);
             message.appendChild(content);
             messagesContainer.appendChild(message);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }}
+        }
 
         // Отправка сообщения
-        async function sendMessage() {{
+        async function sendMessage() {
             const input = document.getElementById('msg-input');
             const msg = input.value.trim();
             const fileInput = document.getElementById('file-input');
@@ -5450,42 +5929,42 @@ def create_app():
             let fileName = null;
             let fileType = null;
             
-            if (fileInput.files[0]) {{
+            if (fileInput.files[0]) {
                 const formData = new FormData();
                 formData.append('file', fileInput.files[0]);
                 
-                try {{
-                    const response = await fetch('/upload_file', {{
+                try {
+                    const response = await fetch('/upload_file', {
                         method: 'POST',
                         body: formData
-                    }});
+                    });
                     
                     const data = await response.json();
-                    if (data.success) {{
+                    if (data.success) {
                         fileData = data.path;
                         fileName = data.filename;
                         fileType = data.file_type;
-                    }} else {{
+                    } else {
                         alert('Ошибка загрузки файла: ' + data.error);
                         return;
-                    }}
-                }} catch (error) {{
+                    }
+                } catch (error) {
                     alert('Ошибка соединения при загрузке файла');
                     return;
-                }}
-            }}
+                }
+            }
             
-            const messageData = {{
+            const messageData = {
                 message: msg,
                 room: room,
                 type: roomType
-            }};
+            };
             
-            if (fileData) {{
+            if (fileData) {
                 messageData.file = fileData;
                 messageData.fileName = fileName;
                 messageData.fileType = fileType;
-            }}
+            }
             
             socket.emit('message', messageData);
             
@@ -5493,225 +5972,225 @@ def create_app():
             input.style.height = 'auto';
             document.getElementById('file-preview').innerHTML = '';
             fileInput.value = '';
-        }}
+        }
 
-        function handleKeydown(e) {{
-            if (e.key === 'Enter' && !e.shiftKey) {{
+        function handleKeydown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
-            }}
-        }}
+            }
+        }
 
-        function autoResizeTextarea() {{
+        function autoResizeTextarea() {
             const textarea = document.getElementById('msg-input');
             textarea.style.height = 'auto';
             textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        }}
+        }
 
         document.getElementById('msg-input').addEventListener('input', autoResizeTextarea);
 
-        function handleFileSelect(input) {{
+        function handleFileSelect(input) {
             const file = input.files[0];
-            if (file) {{
+            if (file) {
                 const reader = new FileReader();
-                reader.onload = (e) => {{
+                reader.onload = (e) => {
                     const preview = document.getElementById('file-preview');
-                    if (file.type.startsWith('image/')) {{
+                    if (file.type.startsWith('image/')) {
                         preview.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                                <img src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
+                                <img src="${e.target.result}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
                                 <div>
-                                    <div style="font-weight: 500;">${{file.name}}</div>
+                                    <div style="font-weight: 500;">${file.name}</div>
                                     <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
                                         <i class="fas fa-times"></i> Удалить
                                     </button>
                                 </div>
                             </div>
                         `;
-                    }} else if (file.type.startsWith('video/')) {{
+                    } else if (file.type.startsWith('video/')) {
                         preview.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                                <video src="${{e.target.result}}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;"></video>
+                                <video src="${e.target.result}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;"></video>
                                 <div>
-                                    <div style="font-weight: 500;">${{file.name}}</div>
+                                    <div style="font-weight: 500;">${file.name}</div>
                                     <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
                                         <i class="fas fa-times"></i> Удалить
                                     </button>
                                 </div>
                             </div>
                         `;
-                    }} else {{
+                    } else {
                         preview.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
                                 <i class="fas fa-file" style="font-size: 2rem; color: var(--accent);"></i>
                                 <div style="flex: 1;">
-                                    <div style="font-weight: 500;">${{file.name}}</div>
-                                    <div style="font-size: 0.8rem; color: var(--text-light);">${{(file.size / 1024).toFixed(1)}} KB</div>
+                                    <div style="font-weight: 500;">${file.name}</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-light);">${(file.size / 1024).toFixed(1)} KB</div>
                                 </div>
                                 <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer;">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         `;
-                    }}
-                }};
+                    }
+                };
                 reader.readAsDataURL(file);
-            }}
-        }}
+            }
+        }
 
         // Socket events
-        socket.on('message', (data) => {{
-            if (data.room === room) {{
+        socket.on('message', (data) => {
+            if (data.room === room) {
                 addMessageToChat(data, room);
-            }}
-        }});
+            }
+        });
 
         // Функции для избранного
-        function openAddFavoriteModal() {{
+        function openAddFavoriteModal() {
             document.getElementById('add-favorite-modal').style.display = 'flex';
-            document.getElementById('favorite-file').addEventListener('change', function(e) {{
+            document.getElementById('favorite-file').addEventListener('change', function(e) {
                 const file = e.target.files[0];
                 const preview = document.getElementById('favorite-file-preview');
                 
-                if (file) {{
-                    if (file.type.startsWith('image/')) {{
+                if (file) {
+                    if (file.type.startsWith('image/')) {
                         const reader = new FileReader();
-                        reader.onload = (e) => {{
-                            preview.innerHTML = `<img src="${{e.target.result}}" style="max-width: 100%; border-radius: 8px;">`;
-                        }};
+                        reader.onload = (e) => {
+                            preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; border-radius: 8px;">`;
+                        };
                         reader.readAsDataURL(file);
-                    }} else if (file.type.startsWith('video/')) {{
+                    } else if (file.type.startsWith('video/')) {
                         const reader = new FileReader();
-                        reader.onload = (e) => {{
-                            preview.innerHTML = `<video src="${{e.target.result}}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
-                        }};
+                        reader.onload = (e) => {
+                            preview.innerHTML = `<video src="${e.target.result}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
+                        };
                         reader.readAsDataURL(file);
-                    }} else {{
+                    } else {
                         preview.innerHTML = `<div style="padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                            <i class="fas fa-file"></i> ${{file.name}}
+                            <i class="fas fa-file"></i> ${file.name}
                         </div>`;
-                    }}
-                }}
-            }});
-        }}
+                    }
+                }
+            });
+        }
 
-        function closeAddFavoriteModal() {{
+        function closeAddFavoriteModal() {
             document.getElementById('add-favorite-modal').style.display = 'none';
             document.getElementById('favorite-content').value = '';
             document.getElementById('favorite-category').value = 'general';
             document.getElementById('favorite-file').value = '';
             document.getElementById('favorite-file-preview').innerHTML = '';
-        }}
+        }
 
-        function saveFavorite() {{
+        function saveFavorite() {
             const content = document.getElementById('favorite-content').value.trim();
             const category = document.getElementById('favorite-category').value.trim() || 'general';
             const fileInput = document.getElementById('favorite-file');
             const file = fileInput.files[0];
             
-            if (!content && !file) {{
+            if (!content && !file) {
                 alert('Добавьте текст или файл');
                 return;
-            }}
+            }
             
             const formData = new FormData();
             formData.append('content', content);
             formData.append('category', category);
             
-            if (file) {{
+            if (file) {
                 formData.append('file', file);
-            }}
+            }
             
-            fetch('/add_to_favorites', {{
+            fetch('/add_to_favorites', {
                 method: 'POST',
                 body: formData
-            }})
+            })
             .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
+            .then(data => {
+                if (data.success) {
                     closeAddFavoriteModal();
                     loadFavoritesNav();
                     loadFavoritesCategories();
                     loadFavorites(currentCategory === 'all' ? null : currentCategory);
                     alert('Добавлено в избранное!');
-                }} else {{
+                } else {
                     alert(data.error || 'Ошибка при сохранении');
-                }}
-            }});
-        }}
+                }
+            });
+        }
 
-        function deleteFavorite(favoriteId) {{
+        function deleteFavorite(favoriteId) {
             if (!confirm('Удалить эту заметку?')) return;
             
-            fetch(`/delete_favorite/${{favoriteId}}`, {{
+            fetch(`/delete_favorite/${favoriteId}`, {
                 method: 'DELETE'
-            }})
+            })
             .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    document.getElementById(`favorite-${{favoriteId}}`).remove();
+            .then(data => {
+                if (data.success) {
+                    document.getElementById(`favorite-${favoriteId}`).remove();
                     
                     const grid = document.getElementById('favorites-grid');
-                    if (grid.children.length === 0) {{
+                    if (grid.children.length === 0) {
                         loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                    }}
-                }} else {{
+                    }
+                } else {
                     alert('Ошибка при удалении');
-                }}
-            }});
-        }}
+                }
+            });
+        }
 
-        function togglePinFavorite(favoriteId) {{
-            fetch(`/toggle_pin_favorite/${{favoriteId}}`, {{
+        function togglePinFavorite(favoriteId) {
+            fetch(`/toggle_pin_favorite/${favoriteId}`, {
                 method: 'POST'
-            }})
+            })
             .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    const item = document.getElementById(`favorite-${{favoriteId}}`);
-                    if (data.pinned) {{
+            .then(data => {
+                if (data.success) {
+                    const item = document.getElementById(`favorite-${favoriteId}`);
+                    if (data.pinned) {
                         item.classList.add('pinned');
-                    }} else {{
+                    } else {
                         item.classList.remove('pinned');
-                    }}
+                    }
                     
                     loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                }}
-            }});
-        }}
+                }
+            });
+        }
 
-        function openFilePreview(filePath) {{
+        function openFilePreview(filePath) {
             window.open(filePath, '_blank');
-        }}
+        }
 
         // Функции для эмодзи
-        function initEmojis() {{
+        function initEmojis() {
             const emojiGrid = document.getElementById('emoji-grid');
-            emojiData.forEach(emoji => {{
+            emojiData.forEach(emoji => {
                 const emojiItem = document.createElement('div');
                 emojiItem.className = 'emoji-item';
                 emojiItem.textContent = emoji;
                 emojiItem.onclick = () => insertEmoji(emoji);
                 emojiGrid.appendChild(emojiItem);
-            }});
-        }}
+            });
+        }
 
-        function toggleEmojiPicker() {{
+        function toggleEmojiPicker() {
             const emojiContainer = document.getElementById('emoji-container');
             const emojiBtn = document.querySelector('.emoji-btn');
             
-            if (emojiContainer.style.display === 'block') {{
+            if (emojiContainer.style.display === 'block') {
                 emojiContainer.style.display = 'none';
                 emojiBtn.classList.remove('active');
-            }} else {{
+            } else {
                 emojiContainer.style.display = 'block';
                 emojiBtn.classList.add('active');
                 document.getElementById('emoji-search').value = '';
                 searchEmojis();
-            }}
-        }}
+            }
+        }
 
-        function insertEmoji(emoji) {{
+        function insertEmoji(emoji) {
             const input = document.getElementById('msg-input');
             const start = input.selectionStart;
             const end = input.selectionEnd;
@@ -5720,55 +6199,55 @@ def create_app():
             input.selectionStart = input.selectionEnd = start + emoji.length;
             input.focus();
             autoResizeTextarea();
-        }}
+        }
 
-        function searchEmojis() {{
+        function searchEmojis() {
             const searchTerm = document.getElementById('emoji-search').value.toLowerCase();
             const emojiItems = document.querySelectorAll('#emoji-grid .emoji-item');
             
-            emojiItems.forEach(item => {{
-                if (!searchTerm) {{
+            emojiItems.forEach(item => {
+                if (!searchTerm) {
                     item.style.display = 'flex';
-                }} else {{
+                } else {
                     item.style.display = 'none';
-                }}
-            }});
-        }}
+                }
+            });
+        }
 
         // Настройки канала
-        function openChannelSettingsModal() {{
+        function openChannelSettingsModal() {
             if (!currentChannel) return;
             
             document.getElementById('channel-settings-modal').style.display = 'flex';
             loadChannelInfo();
             loadChannelMembers();
-        }}
+        }
 
-        function closeChannelSettingsModal() {{
+        function closeChannelSettingsModal() {
             document.getElementById('channel-settings-modal').style.display = 'none';
-        }}
+        }
 
-        function loadChannelInfo() {{
-            fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
+        function loadChannelInfo() {
+            fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const channelInfo = data.data;
                         document.getElementById('channel-edit-name').value = channelInfo.display_name;
                         document.getElementById('channel-edit-description').value = channelInfo.description || '';
-                    }}
-                }});
-        }}
+                    }
+                });
+        }
 
-        function loadChannelMembers() {{
-            fetch(`/channel_info/${{encodeURIComponent(currentChannel)}}`)
+        function loadChannelMembers() {
+            fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
                 .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
+                .then(data => {
+                    if (data.success) {
                         const membersList = document.getElementById('channel-members-list');
                         membersList.innerHTML = '';
                         
-                        data.data.members.forEach(member => {{
+                        data.data.members.forEach(member => {
                             const memberItem = document.createElement('div');
                             memberItem.className = 'member-item';
                             memberItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border);';
@@ -5779,68 +6258,69 @@ def create_app():
                             
                             memberItem.innerHTML = `
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div style="width: 32px; height: 32px; border-radius: 50%; background-color: ${{member.color}}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem;">
-                                        ${{member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}}
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; background-color: ${member.color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem;">
+                                        ${member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}
                                     </div>
                                     <div>
-                                        <div>${{member.username}}</div>
+                                        <div>${member.username}</div>
                                         <div style="font-size: 0.8rem; color: var(--text-light);">
-                                            ${{isCreator ? 'Создатель' : member.is_admin ? 'Админ' : 'Участник'}}
+                                            ${isCreator ? 'Создатель' : member.is_admin ? 'Админ' : 'Участник'}
                                         </div>
                                     </div>
                                 </div>
-                                ${{canManage ? `
+                                ${canManage ? `
                                     <div style="display: flex; gap: 5px;">
-                                        ${{!member.is_admin ? 
-                                            `<button onclick="makeUserAdmin('${{member.username}}')" style="padding: 5px 10px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                        ${!member.is_admin ? 
+                                            `<button onclick="makeUserAdmin('${member.username}')" style="padding: 5px 10px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer;">
                                                 Админ
                                             </button>` : 
-                                            `<button onclick="removeUserAdmin('${{member.username}}')" style="padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                            `<button onclick="removeUserAdmin('${member.username}')" style="padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer;">
                                                 Убрать
-                                            </button>`}}
-                                        <button onclick="removeUserFromChannel('${{member.username}}')" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                            </button>`}
+                                        <button onclick="removeUserFromChannel('${member.username}')" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer;">
                                             Удалить
                                         </button>
                                     </div>
-                                ` : ''}}
+                                ` : ''}
                             `;
                             
                             membersList.appendChild(memberItem);
-                        }});
-                    }}
-                }});
-        }}
+                        });
+                    }
+                });
+        }
 
         // Закрытие модальных окон
-        document.addEventListener('click', function(event) {{
+        document.addEventListener('click', function(event) {
             const glassModal = document.getElementById('create-channel-glass-modal');
-            if (event.target === glassModal) {{
+            if (event.target === glassModal) {
                 closeCreateChannelGlassModal();
-            }}
+            }
             
             const profileModal = document.getElementById('profile-modal');
-            if (event.target === profileModal) {{
+            if (event.target === profileModal) {
                 closeProfileModal();
-            }}
-        }});
+            }
+        });
         
-        document.addEventListener('keydown', function(event) {{
-            if (event.key === 'Escape') {{
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
                 closeCreateChannelGlassModal();
                 closeProfileModal();
                 
                 const emojiContainer = document.getElementById('emoji-container');
                 const emojiBtn = document.querySelector('.emoji-btn');
                 
-                if (emojiContainer.style.display === 'block') {{
+                if (emojiContainer.style.display === 'block') {
                     emojiContainer.style.display = 'none';
                     emojiBtn.classList.remove('active');
-                }}
-            }}
-        }});
+                }
+            }
+        });
     </script>
 </body>
-</html>'''
+</html>
+        ''', username=username, theme=theme)
 
     @app.route('/users')
     def users_handler():
