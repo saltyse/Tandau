@@ -1,4 +1,4 @@
-# web_messenger.py - AURA Messenger (единый файл)
+# web_messenger.py - AURA Messenger (единый файл) с поиском
 from flask import Flask, request, jsonify, session, redirect, send_from_directory, render_template_string
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -163,8 +163,8 @@ def create_app():
     def get_all_users():
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
-            c.execute('SELECT username, is_online, avatar_color, avatar_path, theme FROM users ORDER BY username')
-            return [dict(zip(['username','online','color','avatar','theme'], row)) for row in c.fetchall()]
+            c.execute('SELECT username, is_online, avatar_color, avatar_path, theme, profile_description FROM users ORDER BY username')
+            return [dict(zip(['username','online','color','avatar','theme','profile_description'], row)) for row in c.fetchall()]
 
     def get_users_except(username):
         with sqlite3.connect('messenger.db') as conn:
@@ -408,6 +408,54 @@ def create_app():
                 'avatar_path': row[6],
                 'subscriber_count': row[7] or 0
             } for row in c.fetchall()]
+
+    # === НОВАЯ ФУНКЦИЯ: Поиск каналов и пользователей ===
+    def search_channels_and_users(search_query, username):
+        results = {'users': [], 'channels': []}
+        
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            
+            # Поиск пользователей
+            c.execute('''
+                SELECT username, is_online, avatar_color, avatar_path, theme, profile_description 
+                FROM users 
+                WHERE username LIKE ? AND username != ?
+                ORDER BY username
+            ''', (f'%{search_query}%', username))
+            
+            for row in c.fetchall():
+                results['users'].append({
+                    'username': row[0],
+                    'online': row[1],
+                    'color': row[2],
+                    'avatar': row[3],
+                    'theme': row[4],
+                    'profile_description': row[5] or ''
+                })
+            
+            # Поиск каналов
+            c.execute('''
+                SELECT name, display_name, description, is_private, allow_messages, 
+                       created_by, avatar_path, subscriber_count
+                FROM channels 
+                WHERE name LIKE ? OR display_name LIKE ? OR description LIKE ?
+                ORDER BY name
+            ''', (f'%{search_query}%', f'%{search_query}%', f'%{search_query}%'))
+            
+            for row in c.fetchall():
+                results['channels'].append({
+                    'name': row[0],
+                    'display_name': row[1],
+                    'description': row[2],
+                    'is_private': row[3],
+                    'allow_messages': row[4],
+                    'created_by': row[5],
+                    'avatar_path': row[6],
+                    'subscriber_count': row[7] or 0
+                })
+        
+        return results
 
     # === API Routes ===
     @app.route('/upload_avatar', methods=['POST'])
@@ -653,6 +701,19 @@ def create_app():
         if new_state is not None:
             return jsonify({'success': True, 'pinned': new_state})
         return jsonify({'success': False, 'error': 'Не удалось закрепить/открепить'})
+
+    # === НОВЫЙ API ЭНДПОИНТ: Поиск ===
+    @app.route('/search')
+    def search_handler():
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        
+        query = request.args.get('q', '').strip()
+        if not query or len(query) < 2:
+            return jsonify({'success': True, 'results': {'users': [], 'channels': []}})
+        
+        results = search_channels_and_users(query, session['username'])
+        return jsonify({'success': True, 'results': results})
 
     @app.route('/static/<path:filename>')
     def static_files(filename):
@@ -2528,6 +2589,7 @@ def create_app():
         .search-container {
             padding: 20px;
             border-bottom: 1px solid var(--border);
+            position: relative;
         }
         
         .search-box {
@@ -2558,6 +2620,199 @@ def create_app():
             transform: translateY(-50%);
             color: var(--text-light);
             font-size: 1rem;
+        }
+        
+        /* Результаты поиска AURA */
+        .search-results {
+            position: absolute;
+            top: calc(100% + 5px);
+            left: 0;
+            right: 0;
+            background: var(--input);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            z-index: 1002;
+            max-height: 500px;
+            overflow-y: auto;
+            animation: fadeInUp 0.3s ease-out;
+        }
+        
+        .search-results-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: var(--input);
+            z-index: 1;
+        }
+        
+        .search-results-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        .search-close-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .search-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(90deg);
+        }
+        
+        .search-results-content {
+            padding: 20px;
+        }
+        
+        .search-section {
+            margin-bottom: 25px;
+        }
+        
+        .search-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .search-section .section-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .search-section .section-title i {
+            font-size: 1rem;
+        }
+        
+        .search-users-list, .search-channels-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .search-user-item, .search-channel-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .search-user-item:hover, .search-channel-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+        
+        .search-user-avatar, .search-channel-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 15px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: white;
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .search-channel-avatar {
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+        }
+        
+        .search-user-info, .search-channel-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .search-user-name, .search-channel-name {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--text);
+        }
+        
+        .search-user-desc, .search-channel-desc {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .search-user-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+        }
+        
+        .search-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+        
+        .search-status-dot.offline {
+            background: var(--text-light);
+        }
+        
+        .search-channel-stats {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+        
+        .search-no-results {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+        }
+        
+        .search-no-results i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            color: var(--border);
+        }
+        
+        .search-no-results p {
+            font-size: 0.95rem;
         }
         
         /* Навигационные категории AURA */
@@ -4236,7 +4491,36 @@ def create_app():
             <div class="search-container">
                 <div class="search-box">
                     <i class="fas fa-search search-icon"></i>
-                    <input type="text" class="search-input" placeholder="Поиск..." id="search-input">
+                    <input type="text" class="search-input" placeholder="Поиск пользователей и каналов..." id="search-input">
+                </div>
+                <!-- Результаты поиска AURA -->
+                <div class="search-results" id="search-results" style="display: none;">
+                    <div class="search-results-header">
+                        <h3>Результаты поиска</h3>
+                        <button class="search-close-btn" onclick="closeSearchResults()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="search-results-content">
+                        <div class="search-section">
+                            <div class="section-title">
+                                <i class="fas fa-users"></i>
+                                <span>Пользователи</span>
+                            </div>
+                            <div class="search-users-list" id="search-users-list">
+                                <!-- Пользователи будут добавлены динамически -->
+                            </div>
+                        </div>
+                        <div class="search-section">
+                            <div class="section-title">
+                                <i class="fas fa-hashtag"></i>
+                                <span>Каналы</span>
+                            </div>
+                            <div class="search-channels-list" id="search-channels-list">
+                                <!-- Каналы будут добавлены динамически -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -4512,6 +4796,7 @@ def create_app():
             "🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑",
             "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️", "🗜️", "💽", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥"
         ];
+        let searchTimeout;
 
         // Определение мобильного устройства
         function checkMobile() {
@@ -4520,6 +4805,122 @@ def create_app():
                 document.getElementById('sidebar').classList.remove('hidden');
                 document.getElementById('chat-area').classList.add('active');
             }
+        }
+
+        // Поиск
+        document.getElementById('search-input').addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+            
+            clearTimeout(searchTimeout);
+            
+            if (query.length < 2) {
+                closeSearchResults();
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                performSearch(query);
+            }, 300);
+        });
+
+        function performSearch(query) {
+            fetch(`/search?q=${encodeURIComponent(query)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        displaySearchResults(data.results, query);
+                    }
+                });
+        }
+
+        function displaySearchResults(results, query) {
+            const resultsContainer = document.getElementById('search-results');
+            const usersList = document.getElementById('search-users-list');
+            const channelsList = document.getElementById('search-channels-list');
+            
+            // Пользователи
+            if (results.users.length > 0) {
+                usersList.innerHTML = '';
+                results.users.forEach(userData => {
+                    const userItem = document.createElement('div');
+                    userItem.className = 'search-user-item';
+                    userItem.onclick = () => {
+                        if (userData.username !== user) {
+                            const roomName = 'private_' + [user, userData.username].sort().join('_');
+                            openRoom(roomName, 'private', userData.username);
+                            closeSearchResults();
+                        }
+                    };
+                    
+                    userItem.innerHTML = `
+                        <div class="search-user-avatar" style="background-color: ${userData.color || '#667eea'};">
+                            ${userData.avatar ? '' : userData.username.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div class="search-user-info">
+                            <div class="search-user-name">${userData.username}</div>
+                            <div class="search-user-desc">${userData.profile_description || 'Нет описания'}</div>
+                            <div class="search-user-status">
+                                <div class="search-status-dot ${userData.online ? '' : 'offline'}"></div>
+                                ${userData.online ? 'Online' : 'Offline'}
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (userData.avatar) {
+                        const avatar = userItem.querySelector('.search-user-avatar');
+                        avatar.style.backgroundImage = `url(${userData.avatar})`;
+                        avatar.textContent = '';
+                    }
+                    
+                    usersList.appendChild(userItem);
+                });
+            } else {
+                usersList.innerHTML = '<div class="search-no-results"><i class="fas fa-user-slash"></i><p>Пользователи не найдены</p></div>';
+            }
+            
+            // Каналы
+            if (results.channels.length > 0) {
+                channelsList.innerHTML = '';
+                results.channels.forEach(channel => {
+                    const channelItem = document.createElement('div');
+                    channelItem.className = 'search-channel-item';
+                    channelItem.onclick = () => {
+                        openRoom('channel_' + channel.name, 'channel', channel.display_name || channel.name);
+                        closeSearchResults();
+                    };
+                    
+                    channelItem.innerHTML = `
+                        <div class="search-channel-avatar">
+                            ${channel.avatar_path ? '' : (channel.display_name || channel.name).slice(0, 2).toUpperCase()}
+                        </div>
+                        <div class="search-channel-info">
+                            <div class="search-channel-name">${channel.display_name || channel.name}</div>
+                            <div class="search-channel-desc">${channel.description || 'Без описания'}</div>
+                            <div class="search-channel-stats">
+                                <span><i class="fas fa-user"></i> ${channel.subscriber_count || 0}</span>
+                                <span>${channel.is_private ? '🔒 Приватный' : '🌐 Публичный'}</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (channel.avatar_path) {
+                        const avatar = channelItem.querySelector('.search-channel-avatar');
+                        avatar.style.backgroundImage = `url(${channel.avatar_path})`;
+                        avatar.textContent = '';
+                    }
+                    
+                    channelsList.appendChild(channelItem);
+                });
+            } else {
+                channelsList.innerHTML = '<div class="search-no-results"><i class="fas fa-hashtag"></i><p>Каналы не найдены</p></div>';
+            }
+            
+            resultsContainer.style.display = 'block';
+        }
+
+        function closeSearchResults() {
+            document.getElementById('search-results').style.display = 'none';
+            document.getElementById('search-input').value = '';
         }
 
         // Переключение сайдбара
@@ -5038,6 +5439,18 @@ def create_app():
                     !emojiBtn.contains(event.target)) {
                     emojiContainer.style.display = 'none';
                     emojiBtn.classList.remove('active');
+                }
+            });
+            
+            // Закрытие результатов поиска при клике вне
+            document.addEventListener('click', function(event) {
+                const searchResults = document.getElementById('search-results');
+                const searchInput = document.getElementById('search-input');
+                
+                if (searchResults.style.display === 'block' && 
+                    !searchResults.contains(event.target) && 
+                    !searchInput.contains(event.target)) {
+                    closeSearchResults();
                 }
             });
         };
