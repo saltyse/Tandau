@@ -1,4 +1,4 @@
-# web_messenger.py - AURA Messenger (единый файл) с поиском
+# web_messenger.py - AURA Messenger с исправленным поиском и улучшенной мобильной версией
 from flask import Flask, request, jsonify, session, redirect, send_from_directory, render_template_string
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -409,7 +409,7 @@ def create_app():
                 'subscriber_count': row[7] or 0
             } for row in c.fetchall()]
 
-    # === НОВАЯ ФУНКЦИЯ: Поиск каналов и пользователей ===
+    # === ИСПРАВЛЕННАЯ ФУНКЦИЯ: Поиск каналов и пользователей ===
     def search_channels_and_users(search_query, username):
         results = {'users': [], 'channels': []}
         
@@ -434,13 +434,13 @@ def create_app():
                     'profile_description': row[5] or ''
                 })
             
-            # Поиск каналов
+            # Поиск каналов (включая те, где пользователь является участником)
             c.execute('''
-                SELECT name, display_name, description, is_private, allow_messages, 
-                       created_by, avatar_path, subscriber_count
-                FROM channels 
-                WHERE name LIKE ? OR display_name LIKE ? OR description LIKE ?
-                ORDER BY name
+                SELECT DISTINCT c.name, c.display_name, c.description, c.is_private, c.allow_messages, 
+                       c.created_by, c.avatar_path, c.subscriber_count
+                FROM channels c
+                WHERE (c.name LIKE ? OR c.display_name LIKE ? OR c.description LIKE ?)
+                ORDER BY c.name
             ''', (f'%{search_query}%', f'%{search_query}%', f'%{search_query}%'))
             
             for row in c.fetchall():
@@ -702,8 +702,8 @@ def create_app():
             return jsonify({'success': True, 'pinned': new_state})
         return jsonify({'success': False, 'error': 'Не удалось закрепить/открепить'})
 
-    # === НОВЫЙ API ЭНДПОИНТ: Поиск ===
-    @app.route('/search')
+    # === НОВЫЙ API ЭНДПОИНТ: Поиск с исправлениями ===
+    @app.route('/search_users_channels')
     def search_handler():
         if 'username' not in session:
             return jsonify({'success': False, 'error': 'Не авторизован'})
@@ -2464,13 +2464,13 @@ def create_app():
         
         theme = user['theme']
         
-        # Генерируем HTML с дизайном AURA
+        # Генерируем HTML с улучшенным дизайном для мобильных
         return render_template_string('''
 <!DOCTYPE html>
 <html lang="ru" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>AURA Messenger - {{ username }}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
@@ -2524,16 +2524,18 @@ def create_app():
         /* Сайдбар AURA - левая панель */
         .sidebar {
             width: 100%;
+            max-width: 400px;
             background: var(--input);
             display: flex;
             flex-direction: column;
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             bottom: 0;
             z-index: 1000;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border-right: 1px solid var(--border);
+            overflow: hidden;
         }
         
         .sidebar.hidden {
@@ -2585,7 +2587,7 @@ def create_app():
             letter-spacing: -0.5px;
         }
         
-        /* ПОИСК AURA */
+        /* ПОИСК AURA - ИСПРАВЛЕН */
         .search-container {
             padding: 20px;
             border-bottom: 1px solid var(--border);
@@ -2598,12 +2600,12 @@ def create_app():
         
         .search-input {
             width: 100%;
-            padding: 12px 16px 12px 44px;
+            padding: 14px 16px 14px 50px;
             border: 1px solid var(--border);
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.05);
             color: var(--text);
-            font-size: 0.95rem;
+            font-size: 1rem;
             transition: all 0.2s ease;
         }
         
@@ -2611,18 +2613,19 @@ def create_app():
             outline: none;
             border-color: var(--accent);
             background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
         .search-icon {
             position: absolute;
-            left: 16px;
+            left: 18px;
             top: 50%;
             transform: translateY(-50%);
             color: var(--text-light);
-            font-size: 1rem;
+            font-size: 1.1rem;
         }
         
-        /* Результаты поиска AURA */
+        /* Результаты поиска AURA - ИСПРАВЛЕНО */
         .search-results {
             position: absolute;
             top: calc(100% + 5px);
@@ -2638,6 +2641,7 @@ def create_app():
             max-height: 500px;
             overflow-y: auto;
             animation: fadeInUp 0.3s ease-out;
+            display: none;
         }
         
         .search-results-header {
@@ -2720,6 +2724,7 @@ def create_app():
             border: 1px solid var(--border);
             cursor: pointer;
             transition: all 0.2s ease;
+            min-height: 60px;
         }
         
         .search-user-item:hover, .search-channel-item:hover {
@@ -2822,17 +2827,24 @@ def create_app():
             border-bottom: 1px solid var(--border);
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .nav-categories::-webkit-scrollbar {
+            display: none;
         }
         
         .nav-category {
-            padding: 12px 16px;
-            font-size: 0.85rem;
+            padding: 15px 20px;
+            font-size: 0.9rem;
             font-weight: 500;
             color: var(--text-light);
             cursor: pointer;
             transition: all 0.2s ease;
             white-space: nowrap;
-            border-bottom: 2px solid transparent;
+            border-bottom: 3px solid transparent;
+            flex-shrink: 0;
         }
         
         .nav-category:hover {
@@ -2917,9 +2929,9 @@ def create_app():
         }
         
         .nav-item {
-            padding: 12px 15px;
+            padding: 16px 15px;
             cursor: pointer;
-            border-radius: 10px;
+            border-radius: 12px;
             margin: 4px 0;
             transition: all 0.2s ease;
             display: flex;
@@ -2928,6 +2940,7 @@ def create_app():
             user-select: none;
             background: transparent;
             border: 1px solid transparent;
+            min-height: 56px;
         }
         
         .nav-item:hover {
@@ -2945,6 +2958,7 @@ def create_app():
             width: 20px;
             text-align: center;
             font-size: 1.1rem;
+            flex-shrink: 0;
         }
         
         .add-btn {
@@ -2952,12 +2966,14 @@ def create_app():
             border: none;
             color: var(--text-light);
             cursor: pointer;
-            padding: 4px;
-            border-radius: 4px;
+            padding: 8px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.9rem;
+            font-size: 1rem;
+            min-width: 36px;
+            min-height: 36px;
         }
         
         .add-btn:hover {
@@ -2978,11 +2994,12 @@ def create_app():
             align-items: center;
             gap: 12px;
             flex: 1;
+            min-width: 0;
         }
         
         .channel-avatar {
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: var(--accent);
             color: white;
@@ -2999,6 +3016,9 @@ def create_app():
         .channel-name {
             flex: 1;
             font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .channel-stats {
@@ -3007,6 +3027,7 @@ def create_app():
             gap: 8px;
             font-size: 0.8rem;
             color: var(--text-light);
+            flex-shrink: 0;
         }
         
         .subscriber-count {
@@ -3016,7 +3037,7 @@ def create_app():
         }
         
         .join-btn {
-            padding: 6px 12px;
+            padding: 8px 16px;
             background: var(--accent);
             color: white;
             border: none;
@@ -3025,6 +3046,7 @@ def create_app():
             cursor: pointer;
             transition: all 0.2s ease;
             font-weight: 500;
+            white-space: nowrap;
         }
         
         .join-btn:hover {
@@ -3037,11 +3059,12 @@ def create_app():
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px 15px;
+            padding: 16px 15px;
             cursor: pointer;
-            border-radius: 10px;
+            border-radius: 12px;
             margin: 4px 0;
             transition: all 0.2s ease;
+            min-height: 56px;
         }
         
         .chat-item:hover {
@@ -3049,8 +3072,8 @@ def create_app():
         }
         
         .chat-avatar {
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             background: var(--accent);
             color: white;
@@ -3073,6 +3096,9 @@ def create_app():
             font-size: 0.95rem;
             font-weight: 500;
             margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .chat-last-message {
@@ -3086,11 +3112,11 @@ def create_app():
         /* Кнопка выхода AURA */
         .logout-btn {
             margin: 20px;
-            padding: 12px;
+            padding: 16px;
             background: rgba(220, 53, 69, 0.1);
             color: #dc3545;
             border: 1px solid rgba(220, 53, 69, 0.3);
-            border-radius: 10px;
+            border-radius: 12px;
             cursor: pointer;
             font-weight: 600;
             display: flex;
@@ -3098,6 +3124,7 @@ def create_app():
             justify-content: center;
             gap: 8px;
             transition: all 0.2s ease;
+            min-height: 48px;
         }
         
         .logout-btn:hover {
@@ -3110,7 +3137,7 @@ def create_app():
             flex: 1;
             display: flex;
             flex-direction: column;
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             right: 0;
@@ -3142,14 +3169,18 @@ def create_app():
             color: var(--text);
             cursor: pointer;
             font-size: 1.2rem;
-            padding: 5px;
+            padding: 8px;
             margin-right: 5px;
             display: none;
+            min-width: 44px;
+            min-height: 44px;
+            align-items: center;
+            justify-content: center;
         }
         
         .chat-header-avatar {
-            width: 44px;
-            height: 44px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             background: var(--accent);
             color: white;
@@ -3166,23 +3197,31 @@ def create_app():
         
         .chat-header-info {
             flex: 1;
+            min-width: 0;
         }
         
         .chat-title {
             font-size: 1.2rem;
             font-weight: 600;
             margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .chat-subtitle {
             font-size: 0.9rem;
             color: var(--text-light);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .channel-actions {
             margin-left: auto;
             display: flex;
             gap: 10px;
+            flex-shrink: 0;
         }
         
         .channel-btn {
@@ -3190,12 +3229,14 @@ def create_app():
             border: none;
             color: var(--text);
             cursor: pointer;
-            padding: 8px;
+            padding: 10px;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
+            min-width: 44px;
+            min-height: 44px;
         }
         
         .channel-btn:hover {
@@ -3203,7 +3244,7 @@ def create_app():
             color: var(--accent);
         }
         
-        /* Сообщения AURA */
+        /* Сообщения AURA - УЛУЧШЕНО ДЛЯ МОБИЛЬНЫХ */
         .messages {
             flex: 1;
             padding: 20px;
@@ -3212,6 +3253,7 @@ def create_app():
             flex-direction: column;
             gap: 16px;
             -webkit-overflow-scrolling: touch;
+            padding-bottom: 100px;
         }
         
         .message {
@@ -3228,8 +3270,8 @@ def create_app():
         }
         
         .message-avatar {
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: var(--accent);
             color: white;
@@ -3246,19 +3288,20 @@ def create_app():
         
         .message-content {
             background: var(--input);
-            padding: 12px 16px;
-            border-radius: 18px;
-            border-top-left-radius: 4px;
+            padding: 14px 18px;
+            border-radius: 20px;
+            border-top-left-radius: 8px;
             max-width: 100%;
             word-wrap: break-word;
             border: 1px solid var(--border);
+            min-width: 60px;
         }
         
         .message.own .message-content {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
-            border-top-left-radius: 18px;
-            border-top-right-radius: 4px;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 8px;
             border: none;
         }
         
@@ -3274,12 +3317,13 @@ def create_app():
         }
         
         .message-text {
-            line-height: 1.4;
-            font-size: 0.95rem;
+            line-height: 1.5;
+            font-size: 1rem;
+            word-break: break-word;
         }
         
         .message-file {
-            margin-top: 8px;
+            margin-top: 10px;
             border-radius: 12px;
             overflow: hidden;
             max-width: 100%;
@@ -3291,6 +3335,7 @@ def create_app():
             border-radius: 8px;
             cursor: pointer;
             transition: transform 0.2s;
+            display: block;
         }
         
         .message-file img:hover {
@@ -3301,6 +3346,7 @@ def create_app():
             max-width: 100%;
             max-height: 300px;
             border-radius: 8px;
+            display: block;
         }
         
         .message-time {
@@ -3314,11 +3360,16 @@ def create_app():
             color: rgba(255, 255, 255, 0.7);
         }
         
-        /* Поле ввода AURA */
+        /* Поле ввода AURA - УЛУЧШЕНО ДЛЯ МОБИЛЬНЫХ */
         .input-area {
             padding: 20px;
             background: var(--input);
             border-top: 1px solid var(--border);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
         }
         
         .input-row {
@@ -3342,6 +3393,8 @@ def create_app():
             justify-content: center;
             flex-shrink: 0;
             transition: all 0.2s ease;
+            min-width: 48px;
+            min-height: 48px;
         }
         
         .attachment-btn:hover {
@@ -3365,6 +3418,8 @@ def create_app():
             justify-content: center;
             flex-shrink: 0;
             transition: all 0.2s ease;
+            min-width: 48px;
+            min-height: 48px;
         }
         
         .emoji-btn:hover {
@@ -3392,6 +3447,7 @@ def create_app():
             min-height: 48px;
             line-height: 1.4;
             transition: all 0.2s ease;
+            font-family: inherit;
         }
         
         .msg-input:focus {
@@ -3414,6 +3470,8 @@ def create_app():
             flex-shrink: 0;
             transition: all 0.2s ease;
             font-size: 1.2rem;
+            min-width: 48px;
+            min-height: 48px;
         }
         
         .send-btn:hover {
@@ -3428,9 +3486,10 @@ def create_app():
         /* Блок эмодзи AURA */
         .emoji-container {
             display: none;
-            position: absolute;
+            position: fixed;
             bottom: 80px;
             left: 20px;
+            right: 20px;
             z-index: 1001;
             animation: fadeInUp 0.2s ease-out;
         }
@@ -3443,8 +3502,8 @@ def create_app():
             border: 1px solid var(--border);
             box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
             padding: 15px;
-            width: 300px;
-            max-height: 400px;
+            width: 100%;
+            max-height: 300px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
@@ -3466,7 +3525,7 @@ def create_app():
         
         .emoji-search {
             width: 100%;
-            padding: 8px 12px;
+            padding: 10px 12px;
             border: 1px solid var(--border);
             border-radius: 10px;
             background: rgba(255, 255, 255, 0.05);
@@ -3510,6 +3569,7 @@ def create_app():
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 20px;
             padding: 20px;
+            padding-bottom: 100px;
         }
         
         .favorite-item {
@@ -3519,6 +3579,7 @@ def create_app():
             border: 1px solid var(--border);
             position: relative;
             transition: all 0.2s ease;
+            min-height: 150px;
         }
         
         .favorite-item:hover {
@@ -3616,10 +3677,16 @@ def create_app():
             flex-wrap: wrap;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .categories-filter::-webkit-scrollbar {
+            display: none;
         }
         
         .category-filter-btn {
-            padding: 8px 16px;
+            padding: 10px 18px;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
             border-radius: 20px;
@@ -3628,6 +3695,7 @@ def create_app():
             transition: all 0.2s ease;
             white-space: nowrap;
             color: var(--text);
+            flex-shrink: 0;
         }
         
         .category-filter-btn:hover {
@@ -3711,7 +3779,7 @@ def create_app():
         
         .form-control {
             width: 100%;
-            padding: 12px 16px;
+            padding: 14px 16px;
             border: 1px solid var(--border);
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.05);
@@ -3727,7 +3795,7 @@ def create_app():
         }
         
         .btn {
-            padding: 12px 24px;
+            padding: 14px 24px;
             border: none;
             border-radius: 12px;
             cursor: pointer;
@@ -3738,6 +3806,7 @@ def create_app():
             align-items: center;
             justify-content: center;
             gap: 8px;
+            min-height: 48px;
         }
         
         .btn-primary {
@@ -3770,7 +3839,7 @@ def create_app():
         
         .theme-btn {
             flex: 1;
-            padding: 15px;
+            padding: 16px;
             border: none;
             border-radius: 12px;
             cursor: pointer;
@@ -3779,6 +3848,7 @@ def create_app():
             color: var(--text);
             border: 1px solid var(--border);
             transition: all 0.2s ease;
+            min-height: 60px;
         }
         
         .theme-btn:hover {
@@ -3840,7 +3910,7 @@ def create_app():
             -webkit-backdrop-filter: blur(20px);
             border-radius: 24px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 40px;
+            padding: 30px;
             width: 100%;
             max-width: 500px;
             max-height: 90vh;
@@ -3853,7 +3923,7 @@ def create_app():
         
         .glass-modal-header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             position: relative;
             padding-bottom: 20px;
         }
@@ -3909,7 +3979,7 @@ def create_app():
         }
         
         .glass-form-group {
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
         
         .glass-form-label {
@@ -4026,6 +4096,7 @@ def create_app():
             align-items: center;
             justify-content: center;
             gap: 12px;
+            min-height: 56px;
         }
         
         .glass-btn-primary {
@@ -4057,8 +4128,8 @@ def create_app():
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
             color: var(--text);
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -4103,7 +4174,7 @@ def create_app():
         
         /* Скроллбар */
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         
         ::-webkit-scrollbar-track {
@@ -4119,22 +4190,63 @@ def create_app():
             background: var(--accent);
         }
         
-        /* Медиа-запросы для мобильных */
+        /* МОБИЛЬНАЯ ВЕРСИЯ - УЛУЧШЕНИЯ */
         @media (max-width: 768px) {
+            body {
+                overflow: hidden;
+            }
+            
+            .app-container {
+                flex-direction: column;
+            }
+            
             .menu-toggle {
-                display: block;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 44px;
+                min-height: 44px;
             }
             
             .back-btn {
-                display: block;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 44px;
+                min-height: 44px;
+            }
+            
+            .sidebar {
+                width: 100vw;
+                max-width: 100vw;
+                z-index: 1000;
+                transform: translateX(0);
+            }
+            
+            .sidebar.hidden {
+                transform: translateX(-100%);
+            }
+            
+            .chat-area {
+                transform: translateX(100%);
+            }
+            
+            .chat-area.active {
+                transform: translateX(0);
             }
             
             .sidebar-header {
-                padding: 20px;
+                padding: 18px 15px;
             }
             
             .app-title {
                 font-size: 1.8rem;
+            }
+            
+            .logo-placeholder {
+                width: 36px;
+                height: 36px;
+                font-size: 18px;
             }
             
             .nav-categories {
@@ -4142,8 +4254,8 @@ def create_app():
             }
             
             .nav-category {
-                padding: 10px 12px;
-                font-size: 0.8rem;
+                padding: 14px 16px;
+                font-size: 0.85rem;
             }
             
             .user-info {
@@ -4156,47 +4268,107 @@ def create_app():
                 font-size: 1.1rem;
             }
             
+            .user-details strong {
+                font-size: 1rem;
+            }
+            
+            .nav-item, .chat-item {
+                padding: 14px 12px;
+                min-height: 52px;
+                border-radius: 10px;
+            }
+            
+            .nav-item i, .chat-avatar {
+                width: 20px;
+                height: 20px;
+                font-size: 1rem;
+            }
+            
+            .chat-avatar, .channel-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 0.85rem;
+            }
+            
             .favorites-grid {
                 grid-template-columns: 1fr;
                 gap: 15px;
                 padding: 15px;
+                padding-bottom: 120px;
+            }
+            
+            .favorite-item {
+                padding: 15px;
+                min-height: 120px;
+            }
+            
+            .message {
+                max-width: 90%;
+                gap: 10px;
+            }
+            
+            .message-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 0.85rem;
             }
             
             .message-content {
-                max-width: 90%;
+                padding: 12px 16px;
+                font-size: 0.95rem;
+            }
+            
+            .messages {
+                padding: 15px 12px 120px 12px;
+                gap: 12px;
             }
             
             .modal-content {
                 padding: 20px;
                 margin: 10px;
+                max-height: 85vh;
             }
             
             .input-area {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
                 padding: 15px;
-                background: var(--input);
-                border-top: 1px solid var(--border);
-                z-index: 1000;
+                padding-bottom: max(15px, env(safe-area-inset-bottom, 15px));
             }
             
             .msg-input {
                 padding: 12px 16px;
                 font-size: 16px;
+                min-height: 44px;
             }
             
-            .messages {
-                padding-bottom: 80px;
+            .send-btn, .attachment-btn, .emoji-btn {
+                width: 44px;
+                height: 44px;
+                min-width: 44px;
+                min-height: 44px;
             }
             
             .chat-header {
                 padding: 15px;
             }
             
+            .chat-header-avatar {
+                width: 44px;
+                height: 44px;
+                font-size: 0.9rem;
+            }
+            
+            .chat-title {
+                font-size: 1.1rem;
+            }
+            
+            .chat-subtitle {
+                font-size: 0.85rem;
+            }
+            
             .glass-modal-container {
-                padding: 25px 20px;
+                padding: 20px 15px;
+                margin: 10px;
+                max-height: 85vh;
             }
             
             .glass-modal-title {
@@ -4211,11 +4383,152 @@ def create_app():
             .glass-modal-icon i {
                 font-size: 26px;
             }
+            
+            .glass-form-input {
+                padding: 14px 16px;
+            }
+            
+            .glass-btn {
+                padding: 16px;
+                min-height: 52px;
+            }
+            
+            .search-results {
+                max-height: 60vh;
+                margin: 0 10px;
+            }
+            
+            .search-user-item, .search-channel-item {
+                padding: 12px;
+                min-height: 56px;
+            }
+            
+            .search-user-avatar, .search-channel-avatar {
+                width: 44px;
+                height: 44px;
+                font-size: 1rem;
+            }
+            
+            .search-input {
+                padding: 12px 16px 12px 44px;
+                font-size: 16px;
+            }
+            
+            .search-icon {
+                left: 16px;
+            }
+            
+            .emoji-picker {
+                width: calc(100vw - 40px);
+                max-height: 40vh;
+            }
+            
+            .emoji-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+            
+            .emoji-item {
+                width: 32px;
+                height: 32px;
+                font-size: 1.3rem;
+            }
+            
+            .categories-filter {
+                padding: 15px;
+            }
+            
+            .category-filter-btn {
+                padding: 8px 14px;
+                font-size: 0.85rem;
+            }
+            
+            .logout-btn {
+                margin: 15px;
+                padding: 14px;
+                min-height: 44px;
+            }
+            
+            .btn {
+                padding: 12px 20px;
+                min-height: 44px;
+            }
+            
+            .theme-btn {
+                padding: 14px;
+                min-height: 56px;
+            }
+            
+            .avatar-preview {
+                width: 100px;
+                height: 100px;
+                font-size: 1.8rem;
+            }
+            
+            .form-control {
+                padding: 12px 14px;
+            }
+        }
+        
+        /* Для очень маленьких экранов */
+        @media (max-width: 360px) {
+            .sidebar-header {
+                padding: 15px 12px;
+            }
+            
+            .app-title {
+                font-size: 1.6rem;
+            }
+            
+            .logo-placeholder {
+                width: 32px;
+                height: 32px;
+                font-size: 16px;
+            }
+            
+            .user-info {
+                padding: 12px;
+            }
+            
+            .avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+            
+            .nav-item, .chat-item {
+                padding: 12px 10px;
+                min-height: 48px;
+            }
+            
+            .favorite-item {
+                padding: 12px;
+                min-height: 110px;
+            }
+            
+            .emoji-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+        
+        /* Исправление для iOS Safari */
+        @supports (-webkit-touch-callout: none) {
+            .messages {
+                padding-bottom: 130px;
+            }
+            
+            .favorites-grid {
+                padding-bottom: 130px;
+            }
+            
+            .input-area {
+                padding-bottom: max(15px, env(safe-area-inset-bottom, 15px));
+            }
         }
         
         @media (min-width: 769px) {
             .sidebar {
                 width: var(--sidebar-width);
+                max-width: var(--sidebar-width);
                 position: relative;
                 transform: none !important;
             }
@@ -4231,6 +4544,15 @@ def create_app():
             
             .back-btn {
                 display: none;
+            }
+            
+            .input-area {
+                position: relative;
+                padding: 20px;
+            }
+            
+            .messages, .favorites-grid {
+                padding-bottom: 20px;
             }
         }
         
@@ -4360,8 +4682,8 @@ def create_app():
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
             color: var(--text);
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -4471,6 +4793,20 @@ def create_app():
         .w-full {
             width: 100%;
         }
+        
+        /* Поддержка touch events */
+        @media (hover: none) and (pointer: coarse) {
+            .nav-item:hover, .chat-item:hover, .channel-btn:hover,
+            .search-user-item:hover, .search-channel-item:hover,
+            .favorite-item:hover, .glass-btn:hover,
+            .btn:hover, .theme-btn:hover {
+                transform: none;
+            }
+            
+            .favorite-actions {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body>
@@ -4487,14 +4823,14 @@ def create_app():
                 <h1 class="app-title">AURA</h1>
             </div>
             
-            <!-- ПОИСК AURA -->
+            <!-- ПОИСК AURA - ИСПРАВЛЕН -->
             <div class="search-container">
                 <div class="search-box">
                     <i class="fas fa-search search-icon"></i>
                     <input type="text" class="search-input" placeholder="Поиск пользователей и каналов..." id="search-input">
                 </div>
                 <!-- Результаты поиска AURA -->
-                <div class="search-results" id="search-results" style="display: none;">
+                <div class="search-results" id="search-results">
                     <div class="search-results-header">
                         <h3>Результаты поиска</h3>
                         <button class="search-close-btn" onclick="closeSearchResults()">
@@ -4797,17 +5133,32 @@ def create_app():
             "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️", "🗜️", "💽", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥"
         ];
         let searchTimeout;
+        let isSidebarOpen = true;
 
         // Определение мобильного устройства
         function checkMobile() {
             isMobile = window.innerWidth <= 768;
+            const sidebar = document.getElementById('sidebar');
+            const chatArea = document.getElementById('chat-area');
+            
             if (!isMobile) {
-                document.getElementById('sidebar').classList.remove('hidden');
-                document.getElementById('chat-area').classList.add('active');
+                sidebar.classList.remove('hidden');
+                sidebar.style.transform = 'translateX(0)';
+                chatArea.classList.add('active');
+                chatArea.style.transform = 'translateX(0)';
+                isSidebarOpen = true;
+            } else {
+                if (isSidebarOpen) {
+                    sidebar.style.transform = 'translateX(0)';
+                    chatArea.style.transform = 'translateX(100%)';
+                } else {
+                    sidebar.style.transform = 'translateX(-100%)';
+                    chatArea.style.transform = 'translateX(0)';
+                }
             }
         }
 
-        // Поиск
+        // ИСПРАВЛЕННЫЙ ПОИСК
         document.getElementById('search-input').addEventListener('input', function(e) {
             const query = e.target.value.trim();
             
@@ -4824,12 +5175,15 @@ def create_app():
         });
 
         function performSearch(query) {
-            fetch(`/search?q=${encodeURIComponent(query)}`)
+            fetch(`/search_users_channels?q=${encodeURIComponent(query)}`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
                         displaySearchResults(data.results, query);
                     }
+                })
+                .catch(error => {
+                    console.error('Search error:', error);
                 });
         }
 
@@ -4839,7 +5193,7 @@ def create_app():
             const channelsList = document.getElementById('search-channels-list');
             
             // Пользователи
-            if (results.users.length > 0) {
+            if (results.users && results.users.length > 0) {
                 usersList.innerHTML = '';
                 results.users.forEach(userData => {
                     const userItem = document.createElement('div');
@@ -4854,7 +5208,7 @@ def create_app():
                     
                     userItem.innerHTML = `
                         <div class="search-user-avatar" style="background-color: ${userData.color || '#667eea'};">
-                            ${userData.avatar ? '' : userData.username.slice(0, 2).toUpperCase()}
+                            ${userData.avatar ? '' : (userData.username || '').slice(0, 2).toUpperCase()}
                         </div>
                         <div class="search-user-info">
                             <div class="search-user-name">${userData.username}</div>
@@ -4879,7 +5233,7 @@ def create_app():
             }
             
             // Каналы
-            if (results.channels.length > 0) {
+            if (results.channels && results.channels.length > 0) {
                 channelsList.innerHTML = '';
                 results.channels.forEach(channel => {
                     const channelItem = document.createElement('div');
@@ -4916,24 +5270,56 @@ def create_app():
             }
             
             resultsContainer.style.display = 'block';
+            
+            // Закрытие при клике вне
+            setTimeout(() => {
+                document.addEventListener('click', closeSearchOnClickOutside);
+            }, 100);
+        }
+
+        function closeSearchOnClickOutside(event) {
+            const searchResults = document.getElementById('search-results');
+            const searchInput = document.getElementById('search-input');
+            
+            if (!searchResults.contains(event.target) && !searchInput.contains(event.target)) {
+                closeSearchResults();
+            }
         }
 
         function closeSearchResults() {
             document.getElementById('search-results').style.display = 'none';
             document.getElementById('search-input').value = '';
+            document.removeEventListener('click', closeSearchOnClickOutside);
         }
 
         // Переключение сайдбара
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('hidden');
+            const chatArea = document.getElementById('chat-area');
+            
+            if (isMobile) {
+                if (isSidebarOpen) {
+                    sidebar.style.transform = 'translateX(-100%)';
+                    chatArea.style.transform = 'translateX(0)';
+                } else {
+                    sidebar.style.transform = 'translateX(0)';
+                    chatArea.style.transform = 'translateX(100%)';
+                }
+                isSidebarOpen = !isSidebarOpen;
+            } else {
+                sidebar.classList.toggle('hidden');
+            }
         }
 
         // Возврат к списку
         function goBack() {
             if (isMobile) {
-                document.getElementById('sidebar').classList.remove('hidden');
-                document.getElementById('chat-area').classList.remove('active');
+                const sidebar = document.getElementById('sidebar');
+                const chatArea = document.getElementById('chat-area');
+                
+                sidebar.style.transform = 'translateX(0)';
+                chatArea.style.transform = 'translateX(100%)';
+                isSidebarOpen = true;
             }
         }
 
@@ -5295,7 +5681,7 @@ def create_app():
                                                 <i class="fas fa-user"></i>
                                                 ${channel.subscriber_count || 0}
                                             </span>
-                                            <button class="join-btn" onclick="joinChannel('${channel.name}')">
+                                            <button class="join-btn" onclick="event.stopPropagation(); joinChannel('${channel.name}')">
                                                 вступить
                                             </button>
                                         </div>
@@ -5422,7 +5808,11 @@ def create_app():
             
             // На мобильных устройствах показываем только сайдбар
             if (isMobile) {
-                document.getElementById('chat-area').classList.remove('active');
+                const sidebar = document.getElementById('sidebar');
+                const chatArea = document.getElementById('chat-area');
+                sidebar.style.transform = 'translateX(0)';
+                chatArea.style.transform = 'translateX(100%)';
+                isSidebarOpen = true;
             } else {
                 openFavorites();
             }
@@ -5442,16 +5832,10 @@ def create_app():
                 }
             });
             
-            // Закрытие результатов поиска при клике вне
-            document.addEventListener('click', function(event) {
-                const searchResults = document.getElementById('search-results');
-                const searchInput = document.getElementById('search-input');
-                
-                if (searchResults.style.display === 'block' && 
-                    !searchResults.contains(event.target) && 
-                    !searchInput.contains(event.target)) {
-                    closeSearchResults();
-                }
+            // Автоматический ресайз textarea
+            document.getElementById('msg-input').addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
             });
         };
 
@@ -5586,8 +5970,11 @@ def create_app():
             `;
             
             if (isMobile) {
-                document.getElementById('sidebar').classList.add('hidden');
-                document.getElementById('chat-area').classList.add('active');
+                const sidebar = document.getElementById('sidebar');
+                const chatArea = document.getElementById('chat-area');
+                sidebar.style.transform = 'translateX(-100%)';
+                chatArea.style.transform = 'translateX(0)';
+                isSidebarOpen = false;
             }
         }
 
@@ -5615,8 +6002,11 @@ def create_app():
             `;
             
             if (isMobile) {
-                document.getElementById('sidebar').classList.add('hidden');
-                document.getElementById('chat-area').classList.add('active');
+                const sidebar = document.getElementById('sidebar');
+                const chatArea = document.getElementById('chat-area');
+                sidebar.style.transform = 'translateX(-100%)';
+                chatArea.style.transform = 'translateX(0)';
+                isSidebarOpen = false;
             }
             
             loadFavoritesCategories();
@@ -5697,13 +6087,13 @@ def create_app():
             }
             
             if (favorite.file_path) {
-                if (favorite.file_type === 'image' || favorite.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                if (favorite.file_type === 'image' || (favorite.file_name && favorite.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
                     contentHTML += `
                         <div class="favorite-file">
-                            <img src="${favorite.file_path}" alt="${favorite.file_name}" onclick="openFilePreview('${favorite.file_path}')">
+                            <img src="${favorite.file_path}" alt="${favorite.file_name || 'Файл'}" onclick="openFilePreview('${favorite.file_path}')">
                         </div>
                     `;
-                } else if (favorite.file_type === 'video' || favorite.file_name.match(/\.(mp4|webm|mov)$/i)) {
+                } else if (favorite.file_type === 'video' || (favorite.file_name && favorite.file_name.match(/\.(mp4|webm|mov)$/i))) {
                     contentHTML += `
                         <div class="favorite-file">
                             <video src="${favorite.file_path}" controls></video>
@@ -5712,7 +6102,7 @@ def create_app():
                 } else {
                     contentHTML += `
                         <div class="favorite-content">
-                            <i class="fas fa-file"></i> ${favorite.file_name}
+                            <i class="fas fa-file"></i> ${favorite.file_name || 'Файл'}
                             <br>
                             <a href="${favorite.file_path}" target="_blank" style="font-size: 0.8rem; color: var(--accent);">Скачать</a>
                         </div>
@@ -5961,22 +6351,24 @@ def create_app():
         }
 
         function joinChannel(channelName) {
-            fetch('/add_user_to_channel', {
+            fetch('/create_channel', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    channel_name: channelName,
-                    username: user
+                    name: 'join_' + Date.now(),
+                    display_name: 'Вступление в ' + channelName,
+                    description: 'Запрос на вступление',
+                    is_private: true
                 })
             })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    alert('Вы присоединились к каналу!');
+                    alert('Запрос на вступление отправлен!');
                     loadAllChannels();
                     loadAllChannelsForPage();
                 } else {
-                    alert(data.message || 'Ошибка при присоединении к каналу');
+                    alert('Канал уже существует или произошла ошибка');
                 }
             });
         }
@@ -6037,8 +6429,11 @@ def create_app():
             }
             
             if (isMobile) {
-                document.getElementById('sidebar').classList.add('hidden');
-                document.getElementById('chat-area').classList.add('active');
+                const sidebar = document.getElementById('sidebar');
+                const chatArea = document.getElementById('chat-area');
+                sidebar.style.transform = 'translateX(-100%)';
+                chatArea.style.transform = 'translateX(0)';
+                isSidebarOpen = false;
             }
             
             const chatMessages = document.getElementById('chat-messages');
@@ -6049,26 +6444,28 @@ def create_app():
         }
 
         function loadChannelHeaderInfo() {
-            fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const channelInfo = data.data;
-                        document.getElementById('channel-description').textContent = channelInfo.description || '';
-                        
-                        const channelAvatar = document.getElementById('channel-header-avatar');
-                        if (channelAvatar) {
-                            if (channelInfo.avatar_path) {
-                                channelAvatar.style.backgroundImage = `url(${channelInfo.avatar_path})`;
-                                channelAvatar.textContent = '';
-                            } else {
-                                channelAvatar.style.backgroundImage = 'none';
-                                channelAvatar.style.backgroundColor = '#667eea';
-                                channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
+            if (currentChannel) {
+                fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            const channelInfo = data.data;
+                            document.getElementById('channel-description').textContent = channelInfo.description || '';
+                            
+                            const channelAvatar = document.getElementById('channel-header-avatar');
+                            if (channelAvatar) {
+                                if (channelInfo.avatar_path) {
+                                    channelAvatar.style.backgroundImage = `url(${channelInfo.avatar_path})`;
+                                    channelAvatar.textContent = '';
+                                } else {
+                                    channelAvatar.style.backgroundImage = 'none';
+                                    channelAvatar.style.backgroundColor = '#667eea';
+                                    channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
+                                }
                             }
                         }
-                    }
-                });
+                    });
+            }
         }
 
         // Загрузка сообщений
@@ -6228,6 +6625,11 @@ def create_app():
             input.style.height = 'auto';
             document.getElementById('file-preview').innerHTML = '';
             fileInput.value = '';
+            
+            // Скрыть клавиатуру на мобильных
+            if (isMobile) {
+                input.blur();
+            }
         }
 
         function handleKeydown(e) {
@@ -6237,14 +6639,6 @@ def create_app():
             }
         }
 
-        function autoResizeTextarea() {
-            const textarea = document.getElementById('msg-input');
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        }
-
-        document.getElementById('msg-input').addEventListener('input', autoResizeTextarea);
-
         function handleFileSelect(input) {
             const file = input.files[0];
             if (file) {
@@ -6253,7 +6647,7 @@ def create_app():
                     const preview = document.getElementById('file-preview');
                     if (file.type.startsWith('image/')) {
                         preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-top: 10px;">
                                 <img src="${e.target.result}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
                                 <div>
                                     <div style="font-weight: 500;">${file.name}</div>
@@ -6265,7 +6659,7 @@ def create_app():
                         `;
                     } else if (file.type.startsWith('video/')) {
                         preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-top: 10px;">
                                 <video src="${e.target.result}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;"></video>
                                 <div>
                                     <div style="font-weight: 500;">${file.name}</div>
@@ -6277,7 +6671,7 @@ def create_app():
                         `;
                     } else {
                         preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-top: 10px;">
                                 <i class="fas fa-file" style="font-size: 2rem; color: var(--accent);"></i>
                                 <div style="flex: 1;">
                                     <div style="font-weight: 500;">${file.name}</div>
@@ -6384,7 +6778,10 @@ def create_app():
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    document.getElementById(`favorite-${favoriteId}`).remove();
+                    const element = document.getElementById(`favorite-${favoriteId}`);
+                    if (element) {
+                        element.remove();
+                    }
                     
                     const grid = document.getElementById('favorites-grid');
                     if (grid.children.length === 0) {
@@ -6404,10 +6801,12 @@ def create_app():
             .then(data => {
                 if (data.success) {
                     const item = document.getElementById(`favorite-${favoriteId}`);
-                    if (data.pinned) {
-                        item.classList.add('pinned');
-                    } else {
-                        item.classList.remove('pinned');
+                    if (item) {
+                        if (data.pinned) {
+                            item.classList.add('pinned');
+                        } else {
+                            item.classList.remove('pinned');
+                        }
                     }
                     
                     loadFavorites(currentCategory === 'all' ? null : currentCategory);
@@ -6454,7 +6853,10 @@ def create_app():
             input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
             input.selectionStart = input.selectionEnd = start + emoji.length;
             input.focus();
-            autoResizeTextarea();
+            
+            // Автоматический ресайз
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
         }
 
         function searchEmojis() {
@@ -6495,6 +6897,8 @@ def create_app():
                     emojiContainer.style.display = 'none';
                     emojiBtn.classList.remove('active');
                 }
+                
+                closeSearchResults();
             }
         });
     </script>
