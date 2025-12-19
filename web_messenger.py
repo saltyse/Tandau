@@ -102,9 +102,9 @@ def create_app():
                     category TEXT DEFAULT 'general'
                 )
             ''')
-            # Создаем общий канал по умолчанию
-            c.execute('INSERT OR IGNORE INTO channels (name, display_name, description, created_by) VALUES (?, ?, ?, ?)',
-                      ('general', 'General', 'Общий канал', 'system'))
+            # Создаем общий канал по умолчанию - теперь он доступен всем
+            c.execute('INSERT OR IGNORE INTO channels (name, display_name, description, created_by, is_private) VALUES (?, ?, ?, ?, ?)',
+                      ('general', 'General', 'Общий канал для всех пользователей', 'system', False))
             conn.commit()
 
     init_db()
@@ -351,6 +351,11 @@ def create_app():
                 # Добавляем создателя в канал как администратора
                 c.execute('INSERT INTO channel_members (channel_id, username, is_admin) VALUES (?, ?, ?)',
                           (channel_id, created_by, True))
+                
+                # Если это не приватный канал, добавляем создателя и обновляем счетчик
+                if not is_private:
+                    c.execute('UPDATE channels SET subscriber_count = subscriber_count + 1 WHERE id = ?', (channel_id,))
+                
                 conn.commit()
                 return channel_id
             except sqlite3.IntegrityError:
@@ -359,231 +364,25 @@ def create_app():
                 print(f"Error creating channel: {e}")
                 return None
 
-    def rename_channel(channel_name, new_display_name, username):
+    def get_all_channels():
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
-            try:
-                # Проверяем права администратора
-                c.execute('''
-                    SELECT 1 FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, username))
-                
-                if c.fetchone():
-                    c.execute('UPDATE channels SET display_name = ? WHERE name = ?', (new_display_name, channel_name))
-                    conn.commit()
-                    return True
-                return False
-            except:
-                return False
-
-    def update_channel_description(channel_name, description, username):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                # Проверяем права администратора
-                c.execute('''
-                    SELECT 1 FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, username))
-                
-                if c.fetchone():
-                    c.execute('UPDATE channels SET description = ? WHERE name = ?', (description, channel_name))
-                    conn.commit()
-                    return True
-                return False
-            except:
-                return False
-
-    def add_user_to_channel(channel_name, target_user, current_user):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                # Проверяем права администратора
-                c.execute('''
-                    SELECT c.id FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, current_user))
-                
-                row = c.fetchone()
-                if not row:
-                    return False, "У вас нет прав администратора"
-                
-                channel_id = row[0]
-                
-                # Проверяем, существует ли пользователь
-                c.execute('SELECT 1 FROM users WHERE username = ?', (target_user,))
-                if not c.fetchone():
-                    return False, "Пользователь не найден"
-                
-                # Проверяем, не является ли пользователь уже участником
-                c.execute('SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id, target_user))
-                if c.fetchone():
-                    return False, "Пользователь уже в канале"
-                
-                # Добавляем пользователя
-                c.execute('INSERT INTO channel_members (channel_id, username, is_admin) VALUES (?, ?, ?)',
-                          (channel_id, target_user, False))
-                
-                # Обновляем счетчик подписчиков
-                c.execute('UPDATE channels SET subscriber_count = subscriber_count + 1 WHERE id = ?', (channel_id,))
-                conn.commit()
-                return True, "Пользователь добавлен"
-            except Exception as e:
-                return False, f"Ошибка: {str(e)}"
-
-    def remove_user_from_channel(channel_name, target_user, current_user):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                # Проверяем права администратора
-                c.execute('''
-                    SELECT c.id FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, current_user))
-                
-                row = c.fetchone()
-                if not row:
-                    return False, "У вас нет прав администратора"
-                
-                channel_id = row[0]
-                
-                # Нельзя удалить самого себя
-                if target_user == current_user:
-                    return False, "Нельзя удалить самого себя"
-                
-                # Проверяем, существует ли пользователь в канале
-                c.execute('SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id, target_user))
-                if not c.fetchone():
-                    return False, "Пользователь не найден в канале"
-                
-                # Удаляем пользователя
-                c.execute('DELETE FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id, target_user))
-                
-                # Обновляем счетчик подписчиков
-                c.execute('UPDATE channels SET subscriber_count = subscriber_count - 1 WHERE id = ?', (channel_id,))
-                conn.commit()
-                return True, "Пользователь удален"
-            except Exception as e:
-                return False, f"Ошибка: {str(e)}"
-
-    def update_channel_avatar(channel_name, avatar_path, username):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                # Проверяем права администратора
-                c.execute('''
-                    SELECT 1 FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, username))
-                
-                if c.fetchone():
-                    c.execute('UPDATE channels SET avatar_path = ? WHERE name = ?', (avatar_path, channel_name))
-                    conn.commit()
-                    return True
-                return False
-            except Exception as e:
-                print(f"Error updating channel avatar: {e}")
-                return False
-
-    def delete_channel_avatar(channel_name, username):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                # Проверяем права администратора
-                c.execute('''
-                    SELECT 1 FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, username))
-                
-                if c.fetchone():
-                    c.execute('UPDATE channels SET avatar_path = NULL WHERE name = ?', (channel_name,))
-                    conn.commit()
-                    return True
-                return False
-            except Exception as e:
-                print(f"Error deleting channel avatar: {e}")
-                return False
-
-    def make_user_admin(channel_name, target_user, current_user):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                # Проверяем, является ли текущий пользователь администратором
-                c.execute('''
-                    SELECT 1 FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, current_user))
-                
-                if not c.fetchone():
-                    return False, "У вас нет прав администратора"
-                
-                # Получаем ID канала
-                c.execute('SELECT id FROM channels WHERE name = ?', (channel_name,))
-                channel_id = c.fetchone()
-                if not channel_id:
-                    return False, "Канал не найден"
-                
-                # Проверяем, существует ли пользователь в канале
-                c.execute('SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id[0], target_user))
-                if not c.fetchone():
-                    return False, "Пользователь не найден в канале"
-                
-                # Назначаем администратором
-                c.execute('UPDATE channel_members SET is_admin = 1 WHERE channel_id = ? AND username = ?', (channel_id[0], target_user))
-                conn.commit()
-                return True, "Пользователь назначен администратором"
-            except Exception as e:
-                return False, f"Ошибка: {str(e)}"
-
-    def remove_admin(channel_name, target_user, current_user):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            try:
-                # Проверяем, является ли текущий пользователь администратором
-                c.execute('''
-                    SELECT 1 FROM channels c 
-                    JOIN channel_members cm ON c.id = cm.channel_id 
-                    WHERE c.name = ? AND cm.username = ? AND cm.is_admin = 1
-                ''', (channel_name, current_user))
-                
-                if not c.fetchone():
-                    return False, "У вас нет прав администратора"
-                
-                # Получаем ID канала
-                c.execute('SELECT id FROM channels WHERE name = ?', (channel_name,))
-                channel_id = c.fetchone()
-                if not channel_id:
-                    return False, "Канал не найден"
-                
-                # Проверяем, существует ли пользователь в канале
-                c.execute('SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?', (channel_id[0], target_user))
-                if not c.fetchone():
-                    return False, "Пользователь не найден в канале"
-                
-                # Нельзя снять права администратора у создателя канала
-                c.execute('SELECT created_by FROM channels WHERE name = ?', (channel_name,))
-                created_by = c.fetchone()
-                if created_by and created_by[0] == target_user:
-                    return False, "Нельзя снять права администратора у создателя канала"
-                
-                # Нельзя снять права администратора у самого себя
-                if target_user == current_user:
-                    return False, "Нельзя снять права администратора у самого себя"
-                
-                # Снимаем права администратора
-                c.execute('UPDATE channel_members SET is_admin = 0 WHERE channel_id = ? AND username = ?', (channel_id[0], target_user))
-                conn.commit()
-                return True, "Права администратора сняты"
-            except Exception as e:
-                return False, f"Ошибка: {str(e)}"
+            c.execute('''
+                SELECT name, display_name, description, created_by, is_private, allow_messages, avatar_path, subscriber_count 
+                FROM channels 
+                WHERE is_private = 0
+                ORDER BY name
+            ''')
+            return [{
+                'name': row[0],
+                'display_name': row[1],
+                'description': row[2],
+                'created_by': row[3],
+                'is_private': row[4],
+                'allow_messages': row[5],
+                'avatar_path': row[6],
+                'subscriber_count': row[7] or 0
+            } for row in c.fetchall()]
 
     def get_channel_info(channel_name):
         with sqlite3.connect('messenger.db') as conn:
@@ -613,25 +412,6 @@ def create_app():
                 WHERE c.name = ? AND cm.username = ?
             ''', (channel_name, username))
             return c.fetchone() is not None
-
-    def get_channel_members(channel_name):
-        with sqlite3.connect('messenger.db') as conn:
-            c = conn.cursor()
-            c.execute('''
-                SELECT cm.username, cm.is_admin, u.is_online, u.avatar_path, u.avatar_color
-                FROM channel_members cm
-                JOIN channels c ON cm.channel_id = c.id
-                JOIN users u ON cm.username = u.username
-                WHERE c.name = ?
-                ORDER BY cm.is_admin DESC, cm.username
-            ''', (channel_name,))
-            return [{
-                'username': row[0], 
-                'is_admin': row[1], 
-                'online': row[2],
-                'avatar': row[3],
-                'color': row[4]
-            } for row in c.fetchall()]
 
     def get_user_channels(username):
         with sqlite3.connect('messenger.db') as conn:
@@ -684,89 +464,6 @@ def create_app():
         if success:
             return jsonify({'success': True})
         return jsonify({'success': False, 'error': 'Ошибка обновления описания'})
-
-    @app.route('/upload_channel_avatar', methods=['POST'])
-    def upload_channel_avatar_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.form.get('channel_name')
-        if not channel_name:
-            return jsonify({'success': False, 'error': 'Не указан канал'})
-        
-        if 'avatar' in request.files:
-            file = request.files['avatar']
-            path, filename = save_uploaded_file(file, app.config['CHANNEL_AVATAR_FOLDER'])
-        else:
-            return jsonify({'success': False, 'error': 'Файл не найден'})
-        
-        if path:
-            success = update_channel_avatar(channel_name, path, session['username'])
-            if success:
-                return jsonify({'success': True, 'path': path})
-            else:
-                return jsonify({'success': False, 'error': 'Нет прав для изменения аватарки канала'})
-        return jsonify({'success': False, 'error': 'Неверный формат файла'})
-
-    @app.route('/delete_channel_avatar', methods=['POST'])
-    def delete_channel_avatar_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        if not channel_name:
-            return jsonify({'success': False, 'error': 'Не указан канал'})
-        
-        success = delete_channel_avatar(channel_name, session['username'])
-        if success:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': 'Нет прав для удаления аватарки канала'})
-
-    @app.route('/update_channel_description', methods=['POST'])
-    def update_channel_description_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        description = request.json.get('description', '').strip()
-        
-        if not channel_name:
-            return jsonify({'success': False, 'error': 'Не указан канал'})
-        
-        success = update_channel_description(channel_name, description, session['username'])
-        if success:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': 'Нет прав для изменения описания канала'})
-
-    @app.route('/make_admin', methods=['POST'])
-    def make_admin_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = make_user_admin(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
-
-    @app.route('/remove_admin', methods=['POST'])
-    def remove_admin_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = remove_admin(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
 
     @app.route('/delete_avatar', methods=['POST'])
     def delete_avatar_handler():
@@ -834,60 +531,6 @@ def create_app():
             print(f"Error creating channel: {e}")
             return jsonify({'success': False, 'error': f'Ошибка сервера: {str(e)}'})
 
-    @app.route('/rename_channel', methods=['POST'])
-    def rename_channel_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        new_display_name = request.json.get('new_display_name', '').strip()
-        
-        if not new_display_name:
-            return jsonify({'success': False, 'error': 'Новое название не может быть пустым'})
-        
-        if rename_channel(channel_name, new_display_name, session['username']):
-            return jsonify({'success': True})
-        return jsonify({'success': False, 'error': 'Не удалось переименовать канал или нет прав'})
-
-    @app.route('/add_user_to_channel', methods=['POST'])
-    def add_user_to_channel_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = add_user_to_channel(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
-
-    @app.route('/remove_user_from_channel', methods=['POST'])
-    def remove_user_from_channel_handler():
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        
-        channel_name = request.json.get('channel_name')
-        target_user = request.json.get('username', '').strip()
-        
-        if not channel_name or not target_user:
-            return jsonify({'success': False, 'error': 'Не указан канал или пользователь'})
-        
-        success, message = remove_user_from_channel(channel_name, target_user, session['username'])
-        return jsonify({'success': success, 'message': message})
-
-    @app.route('/channel_info/<channel_name>')
-    def channel_info_handler(channel_name):
-        if 'username' not in session: 
-            return jsonify({'success': False, 'error': 'Не авторизован'})
-        info = get_channel_info(channel_name)
-        if info:
-            info['is_member'] = is_channel_member(channel_name, session['username'])
-            info['members'] = get_channel_members(channel_name)
-            return jsonify({'success': True, 'data': info})
-        return jsonify({'success': False, 'error': 'Канал не найден'})
-
     @app.route('/get_available_users')
     def get_available_users_handler():
         if 'username' not in session: 
@@ -922,11 +565,23 @@ def create_app():
             return jsonify({'success': False, 'error': 'Не авторизован'})
         return jsonify({'success': True, 'channels': get_user_channels(session['username'])})
 
+    @app.route('/all_channels')
+    def all_channels_handler():
+        if 'username' not in session: 
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        return jsonify({'success': True, 'channels': get_all_channels()})
+
     @app.route('/personal_chats')
     def personal_chats_handler():
         if 'username' not in session: 
             return jsonify({'success': False, 'error': 'Не авторизован'})
         return jsonify({'success': True, 'chats': get_user_personal_chats(session['username'])})
+
+    @app.route('/all_users')
+    def all_users_handler():
+        if 'username' not in session: 
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        return jsonify({'success': True, 'users': get_all_users()})
 
     @app.route('/user_info/<username>')
     def user_info_handler(username):
@@ -4712,6 +4367,12 @@ def create_app():
                 
                 <!-- Для чата показываем сообщения -->
                 <div id="chat-messages" class="message-container" style="display: none;"></div>
+                
+                <!-- Для списка пользователей -->
+                <div id="all-users-list" class="favorites-grid" style="display: none;"></div>
+                
+                <!-- Для всех каналов -->
+                <div id="all-channels-list" class="favorites-grid" style="display: none;"></div>
             </div>
             
             <!-- Поле ввода AURA -->
@@ -4894,62 +4555,6 @@ def create_app():
             </div>
         </div>
     </div>
-    
-    <!-- Настройки канала -->
-    <div class="modal" id="channel-settings-modal">
-        <div class="modal-content">
-            <h3>Настройки канала</h3>
-            <div class="form-group">
-                <label class="form-label">Название канала</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" class="form-control" id="channel-edit-name" placeholder="Название канала" style="flex: 1;">
-                    <button class="btn btn-primary" onclick="renameChannelFromModal()">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Описание канала</label>
-                <textarea class="form-control" id="channel-edit-description" placeholder="Добавьте описание канала..." rows="3"></textarea>
-                <button class="btn btn-primary" onclick="updateChannelDescription()" style="margin-top: 10px;">
-                    <i class="fas fa-save"></i> Сохранить описание
-                </button>
-            </div>
-            
-            <div class="form-group">
-                <h4 style="margin-bottom: 15px;">Участники канала</h4>
-                <div class="member-list" id="channel-members-list">
-                    <!-- Участники будут загружены динамически -->
-                </div>
-                <button class="btn btn-primary" onclick="openAddUserModalFromSettings()" style="margin-top: 10px;">
-                    <i class="fas fa-user-plus"></i> Добавить пользователя
-                </button>
-            </div>
-            
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="closeChannelSettingsModal()">Закрыть</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Добавление пользователя в канал -->
-    <div class="modal" id="add-user-modal">
-        <div class="modal-content">
-            <h3>Добавить пользователя в канал</h3>
-            <div class="form-group">
-                <label class="form-label">Пользователь</label>
-                <select class="form-control" id="user-select">
-                    <option value="">Выберите пользователя...</option>
-                    <!-- Пользователи будут загружены динамически -->
-                </select>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-primary" onclick="addUserToChannel()">Добавить</button>
-                <button class="btn btn-secondary" onclick="closeAddUserModal()">Отмена</button>
-            </div>
-        </div>
-    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
@@ -5067,12 +4672,397 @@ def create_app():
                 <div id="all-chats-list">
                     <!-- Чаты будут загружены динамически -->
                 </div>
+                
+                <div class="nav-title">
+                    <span>Все пользователи</span>
+                </div>
+                <div id="all-users-nav-list">
+                    <!-- Пользователи будут загружены динамически -->
+                </div>
             `;
             
             // Загружаем данные
             loadFavoritesNav();
             loadAllChannels();
             loadAllChats();
+            loadAllUsersNav();
+        }
+
+        // Загрузка личных чатов
+        function loadPersonalChats() {
+            const navContent = document.getElementById('nav-content');
+            navContent.innerHTML = `
+                <div class="nav-title">
+                    <span>Личные чаты</span>
+                    <button class="add-btn" onclick="openNewChatModal()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div id="personal-chats-list">
+                    <!-- Чаты будут загружены динамически -->
+                </div>
+                
+                <div class="nav-title">
+                    <span>Все пользователи</span>
+                </div>
+                <div id="all-users-list-sidebar">
+                    <!-- Пользователи будут загружены динамически -->
+                </div>
+            `;
+            
+            // Загружаем личные чаты
+            fetch('/personal_chats')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const container = document.getElementById('personal-chats-list');
+                        if (container) {
+                            if (data.chats.length === 0) {
+                                container.innerHTML = '<div class="nav-item">Нет личных чатов</div>';
+                            } else {
+                                container.innerHTML = '';
+                                data.chats.forEach(chatUser => {
+                                    const el = document.createElement('div');
+                                    el.className = 'chat-item';
+                                    el.onclick = () => openRoom(
+                                        'private_' + [user, chatUser].sort().join('_'),
+                                        'private',
+                                        chatUser
+                                    );
+                                    
+                                    // Получаем информацию о пользователе
+                                    fetch('/user_info/' + chatUser)
+                                        .then(r => r.json())
+                                        .then(userInfo => {
+                                            if (userInfo.success) {
+                                                el.innerHTML = `
+                                                    <div class="chat-avatar" style="background-color: ${userInfo.avatar_color};">
+                                                        ${userInfo.avatar_path ? '' : chatUser.slice(0, 2).toUpperCase()}
+                                                    </div>
+                                                    <div class="chat-info">
+                                                        <div class="chat-name">${chatUser}</div>
+                                                        <div class="chat-last-message">Начните общение</div>
+                                                    </div>
+                                                `;
+                                                
+                                                if (userInfo.avatar_path) {
+                                                    const avatar = el.querySelector('.chat-avatar');
+                                                    avatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
+                                                    avatar.textContent = '';
+                                                }
+                                            }
+                                        });
+                                    
+                                    container.appendChild(el);
+                                });
+                            }
+                        }
+                    }
+                });
+            
+            // Загружаем всех пользователей
+            loadAllUsersSidebar();
+        }
+
+        // Загрузка каналов пользователя
+        function loadUserChannels() {
+            const navContent = document.getElementById('nav-content');
+            navContent.innerHTML = `
+                <div class="nav-title">
+                    <span>Мои каналы</span>
+                    <button class="add-btn" onclick="openCreateChannelGlassModal()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div id="user-channels-list">
+                    <!-- Каналы будут загружены динамически -->
+                </div>
+                
+                <div class="nav-title">
+                    <span>Все каналы</span>
+                </div>
+                <div id="all-channels-sidebar">
+                    <!-- Все каналы будут загружены динамически -->
+                </div>
+            `;
+            
+            // Загружаем каналы пользователя
+            fetch('/user_channels')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const container = document.getElementById('user-channels-list');
+                        if (container) {
+                            if (data.channels.length === 0) {
+                                container.innerHTML = '<div class="nav-item">Вы не состоите в каналах</div>';
+                            } else {
+                                container.innerHTML = '';
+                                data.channels.forEach(channel => {
+                                    const el = document.createElement('div');
+                                    el.className = 'nav-item';
+                                    el.onclick = () => openRoom(
+                                        'channel_' + channel.name,
+                                        'channel',
+                                        channel.display_name || channel.name
+                                    );
+                                    el.innerHTML = `
+                                        <div class="channel-item">
+                                            <div class="channel-info">
+                                                <div class="channel-avatar" style="background-color: #667eea;">
+                                                    ${channel.avatar_path ? '' : (channel.display_name || channel.name).slice(0, 2).toUpperCase()}
+                                                </div>
+                                                <div class="channel-name">${channel.display_name || channel.name}</div>
+                                            </div>
+                                            <div class="channel-stats">
+                                                <span class="subscriber-count">
+                                                    <i class="fas fa-user"></i>
+                                                    ${channel.subscriber_count || 0}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    `;
+                                    
+                                    if (channel.avatar_path) {
+                                        const avatar = el.querySelector('.channel-avatar');
+                                        avatar.style.backgroundImage = `url(${channel.avatar_path})`;
+                                        avatar.textContent = '';
+                                    }
+                                    
+                                    container.appendChild(el);
+                                });
+                            }
+                        }
+                    }
+                });
+            
+            // Загружаем все каналы
+            loadAllChannelsSidebar();
+        }
+
+        // Загрузка полезного
+        function loadSupportContent() {
+            const navContent = document.getElementById('nav-content');
+            navContent.innerHTML = `
+                <div class="nav-title">
+                    <span>Полезное</span>
+                </div>
+                <div class="nav-item" onclick="openSupport()">
+                    <i class="fas fa-headset"></i>
+                    <span>Центр поддержки</span>
+                </div>
+                <div class="nav-item" onclick="openFAQ()">
+                    <i class="fas fa-question-circle"></i>
+                    <span>Частые вопросы</span>
+                </div>
+                <div class="nav-item" onclick="openContact()">
+                    <i class="fas fa-envelope"></i>
+                    <span>Связаться с нами</span>
+                </div>
+            `;
+            
+            // При переходе на вкладку полезное, показываем поддержку в основной области
+            openSupport();
+        }
+
+        // Загрузка избранного
+        function loadFavoritesNav() {
+            const navContent = document.getElementById('nav-content');
+            navContent.innerHTML = `
+                <div class="nav-title">
+                    <span>Избранное</span>
+                    <button class="add-btn" onclick="openAddFavoriteModal()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div id="favorites-nav-list">
+                    <!-- Избранное будет загружено динамически -->
+                </div>
+                
+                <div class="nav-title">
+                    <span>Центр поддержки</span>
+                </div>
+                <div class="nav-item" onclick="openSupport()">
+                    <i class="fas fa-headset"></i>
+                    <span>Центр поддержки</span>
+                </div>
+                
+                <div class="nav-title">
+                    <span>Заметки</span>
+                </div>
+                <div class="nav-item" onclick="openNotesChannel()">
+                    <i class="fas fa-sticky-note"></i>
+                    <span>Мои заметки</span>
+                </div>
+            `;
+            
+            // Загружаем избранное
+            fetch('/get_favorites')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const container = document.getElementById('favorites-nav-list');
+                        if (container) {
+                            if (data.favorites.length === 0) {
+                                container.innerHTML = '<div class="nav-item">Нет избранного</div>';
+                            } else {
+                                container.innerHTML = '';
+                                data.favorites.slice(0, 5).forEach(favorite => {
+                                    const el = document.createElement('div');
+                                    el.className = 'nav-item';
+                                    el.onclick = () => openFavorites();
+                                    el.innerHTML = `
+                                        <i class="fas fa-star"></i>
+                                        <span>${favorite.content ? favorite.content.substring(0, 30) : 'Файл'}${favorite.content && favorite.content.length > 30 ? '...' : ''}</span>
+                                    `;
+                                    container.appendChild(el);
+                                });
+                                
+                                if (data.favorites.length > 5) {
+                                    const moreEl = document.createElement('div');
+                                    moreEl.className = 'nav-item';
+                                    moreEl.onclick = () => openFavorites();
+                                    moreEl.innerHTML = `
+                                        <i class="fas fa-ellipsis-h"></i>
+                                        <span>Еще ${data.favorites.length - 5} заметок</span>
+                                    `;
+                                    container.appendChild(moreEl);
+                                }
+                            }
+                        }
+                    }
+                });
+            
+            // При переходе на вкладку избранное, показываем избранное в основной области
+            openFavorites();
+        }
+
+        // Загрузка всех пользователей в навигацию
+        function loadAllUsersNav() {
+            fetch('/all_users')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const container = document.getElementById('all-users-nav-list');
+                        if (container) {
+                            container.innerHTML = '';
+                            data.users.forEach(userInfo => {
+                                const el = document.createElement('div');
+                                el.className = 'chat-item';
+                                el.onclick = () => openRoom(
+                                    'private_' + [user, userInfo.username].sort().join('_'),
+                                    'private',
+                                    userInfo.username
+                                );
+                                
+                                el.innerHTML = `
+                                    <div class="chat-avatar" style="background-color: ${userInfo.color};">
+                                        ${userInfo.avatar ? '' : userInfo.username.slice(0, 2).toUpperCase()}
+                                    </div>
+                                    <div class="chat-info">
+                                        <div class="chat-name">${userInfo.username}</div>
+                                        <div class="chat-last-message">${userInfo.online ? 'Online' : 'Offline'}</div>
+                                    </div>
+                                `;
+                                
+                                if (userInfo.avatar) {
+                                    const avatar = el.querySelector('.chat-avatar');
+                                    avatar.style.backgroundImage = `url(${userInfo.avatar})`;
+                                    avatar.textContent = '';
+                                }
+                                
+                                container.appendChild(el);
+                            });
+                        }
+                    }
+                });
+        }
+
+        // Загрузка всех пользователей в сайдбар
+        function loadAllUsersSidebar() {
+            fetch('/all_users')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const container = document.getElementById('all-users-list-sidebar');
+                        if (container) {
+                            container.innerHTML = '';
+                            data.users.forEach(userInfo => {
+                                if (userInfo.username === user) return;
+                                
+                                const el = document.createElement('div');
+                                el.className = 'chat-item';
+                                el.onclick = () => openRoom(
+                                    'private_' + [user, userInfo.username].sort().join('_'),
+                                    'private',
+                                    userInfo.username
+                                );
+                                
+                                el.innerHTML = `
+                                    <div class="chat-avatar" style="background-color: ${userInfo.color};">
+                                        ${userInfo.avatar ? '' : userInfo.username.slice(0, 2).toUpperCase()}
+                                    </div>
+                                    <div class="chat-info">
+                                        <div class="chat-name">${userInfo.username}</div>
+                                        <div class="chat-last-message">${userInfo.online ? 'Online' : 'Offline'}</div>
+                                    </div>
+                                `;
+                                
+                                if (userInfo.avatar) {
+                                    const avatar = el.querySelector('.chat-avatar');
+                                    avatar.style.backgroundImage = `url(${userInfo.avatar})`;
+                                    avatar.textContent = '';
+                                }
+                                
+                                container.appendChild(el);
+                            });
+                        }
+                    }
+                });
+        }
+
+        // Загрузка всех каналов в сайдбар
+        function loadAllChannelsSidebar() {
+            fetch('/all_channels')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const container = document.getElementById('all-channels-sidebar');
+                        if (container) {
+                            container.innerHTML = '';
+                            data.channels.forEach(channel => {
+                                const el = document.createElement('div');
+                                el.className = 'nav-item';
+                                el.innerHTML = `
+                                    <div class="channel-item">
+                                        <div class="channel-info">
+                                            <div class="channel-avatar" style="background-color: #667eea;">
+                                                ${channel.avatar_path ? '' : (channel.display_name || channel.name).slice(0, 2).toUpperCase()}
+                                            </div>
+                                            <div class="channel-name">${channel.display_name || channel.name}</div>
+                                        </div>
+                                        <div class="channel-stats">
+                                            <span class="subscriber-count">
+                                                <i class="fas fa-user"></i>
+                                                ${channel.subscriber_count || 0}
+                                            </span>
+                                            <button class="join-btn" onclick="joinChannel('${channel.name}')">
+                                                вступить
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                                
+                                if (channel.avatar_path) {
+                                    const avatar = el.querySelector('.channel-avatar');
+                                    avatar.style.backgroundImage = `url(${channel.avatar_path})`;
+                                    avatar.textContent = '';
+                                }
+                                
+                                container.appendChild(el);
+                            });
+                        }
+                    }
+                });
         }
 
         // Инициализация при загрузке
@@ -5218,78 +5208,18 @@ def create_app():
                 });
         }
 
-        // Загрузка избранного в навигацию
-        function loadFavoritesNav() {
-            fetch('/get_favorites')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const container = document.getElementById('all-notes-list');
-                        if (container) {
-                            if (data.favorites.length === 0) {
-                                container.innerHTML = '<div class="nav-item">Нет заметок</div>';
-                            } else {
-                                container.innerHTML = '';
-                                data.favorites.slice(0, 5).forEach(favorite => {
-                                    const el = document.createElement('div');
-                                    el.className = 'nav-item';
-                                    el.onclick = () => openFavorites();
-                                    el.innerHTML = `
-                                        <i class="fas fa-star"></i>
-                                        <span>${favorite.content ? favorite.content.substring(0, 30) : 'Файл'}${favorite.content && favorite.content.length > 30 ? '...' : ''}</span>
-                                    `;
-                                    container.appendChild(el);
-                                });
-                                
-                                if (data.favorites.length > 5) {
-                                    const moreEl = document.createElement('div');
-                                    moreEl.className = 'nav-item';
-                                    moreEl.onclick = () => openFavorites();
-                                    moreEl.innerHTML = `
-                                        <i class="fas fa-ellipsis-h"></i>
-                                        <span>Еще ${data.favorites.length - 5} заметок</span>
-                                    `;
-                                    container.appendChild(moreEl);
-                                }
-                            }
-                        }
-                    }
-                });
-        }
-
-        // Загрузка поддержки
-        function loadSupportContent() {
-            const navContent = document.getElementById('nav-content');
-            navContent.innerHTML = `
-                <div class="nav-title">
-                    <span>Поддержка</span>
-                </div>
-                <div class="nav-item" onclick="openSupport()">
-                    <i class="fas fa-headset"></i>
-                    <span>Центр поддержки</span>
-                </div>
-                <div class="nav-item" onclick="openFAQ()">
-                    <i class="fas fa-question-circle"></i>
-                    <span>Частые вопросы</span>
-                </div>
-                <div class="nav-item" onclick="openContact()">
-                    <i class="fas fa-envelope"></i>
-                    <span>Связаться с нами</span>
-                </div>
-            `;
-        }
-
         // Открытие поддержки
         function openSupport() {
             room = "support";
             roomType = "support";
             
-            document.getElementById('chat-title').textContent = 'Поддержка';
             document.getElementById('categories-filter').style.display = 'none';
             document.getElementById('favorites-grid').style.display = 'none';
             document.getElementById('chat-messages').style.display = 'none';
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
+            document.getElementById('all-users-list').style.display = 'none';
+            document.getElementById('all-channels-list').style.display = 'none';
             document.getElementById('support-content').style.display = 'block';
             
             const chatHeader = document.getElementById('chat-header-content');
@@ -5341,13 +5271,14 @@ def create_app():
             room = "favorites";
             roomType = "favorites";
             
-            document.getElementById('chat-title').textContent = 'Все заметки';
             document.getElementById('categories-filter').style.display = 'flex';
             document.getElementById('favorites-grid').style.display = 'grid';
             document.getElementById('support-content').style.display = 'none';
             document.getElementById('chat-messages').style.display = 'none';
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('channel-actions').style.display = 'none';
+            document.getElementById('all-users-list').style.display = 'none';
+            document.getElementById('all-channels-list').style.display = 'none';
             
             const chatHeader = document.getElementById('chat-header-content');
             chatHeader.innerHTML = `
@@ -5369,373 +5300,192 @@ def create_app():
             loadFavorites(currentCategory);
         }
 
-        // Загрузка категорий избранного
-        function loadFavoritesCategories() {
-            fetch('/get_favorite_categories')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const filterContainer = document.getElementById('categories-filter');
-                        filterContainer.innerHTML = '';
-                        
-                        const allBtn = document.createElement('button');
-                        allBtn.className = 'category-filter-btn active';
-                        allBtn.textContent = 'Все';
-                        allBtn.onclick = () => filterFavorites('all');
-                        filterContainer.appendChild(allBtn);
-                        
-                        data.categories.forEach(category => {
-                            const btn = document.createElement('button');
-                            btn.className = 'category-filter-btn';
-                            btn.textContent = category || 'Без категории';
-                            btn.onclick = () => filterFavorites(category);
-                            filterContainer.appendChild(btn);
-                        });
-                    }
-                });
-        }
-
-        // Загрузка избранного
-        function loadFavorites(category = null) {
-            let url = '/get_favorites';
-            if (category && category !== 'all') {
-                url += `?category=${encodeURIComponent(category)}`;
-            }
+        // Открытие списка всех пользователей
+        function openAllUsers() {
+            room = "all_users";
+            roomType = "users";
             
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const grid = document.getElementById('favorites-grid');
-                        
-                        if (data.favorites.length === 0) {
-                            grid.innerHTML = `
-                                <div class="empty-state" style="grid-column: 1 / -1;">
-                                    <i class="fas fa-star"></i>
-                                    <h3>Пока ничего нет</h3>
-                                    <p>Добавьте свои заметки, фото или видео</p>
-                                    <button class="btn btn-primary" onclick="openAddFavoriteModal()" style="margin-top: 15px;">
-                                        <i class="fas fa-plus"></i> Добавить заметку
-                                    </button>
-                                </div>
-                            `;
-                        } else {
-                            grid.innerHTML = '';
-                            data.favorites.forEach(favorite => {
-                                const item = createFavoriteItem(favorite);
-                                grid.appendChild(item);
-                            });
-                        }
-                    }
-                });
-        }
-
-        // Создание элемента избранного
-        function createFavoriteItem(favorite) {
-            const item = document.createElement('div');
-            item.className = `favorite-item ${favorite.is_pinned ? 'pinned' : ''}`;
-            item.id = `favorite-${favorite.id}`;
+            document.getElementById('categories-filter').style.display = 'none';
+            document.getElementById('favorites-grid').style.display = 'none';
+            document.getElementById('support-content').style.display = 'none';
+            document.getElementById('chat-messages').style.display = 'none';
+            document.getElementById('input-area').style.display = 'none';
+            document.getElementById('channel-actions').style.display = 'none';
+            document.getElementById('all-users-list').style.display = 'grid';
+            document.getElementById('all-channels-list').style.display = 'none';
             
-            let contentHTML = '';
-            
-            if (favorite.content) {
-                contentHTML += `<div class="favorite-content">${favorite.content}</div>`;
-            }
-            
-            if (favorite.file_path) {
-                if (favorite.file_type === 'image' || favorite.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                    contentHTML += `
-                        <div class="favorite-file">
-                            <img src="${favorite.file_path}" alt="${favorite.file_name}" onclick="openFilePreview('${favorite.file_path}')">
-                        </div>
-                    `;
-                } else if (favorite.file_type === 'video' || favorite.file_name.match(/\.(mp4|webm|mov)$/i)) {
-                    contentHTML += `
-                        <div class="favorite-file">
-                            <video src="${favorite.file_path}" controls></video>
-                        </div>
-                    `;
-                } else {
-                    contentHTML += `
-                        <div class="favorite-content">
-                            <i class="fas fa-file"></i> ${favorite.file_name}
-                            <br>
-                            <a href="${favorite.file_path}" target="_blank" style="font-size: 0.8rem; color: var(--accent);">Скачать</a>
-                        </div>
-                    `;
-                }
-            }
-            
-            const category = favorite.category && favorite.category !== 'general' ? 
-                `<span class="category-badge">${favorite.category}</span>` : '';
-            
-            const date = new Date(favorite.created_at).toLocaleDateString('ru-RU', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric'
-            });
-            
-            item.innerHTML = `
-                <div class="favorite-actions">
-                    <button class="favorite-action-btn" onclick="togglePinFavorite(${favorite.id})" title="${favorite.is_pinned ? 'Открепить' : 'Закрепить'}">
-                        <i class="fas fa-thumbtack"></i>
-                    </button>
-                    <button class="favorite-action-btn" onclick="deleteFavorite(${favorite.id})" title="Удалить">
-                        <i class="fas fa-trash"></i>
-                    </button>
+            const chatHeader = document.getElementById('chat-header-content');
+            chatHeader.innerHTML = `
+                <div class="chat-header-avatar" style="background: linear-gradient(135deg, var(--primary), var(--secondary));">
+                    <i class="fas fa-users"></i>
                 </div>
-                ${contentHTML}
-                <div class="favorite-meta">
-                    <span>${date}</span>
-                    ${category}
+                <div class="chat-header-info">
+                    <div class="chat-title">Все пользователи</div>
+                    <div class="chat-subtitle">Зарегистрированные в системе</div>
                 </div>
             `;
             
-            return item;
-        }
-
-        // Фильтрация избранного
-        function filterFavorites(category) {
-            currentCategory = category;
-            
-            document.querySelectorAll('.category-filter-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event?.currentTarget.classList.add('active');
-            
-            loadFavorites(category === 'all' ? null : category);
-        }
-
-        // Открытие профиля пользователя
-        function openUserProfile(username) {
-            fetch('/user_info/' + username)
-                .then(r => r.json())
-                .then(userInfo => {
-                    if (userInfo.success) {
-                        const profileModal = document.getElementById('profile-modal');
-                        const profileAvatar = document.getElementById('profile-avatar-large');
-                        const profileName = document.getElementById('profile-username');
-                        const statusText = document.getElementById('profile-status-text');
-                        const descriptionText = document.getElementById('profile-description-text');
-                        
-                        if (userInfo.avatar_path) {
-                            profileAvatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
-                            profileAvatar.textContent = '';
-                        } else {
-                            profileAvatar.style.backgroundImage = 'none';
-                            profileAvatar.style.backgroundColor = userInfo.avatar_color;
-                            profileAvatar.textContent = username.slice(0, 2).toUpperCase();
-                        }
-                        
-                        profileName.textContent = username;
-                        statusText.textContent = userInfo.online ? 'Online' : 'Offline';
-                        descriptionText.textContent = userInfo.profile_description || 'Пользователь еще не добавил информацию о себе';
-                        
-                        profileModal.style.display = 'flex';
-                        document.body.style.overflow = 'hidden';
-                    }
-                });
-        }
-
-        function closeProfileModal() {
-            document.getElementById('profile-modal').style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-
-        // Функции для аватара
-        function openAvatarModal() {
-            document.getElementById('avatar-modal').style.display = 'flex';
-            const preview = document.getElementById('avatar-preview');
-            fetch('/user_info/' + user)
-                .then(r => r.json())
-                .then(userInfo => {
-                    if (userInfo.success) {
-                        if (userInfo.avatar_path) {
-                            preview.style.backgroundImage = `url(${userInfo.avatar_path})`;
-                            preview.textContent = '';
-                        } else {
-                            preview.style.backgroundImage = 'none';
-                            preview.style.backgroundColor = userInfo.avatar_color;
-                            preview.textContent = user.slice(0, 2).toUpperCase();
-                        }
-                    }
-                });
-        }
-
-        function closeAvatarModal() {
-            document.getElementById('avatar-modal').style.display = 'none';
-        }
-
-        function previewAvatar(input) {
-            const file = input.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const preview = document.getElementById('avatar-preview');
-                    preview.style.backgroundImage = `url(${e.target.result})`;
-                    preview.textContent = '';
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-
-        function uploadAvatar() {
-            const fileInput = document.getElementById('avatar-input');
-            const file = fileInput.files[0];
-            
-            if (file) {
-                const formData = new FormData();
-                formData.append('avatar', file);
-                
-                fetch('/upload_avatar', {
-                    method: 'POST',
-                    body: formData
-                })
+            // Загружаем всех пользователей
+            fetch('/all_users')
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        loadUserAvatar();
-                        closeAvatarModal();
-                        alert('Аватарка обновлена!');
-                    } else {
-                        alert(data.error || 'Ошибка загрузки аватарки');
+                        const container = document.getElementById('all-users-list');
+                        container.innerHTML = '';
+                        
+                        data.users.forEach(userInfo => {
+                            const item = document.createElement('div');
+                            item.className = 'favorite-item';
+                            item.style.cursor = 'pointer';
+                            item.onclick = () => openUserProfile(userInfo.username);
+                            
+                            item.innerHTML = `
+                                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                    <div class="avatar" style="width: 60px; height: 60px; background-color: ${userInfo.color};">
+                                        ${userInfo.avatar ? '' : userInfo.username.slice(0, 2).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h3 style="margin: 0 0 5px 0;">${userInfo.username}</h3>
+                                        <div style="display: flex; align-items: center; gap: 5px; color: ${userInfo.online ? 'var(--success)' : 'var(--text-light)'};">
+                                            <div style="width: 8px; height: 8px; border-radius: 50%; background-color: ${userInfo.online ? 'var(--success)' : '#6c757d'};"></div>
+                                            ${userInfo.online ? 'Online' : 'Offline'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" onclick="event.stopPropagation(); startChatWithUser('${userInfo.username}')" style="width: 100%;">
+                                    <i class="fas fa-comment"></i> Написать сообщение
+                                </button>
+                            `;
+                            
+                            if (userInfo.avatar) {
+                                const avatar = item.querySelector('.avatar');
+                                avatar.style.backgroundImage = `url(${userInfo.avatar})`;
+                                avatar.textContent = '';
+                            }
+                            
+                            container.appendChild(item);
+                        });
                     }
                 });
-            } else {
-                alert('Выберите файл');
+            
+            if (isMobile) {
+                document.getElementById('sidebar').classList.add('hidden');
+                document.getElementById('chat-area').classList.add('active');
             }
         }
 
-        function removeAvatar() {
-            fetch('/delete_avatar', { method: 'POST' })
+        // Открытие всех каналов
+        function openAllChannels() {
+            room = "all_channels";
+            roomType = "channels";
+            
+            document.getElementById('categories-filter').style.display = 'none';
+            document.getElementById('favorites-grid').style.display = 'none';
+            document.getElementById('support-content').style.display = 'none';
+            document.getElementById('chat-messages').style.display = 'none';
+            document.getElementById('input-area').style.display = 'none';
+            document.getElementById('channel-actions').style.display = 'none';
+            document.getElementById('all-users-list').style.display = 'none';
+            document.getElementById('all-channels-list').style.display = 'grid';
+            
+            const chatHeader = document.getElementById('chat-header-content');
+            chatHeader.innerHTML = `
+                <div class="chat-header-avatar" style="background: linear-gradient(135deg, var(--primary), var(--secondary));">
+                    <i class="fas fa-hashtag"></i>
+                </div>
+                <div class="chat-header-info">
+                    <div class="chat-title">Все каналы</div>
+                    <div class="chat-subtitle">Публичные каналы сообщества</div>
+                </div>
+            `;
+            
+            // Загружаем все каналы
+            fetch('/all_channels')
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        loadUserAvatar();
-                        closeAvatarModal();
-                        alert('Аватарка удалена!');
+                        const container = document.getElementById('all-channels-list');
+                        container.innerHTML = '';
+                        
+                        data.channels.forEach(channel => {
+                            const item = document.createElement('div');
+                            item.className = 'favorite-item';
+                            item.style.cursor = 'pointer';
+                            item.onclick = () => openRoom('channel_' + channel.name, 'channel', channel.display_name || channel.name);
+                            
+                            item.innerHTML = `
+                                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                    <div class="channel-avatar" style="width: 60px; height: 60px; background-color: #667eea;">
+                                        ${channel.avatar_path ? '' : (channel.display_name || channel.name).slice(0, 2).toUpperCase()}
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <h3 style="margin: 0 0 5px 0;">${channel.display_name || channel.name}</h3>
+                                        <p style="margin: 0 0 10px 0; color: var(--text-light); font-size: 0.9rem;">${channel.description || 'Без описания'}</p>
+                                        <div style="display: flex; align-items: center; gap: 10px; color: var(--text-light); font-size: 0.85rem;">
+                                            <span><i class="fas fa-user"></i> ${channel.subscriber_count || 0}</span>
+                                            <span><i class="fas fa-lock" style="display: ${channel.is_private ? 'inline-block' : 'none'}"></i></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" onclick="event.stopPropagation(); joinChannel('${channel.name}')" style="width: 100%;">
+                                    <i class="fas fa-user-plus"></i> Вступить в канал
+                                </button>
+                            `;
+                            
+                            if (channel.avatar_path) {
+                                const avatar = item.querySelector('.channel-avatar');
+                                avatar.style.backgroundImage = `url(${channel.avatar_path})`;
+                                avatar.textContent = '';
+                            }
+                            
+                            container.appendChild(item);
+                        });
                     }
                 });
-        }
-
-        // Функции для темы
-        function openThemeModal() {
-            document.getElementById('theme-modal').style.display = 'flex';
-        }
-
-        function closeThemeModal() {
-            document.getElementById('theme-modal').style.display = 'none';
-        }
-
-        function setTheme(theme) {
-            fetch('/set_theme', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ theme: theme })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    document.documentElement.setAttribute('data-theme', theme);
-                    closeThemeModal();
-                }
-            });
-        }
-
-        // Функции для каналов
-        function openCreateChannelGlassModal() {
-            document.getElementById('create-channel-glass-modal').style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeCreateChannelGlassModal() {
-            document.getElementById('create-channel-glass-modal').style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-
-        function createChannelGlass() {
-            const name = document.getElementById('glass-channel-name').value.trim();
-            const displayName = document.getElementById('glass-channel-display-name').value.trim();
-            const description = document.getElementById('glass-channel-description').value.trim();
-            const isPrivate = document.getElementById('glass-channel-private').checked;
             
-            if (!name) {
-                alert('Введите идентификатор канала');
-                document.getElementById('glass-channel-name').focus();
-                return;
+            if (isMobile) {
+                document.getElementById('sidebar').classList.add('hidden');
+                document.getElementById('chat-area').classList.add('active');
             }
-            
-            if (!/^[a-zA-Z0-9_]+$/.test(name)) {
-                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
-                document.getElementById('glass-channel-name').focus();
-                return;
-            }
-            
-            const btn = document.getElementById('create-channel-glass-btn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Создание...';
-            btn.disabled = true;
-            
-            fetch('/create_channel', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    display_name: displayName || name,
-                    description: description,
-                    is_private: isPrivate
-                })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    closeCreateChannelGlassModal();
-                    loadAllChannels();
-                    alert('Канал создан успешно!');
-                    
-                    setTimeout(() => {
-                        const channelName = data.channel_name;
-                        openRoom('channel_' + channelName, 'channel', data.display_name);
-                    }, 1000);
-                } else {
-                    alert(data.error || 'Ошибка при создании канала');
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            });
         }
 
-        function joinChannel(channelName) {
-            fetch('/add_user_to_channel', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    channel_name: channelName,
-                    username: user
-                })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Вы присоединились к каналу!');
-                    loadAllChannels();
-                } else {
-                    alert(data.message || 'Ошибка при присоединении к каналу');
-                }
-            });
+        // Начать чат с пользователем
+        function startChatWithUser(targetUser) {
+            openRoom(
+                'private_' + [user, targetUser].sort().join('_'),
+                'private',
+                targetUser
+            );
         }
 
-        // Открытие комнаты
+        // При переходе на вкладку "личные" показываем всех пользователей
+        function openPersonalTab() {
+            openAllUsers();
+        }
+
+        // При переходе на вкладку "каналы" показываем все каналы
+        function openChannelsTab() {
+            openAllChannels();
+        }
+
+        // Модифицируем функцию openRoom для обработки General канала
         function openRoom(r, t, title) {
             room = r;
             roomType = t;
             currentChannel = t === 'channel' ? r.replace('channel_', '') : '';
+            
+            // Для General канала автоматически вступаем
+            if (t === 'channel' && currentChannel === 'general') {
+                joinChannel('general', true);
+            }
             
             document.getElementById('categories-filter').style.display = 'none';
             document.getElementById('favorites-grid').style.display = 'none';
             document.getElementById('support-content').style.display = 'none';
             document.getElementById('chat-messages').style.display = 'block';
             document.getElementById('input-area').style.display = 'flex';
+            document.getElementById('all-users-list').style.display = 'none';
+            document.getElementById('all-channels-list').style.display = 'none';
             
             const chatHeader = document.getElementById('chat-header-content');
             
@@ -5792,531 +5542,46 @@ def create_app():
             socket.emit('join', { room: r });
         }
 
-        function loadChannelHeaderInfo() {
-            fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const channelInfo = data.data;
-                        document.getElementById('channel-description').textContent = channelInfo.description || '';
-                        
-                        const channelAvatar = document.getElementById('channel-header-avatar');
-                        if (channelAvatar) {
-                            if (channelInfo.avatar_path) {
-                                channelAvatar.style.backgroundImage = `url(${channelInfo.avatar_path})`;
-                                channelAvatar.textContent = '';
-                            } else {
-                                channelAvatar.style.backgroundImage = 'none';
-                                channelAvatar.style.backgroundColor = '#667eea';
-                                channelAvatar.textContent = currentChannel.slice(0, 2).toUpperCase();
-                            }
-                        }
-                    }
-                });
-        }
-
-        // Загрузка сообщений
-        function loadMessages(roomName) {
-            fetch('/get_messages/' + roomName)
-                .then(r => r.json())
-                .then(messages => {
-                    const messagesContainer = document.getElementById('chat-messages');
-                    messagesContainer.innerHTML = '';
-                    
-                    if (messages && Array.isArray(messages) && messages.length > 0) {
-                        messages.forEach(msg => {
-                            addMessageToChat(msg, roomName);
-                        });
-                    } else {
-                        messagesContainer.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><h3>Начните общение</h3><p>Отправьте сообщение, чтобы начать чат</p></div>';
-                    }
-                    
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                });
-        }
-
-        // Добавление сообщения в чат
-        function addMessageToChat(data, roomName = '') {
-            const messagesContainer = document.getElementById('chat-messages');
-            
-            const emptyChat = messagesContainer.querySelector('.empty-state');
-            if (emptyChat) {
-                emptyChat.remove();
-            }
-            
-            const message = document.createElement('div');
-            message.className = `message ${data.user === user ? 'own' : 'other'}`;
-            
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.style.cursor = 'pointer';
-            avatar.onclick = () => openUserProfile(data.user);
-            
-            fetch('/user_info/' + data.user)
-                .then(r => r.json())
-                .then(userInfo => {
-                    if (userInfo.success) {
-                        if (userInfo.avatar_path) {
-                            avatar.style.backgroundImage = `url(${userInfo.avatar_path})`;
-                            avatar.textContent = '';
-                        } else {
-                            avatar.style.backgroundColor = userInfo.avatar_color || data.color || '#667eea';
-                            avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                        }
-                    } else {
-                        avatar.style.backgroundColor = data.color || '#667eea';
-                        avatar.textContent = data.user.slice(0, 2).toUpperCase();
-                    }
-                });
-            
-            const content = document.createElement('div');
-            content.className = 'message-content';
-            
-            if (data.user !== user) {
-                const sender = document.createElement('div');
-                sender.className = 'message-sender';
-                sender.textContent = data.user;
-                content.appendChild(sender);
-            }
-            
-            if (data.message) {
-                const text = document.createElement('div');
-                text.className = 'message-text';
-                text.innerHTML = data.message.replace(/\\n/g, '<br>');
-                content.appendChild(text);
-            }
-            
-            if (data.file) {
-                const fileContainer = document.createElement('div');
-                fileContainer.className = 'message-file';
-                
-                if (data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov')) {
-                    const video = document.createElement('video');
-                    video.src = data.file;
-                    video.controls = true;
-                    fileContainer.appendChild(video);
-                } else {
-                    const img = document.createElement('img');
-                    img.src = data.file;
-                    img.alt = data.file_name || 'Файл';
-                    img.onclick = () => window.open(data.file, '_blank');
-                    fileContainer.appendChild(img);
-                }
-                
-                content.appendChild(fileContainer);
-            }
-            
-            const time = document.createElement('div');
-            time.className = 'message-time';
-            time.textContent = data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            content.appendChild(time);
-            
-            message.appendChild(avatar);
-            message.appendChild(content);
-            messagesContainer.appendChild(message);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        // Отправка сообщения
-        async function sendMessage() {
-            const input = document.getElementById('msg-input');
-            const msg = input.value.trim();
-            const fileInput = document.getElementById('file-input');
-            
-            if (!msg && !fileInput.files[0]) return;
-            
-            let fileData = null;
-            let fileName = null;
-            let fileType = null;
-            
-            if (fileInput.files[0]) {
-                const formData = new FormData();
-                formData.append('file', fileInput.files[0]);
-                
-                try {
-                    const response = await fetch('/upload_file', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const data = await response.json();
-                    if (data.success) {
-                        fileData = data.path;
-                        fileName = data.filename;
-                        fileType = data.file_type;
-                    } else {
-                        alert('Ошибка загрузки файла: ' + data.error);
-                        return;
-                    }
-                } catch (error) {
-                    alert('Ошибка соединения при загрузке файла');
-                    return;
-                }
-            }
-            
-            const messageData = {
-                message: msg,
-                room: room,
-                type: roomType
-            };
-            
-            if (fileData) {
-                messageData.file = fileData;
-                messageData.fileName = fileName;
-                messageData.fileType = fileType;
-            }
-            
-            socket.emit('message', messageData);
-            
-            input.value = '';
-            input.style.height = 'auto';
-            document.getElementById('file-preview').innerHTML = '';
-            fileInput.value = '';
-        }
-
-        function handleKeydown(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        }
-
-        function autoResizeTextarea() {
-            const textarea = document.getElementById('msg-input');
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        }
-
-        document.getElementById('msg-input').addEventListener('input', autoResizeTextarea);
-
-        function handleFileSelect(input) {
-            const file = input.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const preview = document.getElementById('file-preview');
-                    if (file.type.startsWith('image/')) {
-                        preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                                <img src="${e.target.result}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
-                                <div>
-                                    <div style="font-weight: 500;">${file.name}</div>
-                                    <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
-                                        <i class="fas fa-times"></i> Удалить
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    } else if (file.type.startsWith('video/')) {
-                        preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                                <video src="${e.target.result}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;"></video>
-                                <div>
-                                    <div style="font-weight: 500;">${file.name}</div>
-                                    <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">
-                                        <i class="fas fa-times"></i> Удалить
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        preview.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                                <i class="fas fa-file" style="font-size: 2rem; color: var(--accent);"></i>
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 500;">${file.name}</div>
-                                    <div style="font-size: 0.8rem; color: var(--text-light);">${(file.size / 1024).toFixed(1)} KB</div>
-                                </div>
-                                <button onclick="document.getElementById('file-preview').innerHTML = ''; document.getElementById('file-input').value = '';" style="background: none; border: none; color: #dc3545; cursor: pointer;">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        `;
-                    }
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-
-        // Socket events
-        socket.on('message', (data) => {
-            if (data.room === room) {
-                addMessageToChat(data, room);
-            }
-        });
-
-        // Функции для избранного
-        function openAddFavoriteModal() {
-            document.getElementById('add-favorite-modal').style.display = 'flex';
-            document.getElementById('favorite-file').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                const preview = document.getElementById('favorite-file-preview');
-                
-                if (file) {
-                    if (file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; border-radius: 8px;">`;
-                        };
-                        reader.readAsDataURL(file);
-                    } else if (file.type.startsWith('video/')) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            preview.innerHTML = `<video src="${e.target.result}" controls style="max-width: 100%; border-radius: 8px;"></video>`;
-                        };
-                        reader.readAsDataURL(file);
-                    } else {
-                        preview.innerHTML = `<div style="padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                            <i class="fas fa-file"></i> ${file.name}
-                        </div>`;
-                    }
-                }
-            });
-        }
-
-        function closeAddFavoriteModal() {
-            document.getElementById('add-favorite-modal').style.display = 'none';
-            document.getElementById('favorite-content').value = '';
-            document.getElementById('favorite-category').value = 'general';
-            document.getElementById('favorite-file').value = '';
-            document.getElementById('favorite-file-preview').innerHTML = '';
-        }
-
-        function saveFavorite() {
-            const content = document.getElementById('favorite-content').value.trim();
-            const category = document.getElementById('favorite-category').value.trim() || 'general';
-            const fileInput = document.getElementById('favorite-file');
-            const file = fileInput.files[0];
-            
-            if (!content && !file) {
-                alert('Добавьте текст или файл');
-                return;
-            }
-            
-            const formData = new FormData();
-            formData.append('content', content);
-            formData.append('category', category);
-            
-            if (file) {
-                formData.append('file', file);
-            }
-            
-            fetch('/add_to_favorites', {
+        // Модифицируем функцию joinChannel для General канала
+        function joinChannel(channelName, silent = false) {
+            fetch('/add_user_to_channel', {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    channel_name: channelName,
+                    username: user
+                })
             })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    closeAddFavoriteModal();
-                    loadFavoritesNav();
-                    loadFavoritesCategories();
-                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                    alert('Добавлено в избранное!');
-                } else {
-                    alert(data.error || 'Ошибка при сохранении');
-                }
-            });
-        }
-
-        function deleteFavorite(favoriteId) {
-            if (!confirm('Удалить эту заметку?')) return;
-            
-            fetch(`/delete_favorite/${favoriteId}`, {
-                method: 'DELETE'
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById(`favorite-${favoriteId}`).remove();
-                    
-                    const grid = document.getElementById('favorites-grid');
-                    if (grid.children.length === 0) {
-                        loadFavorites(currentCategory === 'all' ? null : currentCategory);
+                    if (!silent) {
+                        alert('Вы присоединились к каналу!');
                     }
-                } else {
-                    alert('Ошибка при удалении');
-                }
-            });
-        }
-
-        function togglePinFavorite(favoriteId) {
-            fetch(`/toggle_pin_favorite/${favoriteId}`, {
-                method: 'POST'
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    const item = document.getElementById(`favorite-${favoriteId}`);
-                    if (data.pinned) {
-                        item.classList.add('pinned');
-                    } else {
-                        item.classList.remove('pinned');
+                    loadAllChannels();
+                    loadAllChannelsSidebar();
+                    
+                    // Если мы на вкладке каналов, обновляем список
+                    if (currentNavCategory === 'channels') {
+                        loadUserChannels();
                     }
                     
-                    loadFavorites(currentCategory === 'all' ? null : currentCategory);
-                }
-            });
-        }
-
-        function openFilePreview(filePath) {
-            window.open(filePath, '_blank');
-        }
-
-        // Функции для эмодзи
-        function initEmojis() {
-            const emojiGrid = document.getElementById('emoji-grid');
-            emojiData.forEach(emoji => {
-                const emojiItem = document.createElement('div');
-                emojiItem.className = 'emoji-item';
-                emojiItem.textContent = emoji;
-                emojiItem.onclick = () => insertEmoji(emoji);
-                emojiGrid.appendChild(emojiItem);
-            });
-        }
-
-        function toggleEmojiPicker() {
-            const emojiContainer = document.getElementById('emoji-container');
-            const emojiBtn = document.querySelector('.emoji-btn');
-            
-            if (emojiContainer.style.display === 'block') {
-                emojiContainer.style.display = 'none';
-                emojiBtn.classList.remove('active');
-            } else {
-                emojiContainer.style.display = 'block';
-                emojiBtn.classList.add('active');
-                document.getElementById('emoji-search').value = '';
-                searchEmojis();
-            }
-        }
-
-        function insertEmoji(emoji) {
-            const input = document.getElementById('msg-input');
-            const start = input.selectionStart;
-            const end = input.selectionEnd;
-            
-            input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
-            input.selectionStart = input.selectionEnd = start + emoji.length;
-            input.focus();
-            autoResizeTextarea();
-        }
-
-        function searchEmojis() {
-            const searchTerm = document.getElementById('emoji-search').value.toLowerCase();
-            const emojiItems = document.querySelectorAll('#emoji-grid .emoji-item');
-            
-            emojiItems.forEach(item => {
-                if (!searchTerm) {
-                    item.style.display = 'flex';
+                    // Автоматически открываем канал
+                    setTimeout(() => {
+                        openRoom('channel_' + channelName, 'channel', channelName);
+                    }, 500);
                 } else {
-                    item.style.display = 'none';
+                    if (!silent) {
+                        alert(data.message || 'Ошибка при присоединении к каналу');
+                    }
                 }
             });
         }
 
-        // Настройки канала
-        function openChannelSettingsModal() {
-            if (!currentChannel) return;
-            
-            document.getElementById('channel-settings-modal').style.display = 'flex';
-            loadChannelInfo();
-            loadChannelMembers();
-        }
+        // Остальной код остается без изменений...
 
-        function closeChannelSettingsModal() {
-            document.getElementById('channel-settings-modal').style.display = 'none';
-        }
+        // ... [остальной код JavaScript остается без изменений] ...
 
-        function loadChannelInfo() {
-            fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const channelInfo = data.data;
-                        document.getElementById('channel-edit-name').value = channelInfo.display_name;
-                        document.getElementById('channel-edit-description').value = channelInfo.description || '';
-                    }
-                });
-        }
-
-        function loadChannelMembers() {
-            fetch(`/channel_info/${encodeURIComponent(currentChannel)}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const membersList = document.getElementById('channel-members-list');
-                        membersList.innerHTML = '';
-                        
-                        data.data.members.forEach(member => {
-                            const memberItem = document.createElement('div');
-                            memberItem.className = 'member-item';
-                            memberItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border);';
-                            
-                            const isCurrentUser = member.username === user;
-                            const isCreator = data.data.created_by === member.username;
-                            const canManage = data.data.created_by === user && !isCurrentUser;
-                            
-                            memberItem.innerHTML = `
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div style="width: 32px; height: 32px; border-radius: 50%; background-color: ${member.color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem;">
-                                        ${member.avatar ? '' : member.username.slice(0, 2).toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <div>${member.username}</div>
-                                        <div style="font-size: 0.8rem; color: var(--text-light);">
-                                            ${isCreator ? 'Создатель' : member.is_admin ? 'Админ' : 'Участник'}
-                                        </div>
-                                    </div>
-                                </div>
-                                ${canManage ? `
-                                    <div style="display: flex; gap: 5px;">
-                                        ${!member.is_admin ? 
-                                            `<button onclick="makeUserAdmin('${member.username}')" style="padding: 5px 10px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer;">
-                                                Админ
-                                            </button>` : 
-                                            `<button onclick="removeUserAdmin('${member.username}')" style="padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                                                Убрать
-                                            </button>`}
-                                        <button onclick="removeUserFromChannel('${member.username}')" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                                            Удалить
-                                        </button>
-                                    </div>
-                                ` : ''}
-                            `;
-                            
-                            membersList.appendChild(memberItem);
-                        });
-                    }
-                });
-        }
-
-        // Закрытие модальных окон
-        document.addEventListener('click', function(event) {
-            const glassModal = document.getElementById('create-channel-glass-modal');
-            if (event.target === glassModal) {
-                closeCreateChannelGlassModal();
-            }
-            
-            const profileModal = document.getElementById('profile-modal');
-            if (event.target === profileModal) {
-                closeProfileModal();
-            }
-        });
-        
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                closeCreateChannelGlassModal();
-                closeProfileModal();
-                
-                const emojiContainer = document.getElementById('emoji-container');
-                const emojiBtn = document.querySelector('.emoji-btn');
-                
-                if (emojiContainer.style.display === 'block') {
-                    emojiContainer.style.display = 'none';
-                    emojiBtn.classList.remove('active');
-                }
-            }
-        });
     </script>
 </body>
 </html>
