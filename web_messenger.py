@@ -351,8 +351,11 @@ def create_app():
                 # Добавляем создателя в канал как администратора
                 c.execute('INSERT INTO channel_members (channel_id, username, is_admin) VALUES (?, ?, ?)',
                           (channel_id, created_by, True))
+                
+                # Обновляем счетчик подписчиков
+                c.execute('UPDATE channels SET subscriber_count = 1 WHERE id = ?', (channel_id,))
                 conn.commit()
-                return channel_id
+                return channel_id  # ВАЖНО: возвращаем channel_id, а не None
             except sqlite3.IntegrityError:
                 return None
             except Exception as e:
@@ -545,6 +548,7 @@ def create_app():
             if channel_id:
                 return jsonify({
                     'success': True, 
+                    'channel_id': channel_id,  # Добавляем channel_id в ответ
                     'channel_name': name, 
                     'display_name': display_name,
                     'message': 'Канал успешно создан!'
@@ -2919,14 +2923,14 @@ def create_app():
             color: var(--text);
         }}
 
-        /* Сообщения AURA - стиль из скриншота */
+        /* УЛУЧШЕННОЕ ОТОБРАЖЕНИЕ СООБЩЕНИЙ */
         .messages {{
             flex: 1;
             overflow-y: auto;
             padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 16px;
             -webkit-overflow-scrolling: touch;
         }}
 
@@ -3003,6 +3007,7 @@ def create_app():
             word-wrap: break-word;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
+            position: relative;
         }}
 
         .message.own .message-content {{
@@ -3035,6 +3040,7 @@ def create_app():
             border-radius: 12px;
             overflow: hidden;
             max-width: 300px;
+            position: relative;
         }}
 
         .message-file img {{
@@ -3043,6 +3049,7 @@ def create_app():
             border-radius: 12px;
             cursor: pointer;
             transition: transform 0.2s;
+            display: block;
         }}
 
         .message-file img:hover {{
@@ -3065,6 +3072,23 @@ def create_app():
 
         .message.own .message-time {{
             color: rgba(255, 255, 255, 0.7);
+        }}
+
+        /* Индикатор прокрутки к новым сообщениям */
+        .new-messages-indicator {{
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            z-index: 10;
+            display: none;
+            box-shadow: var(--shadow);
         }}
 
         /* Поле ввода AURA */
@@ -3309,6 +3333,127 @@ def create_app():
             margin: 0 auto;
         }}
 
+        /* Красивые каналы в сайдбаре */
+        .channel-item {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            margin-bottom: 4px;
+            color: var(--text);
+            text-decoration: none;
+        }}
+
+        .channel-item:hover {{
+            background: var(--glass-bg);
+        }}
+
+        .channel-item.active {{
+            background: rgba(124, 58, 237, 0.1);
+            color: var(--primary);
+        }}
+
+        .channel-avatar-small {{
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }}
+
+        .channel-info {{
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .channel-name {{
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 2px;
+            color: inherit;
+        }}
+
+        .channel-desc {{
+            font-size: 0.75rem;
+            color: var(--text-light);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        /* Личные чаты в сайдбаре */
+        .private-chat-item {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            margin-bottom: 4px;
+            color: var(--text);
+            text-decoration: none;
+        }}
+
+        .private-chat-item:hover {{
+            background: var(--glass-bg);
+        }}
+
+        .private-chat-item.active {{
+            background: rgba(124, 58, 237, 0.1);
+            color: var(--primary);
+        }}
+
+        .private-chat-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }}
+
+        .private-chat-info {{
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .private-chat-name {{
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 2px;
+            color: inherit;
+        }}
+
+        .private-chat-status {{
+            font-size: 0.75rem;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }}
+
+        .online-dot {{
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }}
+
         /* Скроллбар */
         ::-webkit-scrollbar {{
             width: 6px;
@@ -3331,6 +3476,11 @@ def create_app():
         @keyframes fadeIn {{
             from {{ opacity: 0; transform: translateY(10px); }}
             to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        @keyframes slideInRight {{
+            from {{ opacity: 0; transform: translateX(-20px); }}
+            to {{ opacity: 1; transform: translateX(0); }}
         }}
 
         /* Мобильная версия */
@@ -3425,10 +3575,15 @@ def create_app():
                 <div class="nav-category">Личные чаты</div>
                 <div id="personal-chats-list">
                     <!-- Личные чаты будут загружены динамически -->
+                    <div class="empty-state" style="padding: 20px 16px; text-align: left;">
+                        <div style="font-size: 0.8rem; color: var(--text-light);">
+                            <i class="fas fa-user-friends"></i> Нет активных чатов
+                        </div>
+                    </div>
                 </div>
 
                 <div class="nav-category">Каналы</div>
-                <a href="#" class="nav-item" onclick="openCreateChannel()">
+                <a href="#" class="nav-item" onclick="openCreateChannel()" style="background: rgba(124, 58, 237, 0.1); color: var(--primary);">
                     <i class="fas fa-plus-circle"></i>
                     <span class="nav-item-text">Создать канал</span>
                 </a>
@@ -3472,6 +3627,9 @@ def create_app():
 
             <!-- Сообщения / Избранное -->
             <div class="messages" id="messages">
+                <div class="new-messages-indicator" id="new-messages-indicator" onclick="scrollToBottom()">
+                    <i class="fas fa-arrow-down"></i> Новые сообщения
+                </div>
                 <div id="messages-content">
                     <!-- Контент будет загружен динамически -->
                     <div class="empty-state">
@@ -3495,7 +3653,7 @@ def create_app():
                     </div>
                     <div class="input-wrapper">
                         <textarea class="msg-input" id="msg-input" placeholder="Написать сообщение..." rows="1"></textarea>
-                        <input type="file" id="file-input" style="display: none;" accept="image/*,video/*,text/*">
+                        <input type="file" id="file-input" style="display: none;" accept="image/*,video/*,text/*" multiple>
                     </div>
                     <button class="send-btn" onclick="sendMessage()">
                         <i class="fas fa-paper-plane"></i>
@@ -3544,10 +3702,11 @@ def create_app():
         <div class="modal-content">
             <h3 style="margin-bottom: 20px;">Создать канал</h3>
             <div style="margin-bottom: 16px;">
-                <input type="text" id="channel-name" placeholder="Название канала" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); margin-bottom: 12px;">
-                <textarea id="channel-description" placeholder="Описание (необязательно)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); min-height: 80px;"></textarea>
+                <input type="text" id="channel-name" placeholder="Название канала (например: music_chat)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); margin-bottom: 12px;">
+                <input type="text" id="channel-display-name" placeholder="Отображаемое название (например: Music Chat)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); margin-bottom: 12px;">
+                <textarea id="channel-description" placeholder="Описание канала (необязательно)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); min-height: 80px;"></textarea>
             </div>
-            <button class="btn btn-primary" onclick="createChannel()" style="width: 100%; margin-bottom: 10px;">Создать</button>
+            <button class="btn btn-primary" onclick="createChannel()" style="width: 100%; margin-bottom: 10px;">Создать канал</button>
             <button class="btn" onclick="closeModal('create-channel-modal')" style="width: 100%;">Отмена</button>
         </div>
     </div>
@@ -3561,6 +3720,7 @@ def create_app():
         let currentChannel = "";
         let isMobile = window.innerWidth <= 768;
         let emojiData = ["😀", "😁", "😂", "🤣", "😃", "😄", "😅", "😆", "😉", "😊", "😋", "😎", "😍", "😘", "😗", "😙", "😚", "🙂", "🤗", "🤔", "👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🙈", "🙉", "🙊", "🐔", "🐧", "🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️", "🗜️", "💽", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥"];
+        let isAtBottom = true;
 
         // Инициализация
         window.onload = function() {{
@@ -3570,6 +3730,17 @@ def create_app():
             loadFavorites();
             initEmojis();
             checkMobile();
+            setupMessageScroll();
+            
+            // Устанавливаем тему из настроек пользователя
+            fetch(`/user_info/${{user}}`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success && data.theme) {{
+                        document.documentElement.setAttribute('data-theme', data.theme);
+                        document.getElementById('theme-select').value = data.theme;
+                    }}
+                }});
             
             // Событие ресайза
             window.addEventListener('resize', checkMobile);
@@ -3592,6 +3763,15 @@ def create_app():
             document.getElementById('search-input').addEventListener('input', function(e) {{
                 performSearch(e.target.value);
             }});
+            
+            // Обработка загрузки файлов
+            document.getElementById('file-input').addEventListener('change', function(e) {{
+                if (this.files.length > 0) {{
+                    // Показываем уведомление о загрузке файлов
+                    const fileNames = Array.from(this.files).map(f => f.name).join(', ');
+                    alert(`Файлы выбраны: ${{fileNames}}`);
+                }}
+            }});
         }};
 
         function checkMobile() {{
@@ -3602,6 +3782,24 @@ def create_app():
             if (isMobile) {{
                 document.getElementById('sidebar').classList.toggle('active');
             }}
+        }}
+
+        function setupMessageScroll() {{
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.addEventListener('scroll', function() {{
+                const {scrollTop, scrollHeight, clientHeight} = this;
+                isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+                
+                if (isAtBottom) {{
+                    document.getElementById('new-messages-indicator').style.display = 'none';
+                }}
+            }});
+        }}
+
+        function scrollToBottom() {{
+            const container = document.getElementById('messages');
+            container.scrollTop = container.scrollHeight;
+            document.getElementById('new-messages-indicator').style.display = 'none';
         }}
 
         // Загрузка аватара пользователя
@@ -3649,7 +3847,10 @@ def create_app():
                     if (userData.username !== user) {{
                         const item = document.createElement('div');
                         item.className = 'search-user-item';
-                        item.onclick = () => openChat(userData.username, 'private', userData.username);
+                        item.onclick = () => {{
+                            openChat(userData.username, 'private', userData.username);
+                            container.style.display = 'none';
+                        }};
                         item.innerHTML = `
                             <div class="search-user-avatar" style="background-color: ${{userData.color}};">
                                 ${{userData.avatar ? '' : userData.username.slice(0, 2).toUpperCase()}}
@@ -3672,7 +3873,10 @@ def create_app():
                 results.channels.forEach(channel => {{
                     const item = document.createElement('div');
                     item.className = 'search-channel-item';
-                    item.onclick = () => openChat(channel.name, 'channel', channel.display_name);
+                    item.onclick = () => {{
+                        openChat(channel.name, 'channel', channel.display_name);
+                        container.style.display = 'none';
+                    }};
                     item.innerHTML = `
                         <div class="search-channel-avatar">
                             ${{channel.avatar_path ? '' : channel.display_name.slice(0, 2).toUpperCase()}}
@@ -3691,7 +3895,7 @@ def create_app():
             }}
         }}
 
-        // Загрузка личных чатов
+        // Загрузка личных чатов - СТИЛИЗОВАННАЯ ВЕРСИЯ
         function loadPersonalChats() {{
             fetch('/personal_chats')
                 .then(r => r.json())
@@ -3701,25 +3905,60 @@ def create_app():
                         container.innerHTML = '';
                         
                         if (data.chats.length === 0) {{
-                            container.innerHTML = '<div style="padding: 12px 16px; color: var(--text-light); font-size: 0.9rem;">Нет личных чатов</div>';
+                            const empty = document.createElement('div');
+                            empty.className = 'empty-state';
+                            empty.style.padding = '20px 16px';
+                            empty.style.textAlign = 'left';
+                            empty.innerHTML = `
+                                <div style="font-size: 0.8rem; color: var(--text-light);">
+                                    <i class="fas fa-user-friends"></i> Нет активных чатов
+                                </div>
+                            `;
+                            container.appendChild(empty);
                         }} else {{
                             data.chats.forEach(chatUser => {{
-                                const item = document.createElement('a');
-                                item.className = 'nav-item';
-                                item.href = '#';
+                                const item = document.createElement('div');
+                                item.className = 'private-chat-item';
                                 item.onclick = () => openChat(chatUser, 'private', chatUser);
                                 item.innerHTML = `
-                                    <i class="fas fa-user"></i>
-                                    <span class="nav-item-text">${{chatUser}}</span>
+                                    <div class="private-chat-avatar">${{chatUser.slice(0, 2).toUpperCase()}}</div>
+                                    <div class="private-chat-info">
+                                        <div class="private-chat-name">${{chatUser}}</div>
+                                        <div class="private-chat-status">
+                                            <span class="online-dot"></span>
+                                            <span>Online</span>
+                                        </div>
+                                    </div>
                                 `;
                                 container.appendChild(item);
+                                
+                                // Загружаем аватар пользователя
+                                fetch(`/user_info/${{chatUser}}`)
+                                    .then(r => r.json())
+                                    .then(userData => {{
+                                        if (userData.success) {{
+                                            const avatar = item.querySelector('.private-chat-avatar');
+                                            if (userData.avatar_path) {{
+                                                avatar.style.backgroundImage = `url(${{userData.avatar_path}})`;
+                                                avatar.textContent = '';
+                                            }} else {{
+                                                avatar.style.backgroundColor = userData.avatar_color;
+                                            }}
+                                            
+                                            // Обновляем статус
+                                            const statusDot = item.querySelector('.online-dot');
+                                            const statusText = item.querySelector('.private-chat-status span:last-child');
+                                            statusDot.style.backgroundColor = userData.online ? 'var(--accent)' : 'var(--text-light)';
+                                            statusText.textContent = userData.online ? 'Online' : 'Offline';
+                                        }}
+                                    }});
                             }});
                         }}
                     }}
                 }});
         }}
 
-        // Загрузка каналов
+        // Загрузка каналов - СТИЛИЗОВАННАЯ ВЕРСИЯ
         function loadChannels() {{
             fetch('/user_channels')
                 .then(r => r.json())
@@ -3729,15 +3968,20 @@ def create_app():
                         container.innerHTML = '';
                         
                         data.channels.forEach(channel => {{
-                            const item = document.createElement('a');
-                            item.className = 'nav-item';
-                            item.href = '#';
+                            const item = document.createElement('div');
+                            item.className = 'channel-item';
                             item.onclick = () => openChat(channel.name, 'channel', channel.display_name);
                             item.innerHTML = `
-                                <i class="fas fa-hashtag"></i>
-                                <span class="nav-item-text">${{channel.display_name}}</span>
+                                <div class="channel-avatar-small">${{channel.display_name.slice(0, 2).toUpperCase()}}</div>
+                                <div class="channel-info">
+                                    <div class="channel-name">${{channel.display_name}}</div>
+                                    <div class="channel-desc">${{channel.description || 'Канал'}} • ${{channel.subscriber_count}} участников</div>
+                                </div>
                             `;
                             container.appendChild(item);
+                            
+                            // Анимация появления
+                            item.style.animation = 'slideInRight 0.3s ease';
                         }});
                     }}
                 }});
@@ -3763,6 +4007,7 @@ def create_app():
                     .then(data => {{
                         if (data.success) {{
                             document.getElementById('chat-subtitle').textContent = data.data.description || 'Канал';
+                            document.getElementById('chat-header-avatar').textContent = data.data.display_name.slice(0, 2).toUpperCase();
                         }}
                     }});
             }} else {{
@@ -3800,6 +4045,36 @@ def create_app():
             if (isMobile) {{
                 document.getElementById('sidebar').classList.remove('active');
             }}
+            
+            // Обновляем активные элементы в сайдбаре
+            updateSidebarActiveItems();
+        }}
+
+        function updateSidebarActiveItems() {{
+            // Убираем активный класс у всех элементов
+            document.querySelectorAll('.nav-item, .channel-item, .private-chat-item').forEach(item => {{
+                item.classList.remove('active');
+            }});
+            
+            // Если это канал, находим и активируем соответствующий элемент
+            if (currentRoomType === 'channel') {{
+                const channelItems = document.querySelectorAll('.channel-item');
+                channelItems.forEach(item => {{
+                    if (item.querySelector('.channel-name').textContent === currentChannel) {{
+                        item.classList.add('active');
+                    }}
+                }});
+            }}
+            
+            // Если это приватный чат, находим и активируем соответствующий элемент
+            if (currentRoomType === 'private') {{
+                const chatItems = document.querySelectorAll('.private-chat-item');
+                chatItems.forEach(item => {{
+                    if (item.querySelector('.private-chat-name').textContent === currentChannel) {{
+                        item.classList.add('active');
+                    }}
+                }});
+            }}
         }}
 
         // Открытие избранного
@@ -3824,6 +4099,12 @@ def create_app():
             if (isMobile) {{
                 document.getElementById('sidebar').classList.remove('active');
             }}
+            
+            // Активируем кнопку избранного в сайдбаре
+            document.querySelectorAll('.nav-item, .channel-item, .private-chat-item').forEach(item => {{
+                item.classList.remove('active');
+            }});
+            document.querySelector('.nav-item[onclick*="openFavorites"]').classList.add('active');
         }}
 
         // Загрузка избранного
@@ -3863,7 +4144,7 @@ def create_app():
                                     if (favorite.file_type === 'image' || favorite.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {{
                                         content += `
                                             <div class="favorite-file">
-                                                <img src="${{favorite.file_path}}" alt="${{favorite.file_name}}">
+                                                <img src="${{favorite.file_path}}" alt="${{favorite.file_name}}" loading="lazy">
                                             </div>
                                         `;
                                     }} else if (favorite.file_type === 'video' || favorite.file_name?.match(/\.(mp4|webm|mov)$/i)) {{
@@ -3875,7 +4156,11 @@ def create_app():
                                     }}
                                 }}
                                 
-                                const date = new Date(favorite.created_at).toLocaleDateString('ru-RU');
+                                const date = new Date(favorite.created_at).toLocaleDateString('ru-RU', {{
+                                    day: 'numeric',
+                                    month: 'long',
+                                    year: 'numeric'
+                                }});
                                 const category = favorite.category !== 'general' ? `<span class="category-badge">${{favorite.category}}</span>` : '';
                                 
                                 item.innerHTML = `
@@ -3933,18 +4218,37 @@ def create_app():
                                 const messageDiv = document.createElement('div');
                                 messageDiv.className = `message ${{msg.user === user ? 'own' : 'other'}}`;
                                 
+                                let avatarContent = msg.user.slice(0, 2).toUpperCase();
+                                let avatarStyle = `background-color: ${{msg.color}};`;
+                                
+                                if (msg.avatar_path) {{
+                                    avatarStyle = `background-image: url(${{msg.avatar_path}}); background-size: cover;`;
+                                    avatarContent = '';
+                                }}
+                                
+                                let fileContent = '';
+                                if (msg.file) {{
+                                    if (msg.file.match(/\.(mp4|webm|mov)$/i)) {{
+                                        fileContent = `
+                                            <div class="message-file">
+                                                <video src="${{msg.file}}" controls></video>
+                                            </div>
+                                        `;
+                                    }} else {{
+                                        fileContent = `
+                                            <div class="message-file">
+                                                <img src="${{msg.file}}" alt="${{msg.file_name || 'Файл'}}" loading="lazy">
+                                            </div>
+                                        `;
+                                    }}
+                                }}
+                                
                                 messageDiv.innerHTML = `
-                                    <div class="message-avatar"></div>
+                                    <div class="message-avatar" style="${{avatarStyle}}">${{avatarContent}}</div>
                                     <div class="message-content">
                                         <div class="message-sender">${{msg.user}}</div>
                                         <div class="message-text">${{msg.message || ''}}</div>
-                                        ${{msg.file ? `
-                                            <div class="message-file">
-                                                ${{msg.file.endsWith('.mp4') || msg.file.endsWith('.webm') || msg.file.endsWith('.mov') ? 
-                                                    `<video src="${{msg.file}}" controls></video>` : 
-                                                    `<img src="${{msg.file}}" alt="${{msg.file_name || 'Файл'}}">`}}
-                                            </div>
-                                        ` : ''}}
+                                        ${{fileContent}}
                                         <div class="message-time">${{msg.timestamp || ''}}</div>
                                     </div>
                                 `;
@@ -3955,46 +4259,52 @@ def create_app():
                     }}
                     
                     // Прокручиваем вниз
-                    container.scrollTop = container.scrollHeight;
+                    setTimeout(() => {{
+                        container.scrollTop = container.scrollHeight;
+                        isAtBottom = true;
+                    }}, 100);
                 }});
         }}
 
         // Отправка сообщения
-        function sendMessage() {{
+        async function sendMessage() {{
             const input = document.getElementById('msg-input');
             const msg = input.value.trim();
             const fileInput = document.getElementById('file-input');
             
             if (!msg && !fileInput.files[0]) return;
             
-            let fileData = null;
-            let fileName = null;
-            let fileType = null;
-            
+            // Если есть файлы, загружаем их
             if (fileInput.files[0]) {{
-                const formData = new FormData();
-                formData.append('file', fileInput.files[0]);
-                
-                fetch('/upload_file', {{
-                    method: 'POST',
-                    body: formData
-                }})
-                .then(r => r.json())
-                .then(data => {{
-                    if (data.success) {{
-                        fileData = data.path;
-                        fileName = data.filename;
-                        fileType = data.file_type;
-                        sendSocketMessage(msg, fileData, fileName, fileType);
-                    }}
-                }});
+                for (let file of fileInput.files) {{
+                    await uploadAndSendFile(file, msg);
+                }}
+                fileInput.value = '';
             }} else {{
                 sendSocketMessage(msg);
             }}
             
             input.value = '';
             input.style.height = 'auto';
-            fileInput.value = '';
+        }}
+
+        async function uploadAndSendFile(file, message = '') {{
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {{
+                const response = await fetch('/upload_file', {{
+                    method: 'POST',
+                    body: formData
+                }});
+                const data = await response.json();
+                
+                if (data.success) {{
+                    sendSocketMessage(message, data.path, data.filename, data.file_type);
+                }}
+            }} catch (error) {{
+                console.error('Error uploading file:', error);
+            }}
         }}
 
         function sendSocketMessage(msg, file = null, fileName = null, fileType = null) {{
@@ -4017,6 +4327,9 @@ def create_app():
         socket.on('message', (data) => {{
             if (data.room === currentRoom) {{
                 addMessage(data);
+                if (!isAtBottom) {{
+                    document.getElementById('new-messages-indicator').style.display = 'block';
+                }}
             }}
         }});
 
@@ -4043,24 +4356,48 @@ def create_app():
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${{data.user === user ? 'own' : 'other'}}`;
             
+            let avatarContent = data.user.slice(0, 2).toUpperCase();
+            let avatarStyle = `background-color: ${{data.color || '#7c3aed'}};`;
+            
+            if (data.avatar_path) {{
+                avatarStyle = `background-image: url(${{data.avatar_path}}); background-size: cover;`;
+                avatarContent = '';
+            }}
+            
+            let fileContent = '';
+            if (data.file) {{
+                if (data.file.match(/\.(mp4|webm|mov)$/i)) {{
+                    fileContent = `
+                        <div class="message-file">
+                            <video src="${{data.file}}" controls></video>
+                        </div>
+                    `;
+                }} else {{
+                    fileContent = `
+                        <div class="message-file">
+                            <img src="${{data.file}}" alt="${{data.fileName || 'Файл'}}" loading="lazy">
+                        </div>
+                    `;
+                }}
+            }}
+            
+            const time = new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }});
+            
             messageDiv.innerHTML = `
-                <div class="message-avatar"></div>
+                <div class="message-avatar" style="${{avatarStyle}}">${{avatarContent}}</div>
                 <div class="message-content">
                     <div class="message-sender">${{data.user}}</div>
                     <div class="message-text">${{data.message || ''}}</div>
-                    ${{data.file ? `
-                        <div class="message-file">
-                            ${{data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov') ? 
-                                `<video src="${{data.file}}" controls></video>` : 
-                                `<img src="${{data.file}}" alt="${{data.fileName || 'Файл'}}">`}}
-                        </div>
-                    ` : ''}}
-                    <div class="message-time">${{data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }})}}</div>
+                    ${{fileContent}}
+                    <div class="message-time">${{time}}</div>
                 </div>
             `;
             
             container.appendChild(messageDiv);
-            container.scrollTop = container.scrollHeight;
+            
+            if (isAtBottom) {{
+                container.scrollTop = container.scrollHeight;
+            }}
         }}
 
         // Эмодзи
@@ -4087,6 +4424,7 @@ def create_app():
             input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
             input.focus();
             input.selectionStart = input.selectionEnd = start + emoji.length;
+            toggleEmojiPicker();
         }}
 
         // Модальные окна
@@ -4116,38 +4454,73 @@ def create_app():
 
         function openCreateChannel() {{
             openModal('create-channel-modal');
+            // Очищаем поля
+            document.getElementById('channel-name').value = '';
+            document.getElementById('channel-display-name').value = '';
+            document.getElementById('channel-description').value = '';
         }}
 
-        function createChannel() {{
+        // ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ КАНАЛА
+        async function createChannel() {{
             const name = document.getElementById('channel-name').value.trim();
+            const displayName = document.getElementById('channel-display-name').value.trim();
             const description = document.getElementById('channel-description').value.trim();
             
             if (!name) {{
-                alert('Введите название канала');
+                alert('Введите название канала (латинские буквы, цифры, подчеркивания)');
                 return;
             }}
             
-            fetch('/create_channel', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
-                    name: name.toLowerCase().replace(/\\s+/g, '_'),
-                    display_name: name,
-                    description: description
-                }})
-            }})
-            .then(r => r.json())
-            .then(data => {{
+            if (!displayName) {{
+                alert('Введите отображаемое название канала');
+                return;
+            }}
+            
+            // Проверка формата имени канала
+            if (!/^[a-zA-Z0-9_]+$/.test(name)) {{
+                alert('Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания');
+                return;
+            }}
+            
+            try {{
+                const response = await fetch('/create_channel', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        name: name.toLowerCase(),
+                        display_name: displayName,
+                        description: description,
+                        is_private: false
+                    }})
+                }});
+                
+                const data = await response.json();
+                
                 if (data.success) {{
                     closeModal('create-channel-modal');
+                    
+                    // Показываем уведомление об успехе
+                    alert('Канал успешно создан!');
+                    
+                    // Обновляем список каналов
                     loadChannels();
-                    openChat(data.channel_name, 'channel', data.display_name);
+                    
+                    // Открываем созданный канал
+                    setTimeout(() => {{
+                        openChat(data.channel_name, 'channel', data.display_name);
+                    }}, 300);
+                    
+                    // Очищаем поля
                     document.getElementById('channel-name').value = '';
+                    document.getElementById('channel-display-name').value = '';
                     document.getElementById('channel-description').value = '';
                 }} else {{
                     alert(data.error || 'Ошибка при создании канала');
                 }}
-            }});
+            }} catch (error) {{
+                console.error('Error creating channel:', error);
+                alert('Ошибка соединения с сервером');
+            }}
         }}
 
         function saveSettings() {{
@@ -4162,6 +4535,7 @@ def create_app():
                 if (data.success) {{
                     document.documentElement.setAttribute('data-theme', theme);
                     closeModal('settings-modal');
+                    alert('Настройки сохранены!');
                 }}
             }});
         }}
@@ -4188,18 +4562,48 @@ def create_app():
             const container = document.getElementById('messages-content');
             container.innerHTML = `
                 <div style="padding: 20px;">
-                    <h3 style="margin-bottom: 16px;">Центр поддержки AURA</h3>
-                    <div style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px;">
-                        <h4 style="margin-bottom: 8px;">Частые вопросы</h4>
-                        <p style="color: var(--text-light); margin-bottom: 12px;">Здесь вы найдете ответы на самые популярные вопросы о работе AURA Messenger.</p>
-                        <button onclick="alert('FAQ будет реализован в будущем')" style="padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: var(--radius-xs); cursor: pointer;">
-                            Открыть FAQ
-                        </button>
+                    <div style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; animation: fadeIn 0.5s ease;">
+                        <h3 style="margin-bottom: 12px; color: var(--text);">Центр поддержки AURA</h3>
+                        <p style="color: var(--text-light); margin-bottom: 16px; line-height: 1.6;">Здесь вы найдете ответы на самые популярные вопросы о работе AURA Messenger. Если у вас возникли проблемы или есть предложения, обратитесь в поддержку.</p>
+                        
+                        <div style="display: grid; gap: 12px; margin-top: 20px;">
+                            <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-xs);">
+                                <div style="color: var(--primary); font-size: 1.2rem;">
+                                    <i class="fas fa-question-circle"></i>
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 4px; color: var(--text);">Частые вопросы</div>
+                                    <div style="font-size: 0.9rem; color: var(--text-light);">Ответы на популярные вопросы</div>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-xs);">
+                                <div style="color: var(--accent); font-size: 1.2rem;">
+                                    <i class="fas fa-book"></i>
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 4px; color: var(--text);">Документация</div>
+                                    <div style="font-size: 0.9rem; color: var(--text-light);">Руководства и инструкции</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 20px;">
-                        <h4 style="margin-bottom: 8px;">Связаться с нами</h4>
-                        <p style="color: var(--text-light); margin-bottom: 12px;">По всем вопросам и предложениям:</p>
-                        <a href="https://vk.com/rsaltyyt" target="_blank" style="color: var(--primary); text-decoration: none;">https://vk.com/rsaltyyt</a>
+                    
+                    <div style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 20px; animation: fadeIn 0.5s ease 0.2s both;">
+                        <h4 style="margin-bottom: 12px; color: var(--text);">Связаться с нами</h4>
+                        <p style="color: var(--text-light); margin-bottom: 16px; line-height: 1.6;">По всем вопросам и предложениям обращайтесь:</p>
+                        
+                        <a href="https://vk.com/rsaltyyt" target="_blank" style="display: inline-flex; align-items: center; gap: 10px; padding: 12px 20px; background: rgba(0, 119, 255, 0.1); color: #0077ff; text-decoration: none; border-radius: var(--radius-xs); font-weight: 500; transition: all 0.3s ease;">
+                            <i class="fab fa-vk"></i>
+                            <span>https://vk.com/rsaltyyt</span>
+                            <i class="fas fa-external-link-alt" style="font-size: 0.8rem;"></i>
+                        </a>
+                        
+                        <div style="margin-top: 16px; padding: 12px; background: rgba(124, 58, 237, 0.05); border-radius: var(--radius-xs); border-left: 3px solid var(--primary);">
+                            <div style="font-size: 0.85rem; color: var(--text-light);">
+                                <i class="fas fa-clock"></i> Мы отвечаем в течение 24 часов
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -4207,6 +4611,12 @@ def create_app():
             if (isMobile) {{
                 document.getElementById('sidebar').classList.remove('active');
             }}
+            
+            // Активируем кнопку поддержки в сайдбаре
+            document.querySelectorAll('.nav-item, .channel-item, .private-chat-item').forEach(item => {{
+                item.classList.remove('active');
+            }});
+            document.querySelector('.nav-item[onclick*="openSupport"]').classList.add('active');
         }}
 
         function logout() {{
@@ -4247,6 +4657,28 @@ def create_app():
                 modals.forEach(modal => modal.style.display = 'none');
             }}
         }});
+
+        // Функция для добавления заметки
+        function addFavorite() {{
+            const content = prompt('Введите текст заметки:');
+            if (content) {{
+                fetch('/add_to_favorites', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        content: content,
+                        category: 'notes'
+                    }})
+                }})
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        alert('Заметка добавлена!');
+                        loadFavorites();
+                    }}
+                }});
+            }}
+        }}
     </script>
 </body>
 </html>
