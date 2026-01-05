@@ -491,14 +491,23 @@ def create_app():
             conn.commit()
         return jsonify({'success': True})
 
+    # === ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ КАНАЛА ===
     @app.route('/create_channel', methods=['POST'])
     def create_channel_handler():
         if 'username' not in session:
             return jsonify({'success': False, 'error': 'Не авторизован'})
+        
         try:
-            data = request.get_json()
-            if not data:
-                return jsonify({'success': False, 'error': 'Неверный формат данных'})
+            # Проверяем Content-Type
+            if request.content_type == 'application/json':
+                data = request.get_json()
+                if not data:
+                    return jsonify({'success': False, 'error': 'Пустой JSON'})
+            else:
+                # Пробуем получить данные из формы
+                data = request.form.to_dict()
+                if not data:
+                    return jsonify({'success': False, 'error': 'Нет данных'})
             
             name = data.get('name', '').strip()
             display_name = data.get('display_name', '').strip()
@@ -507,25 +516,40 @@ def create_app():
             
             if not name:
                 return jsonify({'success': False, 'error': 'Название канала не может быть пустым'})
-            if len(name) < 2:
-                return jsonify({'success': False, 'error': 'Название канала должно быть не менее 2 символов'})
-            if len(name) > 50:
-                return jsonify({'success': False, 'error': 'Название канала должно быть не более 50 символов'})
-            if not re.match(r'^[a-zA-Z0-9_]+$', name):
-                return jsonify({'success': False, 'error': 'Идентификатор канала может содержать только латинские буквы, цифры и символ подчеркивания'})
+            
+            # Автоматически создаем имя канала из названия
+            channel_name = name.lower().replace(' ', '_').replace('-', '_')
+            # Убираем все недопустимые символы
+            channel_name = re.sub(r'[^a-z0-9_]', '', channel_name)
+            
+            if len(channel_name) < 2:
+                return jsonify({'success': False, 'error': 'Название канала слишком короткое'})
             
             if not display_name:
-                display_name = name.capitalize()
+                display_name = name
             
-            channel_id = create_channel(name, display_name, description, session['username'], is_private)
+            # Создаем канал
+            channel_id = create_channel(channel_name, display_name, description, session['username'], is_private)
+            
             if channel_id:
+                # Добавляем создателя в канал как участника
+                with sqlite3.connect('messenger.db') as conn:
+                    c = conn.cursor()
+                    c.execute('''
+                        INSERT OR IGNORE INTO channel_members (channel_id, username, is_admin)
+                        VALUES (?, ?, ?)
+                    ''', (channel_id, session['username'], True))
+                    conn.commit()
+                
                 return jsonify({
                     'success': True,
-                    'channel_name': name,
+                    'channel_name': channel_name,
                     'display_name': display_name,
                     'message': 'Канал успешно создан!'
                 })
+            
             return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
+            
         except Exception as e:
             print(f"Error creating channel: {e}")
             return jsonify({'success': False, 'error': f'Ошибка сервера: {str(e)}'})
@@ -2163,12 +2187,14 @@ def create_app():
                 return;
             }}
             
+            // Отправляем запрос на создание канала
             fetch('/create_channel', {{
                 method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
+                headers: {{ 
+                    'Content-Type': 'application/json'
+                }},
                 body: JSON.stringify({{
-                    name: name.toLowerCase().replace(/\\s+/g, '_'),
-                    display_name: name,
+                    name: name,
                     description: description
                 }})
             }})
@@ -2183,6 +2209,10 @@ def create_app():
                 }} else {{
                     alert(data.error || 'Ошибка при создании канала');
                 }}
+            }})
+            .catch(error => {{
+                console.error('Error creating channel:', error);
+                alert('Ошибка соединения с сервером');
             }});
         }}
         
