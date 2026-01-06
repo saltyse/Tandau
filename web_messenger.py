@@ -496,23 +496,18 @@ def create_app():
             return jsonify({'success': False, 'error': 'Не авторизован'})
         
         try:
-            if request.content_type == 'application/json':
-                data = request.get_json()
-                if not data:
-                    return jsonify({'success': False, 'error': 'Пустой JSON'})
-            else:
-                data = request.form.to_dict()
-                if not data:
-                    return jsonify({'success': False, 'error': 'Нет данных'})
+            data = request.get_json()
+            if not data:
+                return jsonify({'success': False, 'error': 'Пустой JSON'})
             
             name = data.get('name', '').strip()
             display_name = data.get('display_name', '').strip()
             description = data.get('description', '').strip()
-            is_private = data.get('is_private', False)
             
             if not name:
                 return jsonify({'success': False, 'error': 'Название канала не может быть пустым'})
             
+            # Генерируем системное имя канала
             channel_name = name.lower().replace(' ', '_').replace('-', '_')
             channel_name = re.sub(r'[^a-z0-9_]', '', channel_name)
             
@@ -522,17 +517,9 @@ def create_app():
             if not display_name:
                 display_name = name
             
-            channel_id = create_channel(channel_name, display_name, description, session['username'], is_private)
+            channel_id = create_channel(channel_name, display_name, description, session['username'])
             
             if channel_id:
-                with sqlite3.connect('messenger.db') as conn:
-                    c = conn.cursor()
-                    c.execute('''
-                        INSERT OR IGNORE INTO channel_members (channel_id, username, is_admin)
-                        VALUES (?, ?, ?)
-                    ''', (channel_id, session['username'], True))
-                    conn.commit()
-                
                 return jsonify({
                     'success': True,
                     'channel_name': channel_name,
@@ -1449,6 +1436,15 @@ def create_app():
         ::-webkit-scrollbar-thumb:hover {{ background: var(--border-light); }}
         /* Анимации */
         @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+        /* Анимации для уведомлений */
+        @keyframes slideIn {{
+            from {{ transform: translateX(100%); opacity: 0; }}
+            to {{ transform: translateX(0); opacity: 1; }}
+        }}
+        @keyframes slideOut {{
+            from {{ transform: translateX(0); opacity: 1; }}
+            to {{ transform: translateX(100%); opacity: 0; }}
+        }}
         /* Мобильная версия */
         @media (max-width: 768px) {{
             .sidebar {{
@@ -1466,6 +1462,15 @@ def create_app():
             .favorites-grid {{ grid-template-columns: 1fr; }}
         }}
         @media (min-width: 769px) {{ .back-btn {{ display: none; }} }}
+        /* Индикатор загрузки */
+        .loader-small {{
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
+            border-top-color: white; animation: spin 1s ease-in-out infinite;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
     </style>
 </head>
 <body>
@@ -1619,7 +1624,7 @@ def create_app():
                 <textarea id="channel-description" placeholder="Описание (необязательно)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); min-height: 80px;"></textarea>
                 <div id="channel-error" style="color: #ef4444; font-size: 0.9rem; margin-top: 8px; display: none;"></div>
             </div>
-            <button class="btn btn-primary" onclick="createChannel()" style="width: 100%; margin-bottom: 10px;">Создать</button>
+            <button class="btn btn-primary" onclick="createChannel()" style="width: 100%; margin-bottom: 10px;" id="create-channel-btn">Создать</button>
             <button class="btn" onclick="closeModal('create-channel-modal')" style="width: 100%;">Отмена</button>
         </div>
     </div>
@@ -2170,51 +2175,80 @@ def create_app():
             openModal('create-channel-modal');
         }}
         
-        // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Создание канала
+        // ФУНКЦИЯ СОЗДАНИЯ КАНАЛА - ИСПРАВЛЕННАЯ
         function createChannel() {{
-            const name = document.getElementById('channel-name').value.trim();
-            const description = document.getElementById('channel-description').value.trim();
+            const nameInput = document.getElementById('channel-name');
+            const descriptionInput = document.getElementById('channel-description');
             const errorDiv = document.getElementById('channel-error');
+            const createButton = document.getElementById('create-channel-btn');
+            
+            const name = nameInput.value.trim();
+            const description = descriptionInput.value.trim();
             
             // Скрываем предыдущие ошибки
             errorDiv.style.display = 'none';
             errorDiv.textContent = '';
             
+            // Валидация
             if (!name) {{
                 errorDiv.textContent = 'Введите название канала';
                 errorDiv.style.display = 'block';
+                nameInput.focus();
                 return;
             }}
+            
+            if (name.length < 2) {{
+                errorDiv.textContent = 'Название должно быть не менее 2 символов';
+                errorDiv.style.display = 'block';
+                nameInput.focus();
+                return;
+            }}
+            
+            // Показываем индикатор загрузки
+            const originalText = createButton.innerHTML;
+            createButton.innerHTML = '<div class="loader-small"></div> Создание...';
+            createButton.disabled = true;
             
             // Отправляем запрос на создание канала
             fetch('/create_channel', {{
                 method: 'POST',
-                headers: {{ 
-                    'Content-Type': 'application/json'
+                headers: {{
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 }},
                 body: JSON.stringify({{
                     name: name,
+                    display_name: name, // Используем то же название для отображения
                     description: description
                 }})
             }})
-            .then(r => r.json())
-            .then(data => {{
+            .then(async response => {{
+                const data = await response.json();
+                
+                // Восстанавливаем кнопку
+                createButton.innerHTML = originalText;
+                createButton.disabled = false;
+                
                 if (data.success) {{
+                    // Закрываем модальное окно
                     closeModal('create-channel-modal');
+                    
                     // Очищаем поля формы
-                    document.getElementById('channel-name').value = '';
-                    document.getElementById('channel-description').value = '';
+                    nameInput.value = '';
+                    descriptionInput.value = '';
                     
                     // Обновляем список каналов
                     loadChannels();
                     
+                    // Показываем уведомление об успехе
+                    showNotification('Канал успешно создан!', 'success');
+                    
                     // Автоматически открываем созданный канал
                     if (data.channel_name) {{
-                        openChat(data.channel_name, 'channel', data.display_name || name);
+                        setTimeout(() => {{
+                            openChat(data.channel_name, 'channel', data.display_name || name);
+                        }}, 500);
                     }}
-                    
-                    // Показываем уведомление
-                    alert(data.message || 'Канал успешно создан!');
                 }} else {{
                     // Показываем ошибку
                     errorDiv.textContent = data.error || 'Ошибка при создании канала';
@@ -2223,9 +2257,55 @@ def create_app():
             }})
             .catch(error => {{
                 console.error('Error creating channel:', error);
+                
+                // Восстанавливаем кнопку
+                createButton.innerHTML = originalText;
+                createButton.disabled = false;
+                
                 errorDiv.textContent = 'Ошибка соединения с сервером';
                 errorDiv.style.display = 'block';
             }});
+        }}
+        
+        // Функция для показа уведомлений
+        function showNotification(message, type = 'success') {{
+            // Создаем элемент уведомления
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                background: ${{type === 'success' ? '#10b981' : '#ef4444'}};
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                z-index: 9999;
+                animation: slideIn 0.3s ease;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-width: 200px;
+            `;
+            
+            notification.innerHTML = `
+                <i class="fas fa-${{type === 'success' ? 'check-circle' : 'exclamation-circle'}}"></i>
+                <span>${{message}}</span>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Автоматически скрываем через 3 секунды
+            setTimeout(() => {{
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {{
+                    if (notification.parentNode) {{
+                        document.body.removeChild(notification);
+                    }}
+                }}, 300);
+            }}, 3000);
         }}
         
         function saveSettings() {{
@@ -2240,6 +2320,7 @@ def create_app():
                 if (data.success) {{
                     document.documentElement.setAttribute('data-theme', theme);
                     closeModal('settings-modal');
+                    showNotification('Настройки сохранены', 'success');
                 }}
             }});
         }}
