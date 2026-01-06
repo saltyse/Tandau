@@ -398,7 +398,6 @@ def create_app():
                 'subscriber_count': row[7] or 0
             } for row in c.fetchall()]
 
-    # === ИСПРАВЛЕННАЯ ФУНКЦИЯ: Поиск каналов и пользователей ===
     def search_channels_and_users(search_query, username):
         results = {'users': [], 'channels': []}
         with sqlite3.connect('messenger.db') as conn:
@@ -420,7 +419,7 @@ def create_app():
                     'profile_description': row[5] or ''
                 })
             
-            # Поиск каналов (включая те, где пользователь является участником)
+            # Поиск каналов
             c.execute('''
                 SELECT DISTINCT c.name, c.display_name, c.description, c.is_private, c.allow_messages, c.created_by, c.avatar_path, c.subscriber_count
                 FROM channels c
@@ -491,20 +490,17 @@ def create_app():
             conn.commit()
         return jsonify({'success': True})
 
-    # === ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ КАНАЛА ===
     @app.route('/create_channel', methods=['POST'])
     def create_channel_handler():
         if 'username' not in session:
             return jsonify({'success': False, 'error': 'Не авторизован'})
         
         try:
-            # Проверяем Content-Type
             if request.content_type == 'application/json':
                 data = request.get_json()
                 if not data:
                     return jsonify({'success': False, 'error': 'Пустой JSON'})
             else:
-                # Пробуем получить данные из формы
                 data = request.form.to_dict()
                 if not data:
                     return jsonify({'success': False, 'error': 'Нет данных'})
@@ -517,9 +513,7 @@ def create_app():
             if not name:
                 return jsonify({'success': False, 'error': 'Название канала не может быть пустым'})
             
-            # Автоматически создаем имя канала из названия
             channel_name = name.lower().replace(' ', '_').replace('-', '_')
-            # Убираем все недопустимые символы
             channel_name = re.sub(r'[^a-z0-9_]', '', channel_name)
             
             if len(channel_name) < 2:
@@ -528,11 +522,9 @@ def create_app():
             if not display_name:
                 display_name = name
             
-            # Создаем канал
             channel_id = create_channel(channel_name, display_name, description, session['username'], is_private)
             
             if channel_id:
-                # Добавляем создателя в канал как участника
                 with sqlite3.connect('messenger.db') as conn:
                     c = conn.cursor()
                     c.execute('''
@@ -689,7 +681,6 @@ def create_app():
             return jsonify({'success': True, 'pinned': new_state})
         return jsonify({'success': False, 'error': 'Не удалось закрепить/открепить'})
 
-    # === НОВЫЙ API ЭНДПОИНТ: Поиск с исправлениями ===
     @app.route('/search_users_channels')
     def search_handler():
         if 'username' not in session:
@@ -1624,8 +1615,9 @@ def create_app():
         <div class="modal-content">
             <h3 style="margin-bottom: 20px;">Создать канал</h3>
             <div style="margin-bottom: 16px;">
-                <input type="text" id="channel-name" placeholder="Название канала" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); margin-bottom: 12px;">
+                <input type="text" id="channel-name" placeholder="Название канала (обязательно)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); margin-bottom: 12px;">
                 <textarea id="channel-description" placeholder="Описание (необязательно)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); min-height: 80px;"></textarea>
+                <div id="channel-error" style="color: #ef4444; font-size: 0.9rem; margin-top: 8px; display: none;"></div>
             </div>
             <button class="btn btn-primary" onclick="createChannel()" style="width: 100%; margin-bottom: 10px;">Создать</button>
             <button class="btn" onclick="closeModal('create-channel-modal')" style="width: 100%;">Отмена</button>
@@ -2178,12 +2170,19 @@ def create_app():
             openModal('create-channel-modal');
         }}
         
+        // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Создание канала
         function createChannel() {{
             const name = document.getElementById('channel-name').value.trim();
             const description = document.getElementById('channel-description').value.trim();
+            const errorDiv = document.getElementById('channel-error');
+            
+            // Скрываем предыдущие ошибки
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
             
             if (!name) {{
-                alert('Введите название канала');
+                errorDiv.textContent = 'Введите название канала';
+                errorDiv.style.display = 'block';
                 return;
             }}
             
@@ -2202,17 +2201,30 @@ def create_app():
             .then(data => {{
                 if (data.success) {{
                     closeModal('create-channel-modal');
-                    loadChannels();
-                    openChat(data.channel_name, 'channel', data.display_name);
+                    // Очищаем поля формы
                     document.getElementById('channel-name').value = '';
                     document.getElementById('channel-description').value = '';
+                    
+                    // Обновляем список каналов
+                    loadChannels();
+                    
+                    // Автоматически открываем созданный канал
+                    if (data.channel_name) {{
+                        openChat(data.channel_name, 'channel', data.display_name || name);
+                    }}
+                    
+                    // Показываем уведомление
+                    alert(data.message || 'Канал успешно создан!');
                 }} else {{
-                    alert(data.error || 'Ошибка при создании канала');
+                    // Показываем ошибку
+                    errorDiv.textContent = data.error || 'Ошибка при создании канала';
+                    errorDiv.style.display = 'block';
                 }}
             }})
             .catch(error => {{
                 console.error('Error creating channel:', error);
-                alert('Ошибка соединения с сервером');
+                errorDiv.textContent = 'Ошибка соединения с сервером';
+                errorDiv.style.display = 'block';
             }});
         }}
         
