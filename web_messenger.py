@@ -1,3 +1,4 @@
+# web_messenger.py - AURA Messenger
 from flask import Flask, request, jsonify, session, redirect, send_from_directory, render_template_string
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -321,7 +322,7 @@ def create_app():
             ''', (username, username, username))
             return [row[0] for row in c.fetchall()]
 
-    def create_channel(name, display_name, description, created_by, is_private=False):
+    def create_channel(name, display_name, description, created_by, is_private=False, avatar_path=None):
         with sqlite3.connect('messenger.db') as conn:
             c = conn.cursor()
             try:
@@ -331,8 +332,8 @@ def create_app():
                     return None
                 
                 # Создаем канал
-                c.execute('INSERT INTO channels (name, display_name, description, created_by, is_private) VALUES (?, ?, ?, ?, ?)',
-                         (name, display_name or name, description or '', created_by, is_private))
+                c.execute('INSERT INTO channels (name, display_name, description, created_by, is_private, avatar_path) VALUES (?, ?, ?, ?, ?, ?)',
+                         (name, display_name or name, description or '', created_by, is_private, avatar_path))
                 channel_id = c.lastrowid
                 
                 # Добавляем создателя в канал как администратора
@@ -438,6 +439,12 @@ def create_app():
                 })
         return results
 
+    def check_channel_availability(channel_id):
+        with sqlite3.connect('messenger.db') as conn:
+            c = conn.cursor()
+            c.execute('SELECT id FROM channels WHERE name = ?', (channel_id,))
+            return c.fetchone() is None
+
     # === API Routes ===
     @app.route('/upload_avatar', methods=['POST'])
     def upload_avatar_handler():
@@ -504,46 +511,60 @@ def create_app():
                 if not data:
                     return jsonify({'success': False, 'error': 'Нет данных'})
             
-            name = data.get('name', '').strip()
+            channel_id = data.get('channel_id', '').strip().lower()
             display_name = data.get('display_name', '').strip()
             description = data.get('description', '').strip()
             is_private = data.get('is_private', False)
             
-            if not name:
-                return jsonify({'success': False, 'error': 'Название канала не может быть пустым'})
+            if not channel_id:
+                return jsonify({'success': False, 'error': 'ID канала не может быть пустым'})
             
-            channel_name = name.lower().replace(' ', '_').replace('-', '_')
-            channel_name = re.sub(r'[^a-z0-9_]', '', channel_name)
-            
-            if len(channel_name) < 2:
-                return jsonify({'success': False, 'error': 'Название канала слишком короткое'})
+            # Проверяем доступность ID
+            if not check_channel_availability(channel_id):
+                return jsonify({'success': False, 'error': 'Канал с таким ID уже существует'})
             
             if not display_name:
-                display_name = name
+                display_name = channel_id
             
-            channel_id = create_channel(channel_name, display_name, description, session['username'], is_private)
+            # Обработка аватарки
+            avatar_path = None
+            if 'avatar' in request.files:
+                file = request.files['avatar']
+                if file and file.filename:
+                    path, filename = save_uploaded_file(file, app.config['CHANNEL_AVATAR_FOLDER'])
+                    if path:
+                        avatar_path = path
             
-            if channel_id:
+            channel_id_db = create_channel(channel_id, display_name, description, session['username'], is_private, avatar_path)
+            
+            if channel_id_db:
                 with sqlite3.connect('messenger.db') as conn:
                     c = conn.cursor()
                     c.execute('''
                         INSERT OR IGNORE INTO channel_members (channel_id, username, is_admin)
                         VALUES (?, ?, ?)
-                    ''', (channel_id, session['username'], True))
+                    ''', (channel_id_db, session['username'], True))
                     conn.commit()
                 
                 return jsonify({
                     'success': True,
-                    'channel_name': channel_name,
+                    'channel_id': channel_id,
                     'display_name': display_name,
                     'message': 'Канал успешно создан!'
                 })
             
-            return jsonify({'success': False, 'error': 'Канал с таким названием уже существует'})
+            return jsonify({'success': False, 'error': 'Ошибка при создании канала'})
             
         except Exception as e:
             print(f"Error creating channel: {e}")
             return jsonify({'success': False, 'error': f'Ошибка сервера: {str(e)}'})
+
+    @app.route('/check_channel_id/<channel_id>')
+    def check_channel_id_handler(channel_id):
+        if 'username' not in session:
+            return jsonify({'success': False, 'error': 'Не авторизован'})
+        available = check_channel_availability(channel_id.lower())
+        return jsonify({'success': True, 'available': available})
 
     @app.route('/channel_info/<channel_name>')
     def channel_info_handler(channel_name):
@@ -1397,13 +1418,124 @@ def create_app():
         .modal-overlay {{
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px); z-index: 1000;
+            -webkit-backdrop-filter: blur(8px); z-index: 2000;
             align-items: center; justify-content: center; padding: 20px;
+            opacity: 0; transition: opacity 0.3s ease;
+        }}
+        .modal-overlay.active {{
+            display: flex; opacity: 1;
+            animation: modalFadeIn 0.3s ease;
+        }}
+        @keyframes modalFadeIn {{
+            from {{ opacity: 0; }}
+            to {{ opacity: 1; }}
         }}
         .modal-content {{
             background: var(--bg-light); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 30px; width: 100%; max-width: 400px;
+            border-radius: var(--radius); padding: 30px; width: 100%; max-width: 500px;
             max-height: 90vh; overflow-y: auto;
+            transform: translateY(20px); transition: transform 0.3s ease;
+        }}
+        .modal-overlay.active .modal-content {{
+            transform: translateY(0);
+            animation: modalSlideUp 0.3s ease;
+        }}
+        @keyframes modalSlideUp {{
+            from {{ transform: translateY(30px); opacity: 0; }}
+            to {{ transform: translateY(0); opacity: 1; }}
+        }}
+        .modal-header {{
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px;
+        }}
+        .modal-title {{
+            font-size: 1.5rem; font-weight: 700; color: var(--text);
+        }}
+        .modal-close {{
+            background: none; border: none; color: var(--text-light);
+            cursor: pointer; font-size: 1.2rem; padding: 8px;
+            border-radius: 8px; transition: var(--transition);
+        }}
+        .modal-close:hover {{ background: var(--glass-bg); color: var(--text); }}
+        .form-group {{ margin-bottom: 20px; }}
+        .form-label {{
+            display: block; margin-bottom: 8px; font-weight: 500;
+            color: var(--text); font-size: 0.95rem;
+        }}
+        .form-input, .form-textarea {{
+            width: 100%; padding: 12px 16px; border: 1px solid var(--border);
+            border-radius: var(--radius-sm); background: var(--glass-bg);
+            color: var(--text); font-size: 0.95rem; transition: var(--transition);
+        }}
+        .form-input:focus, .form-textarea:focus {{
+            outline: none; border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }}
+        .form-textarea {{ min-height: 100px; resize: vertical; }}
+        .id-check {{
+            display: flex; gap: 12px; margin-top: 8px;
+        }}
+        .id-check-input {{ flex: 1; }}
+        .id-check-btn {{
+            background: var(--primary); color: white; border: none;
+            padding: 12px 16px; border-radius: var(--radius-sm);
+            cursor: pointer; font-weight: 500; transition: var(--transition);
+            white-space: nowrap;
+        }}
+        .id-check-btn:hover {{ background: var(--primary-dark); }}
+        .id-check-btn.loading {{ background: var(--text-light); cursor: not-allowed; }}
+        .id-check-status {{
+            margin-top: 8px; font-size: 0.85rem; display: none;
+        }}
+        .id-check-status.available {{ color: var(--accent); display: block; }}
+        .id-check-status.taken {{ color: #ef4444; display: block; }}
+        .avatar-upload {{
+            border: 2px dashed var(--border); border-radius: var(--radius-sm);
+            padding: 24px; text-align: center; cursor: pointer;
+            transition: var(--transition); margin-bottom: 16px;
+        }}
+        .avatar-upload:hover {{ border-color: var(--primary); background: var(--glass-bg); }}
+        .avatar-upload i {{ font-size: 2rem; color: var(--text-light); margin-bottom: 12px; }}
+        .avatar-upload-text {{ color: var(--text-light); font-size: 0.9rem; }}
+        .avatar-preview {{
+            width: 80px; height: 80px; border-radius: 16px;
+            object-fit: cover; display: none; margin: 0 auto 16px;
+        }}
+        .privacy-toggle {{
+            display: flex; background: var(--glass-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 24px;
+        }}
+        .privacy-option {{
+            flex: 1; padding: 12px; text-align: center; cursor: pointer;
+            transition: var(--transition); font-weight: 500;
+        }}
+        .privacy-option:hover {{ background: var(--glass-border); }}
+        .privacy-option.active {{
+            background: var(--primary); color: white;
+        }}
+        .modal-buttons {{
+            display: flex; gap: 12px; margin-top: 24px;
+        }}
+        .modal-btn {{
+            flex: 1; padding: 14px; border: none; border-radius: var(--radius-sm);
+            font-size: 1rem; font-weight: 600; cursor: pointer; transition: var(--transition);
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }}
+        .modal-btn-primary {{
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }}
+        .modal-btn-primary:hover {{
+            transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+        }}
+        .modal-btn-secondary {{
+            background: var(--glass-bg); border: 1px solid var(--border);
+            color: var(--text);
+        }}
+        .modal-btn-secondary:hover {{ background: var(--glass-border); }}
+        .error-message {{
+            color: #ef4444; font-size: 0.85rem; margin-top: 8px;
+            display: none;
         }}
         /* Избранное */
         .favorites-grid {{
@@ -1461,8 +1593,11 @@ def create_app():
             .messages {{ padding: 16px 12px; }}
             .message {{ max-width: 90%; }}
             .input-area {{ padding: 16px; }}
-            .modal-content {{ padding: 20px; margin: 10px; }}
+            .modal-content {{ padding: 20px; margin: 10px; max-width: 95%; }}
             .favorites-grid {{ grid-template-columns: 1fr; }}
+            .modal-buttons {{ flex-direction: column; }}
+            .id-check {{ flex-direction: column; }}
+            .id-check-btn {{ width: 100%; }}
         }}
         @media (min-width: 769px) {{ .back-btn {{ display: none; }} }}
     </style>
@@ -1505,7 +1640,7 @@ def create_app():
                     <!-- Личные чаты будут загружены динамически -->
                 </div>
                 <div class="nav-category">Каналы</div>
-                <a href="#" class="nav-item" onclick="openCreateChannel()">
+                <a href="#" class="nav-item" onclick="openCreateChannelModal()">
                     <i class="fas fa-plus-circle"></i>
                     <span class="nav-item-text">Создать канал</span>
                 </a>
@@ -1582,6 +1717,84 @@ def create_app():
             </div>
         </div>
     </div>
+    <!-- Модальное окно создания канала -->
+    <div class="modal-overlay" id="create-channel-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-plus-circle"></i> Создать новый канал
+                </h2>
+                <button class="modal-close" onclick="closeModal('create-channel-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">ID канала</label>
+                <div class="id-check">
+                    <input type="text" class="form-input id-check-input" id="channel-id" 
+                           placeholder="например: gaming_chat" oninput="formatChannelId(this)">
+                    <button class="id-check-btn" id="check-id-btn" onclick="checkChannelId()">
+                        Проверить
+                    </button>
+                </div>
+                <div class="id-check-status available" id="id-available">
+                    <i class="fas fa-check-circle"></i> ID доступен
+                </div>
+                <div class="id-check-status taken" id="id-taken">
+                    <i class="fas fa-times-circle"></i> ID уже занят
+                </div>
+                <div class="error-message" id="channel-id-error"></div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Название канала</label>
+                <input type="text" class="form-input" id="channel-name" 
+                       placeholder="например: Игровой чат">
+                <div class="error-message" id="channel-name-error"></div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <textarea class="form-textarea" id="channel-description" 
+                          placeholder="Опишите тему вашего канала..."></textarea>
+                <div class="error-message" id="channel-description-error"></div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Аватарка канала (необязательно)</label>
+                <div class="avatar-upload" onclick="document.getElementById('channel-avatar-input').click()">
+                    <i class="fas fa-image"></i>
+                    <div class="avatar-upload-text">Нажмите для загрузки изображения</div>
+                    <img id="channel-avatar-preview" class="avatar-preview" alt="Предпросмотр">
+                </div>
+                <input type="file" id="channel-avatar-input" accept="image/*" 
+                       style="display: none;" onchange="previewChannelAvatar(this)">
+                <div class="error-message" id="channel-avatar-error"></div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Приватность</label>
+                <div class="privacy-toggle" id="privacy-toggle">
+                    <div class="privacy-option active" onclick="setPrivacy(false)">
+                        <i class="fas fa-globe"></i> Публичный
+                    </div>
+                    <div class="privacy-option" onclick="setPrivacy(true)">
+                        <i class="fas fa-lock"></i> Приватный
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-secondary" onclick="closeModal('create-channel-modal')">
+                    <i class="fas fa-times"></i> Отмена
+                </button>
+                <button class="modal-btn modal-btn-primary" onclick="createChannel()" id="create-channel-btn">
+                    <i class="fas fa-plus"></i> Создать канал
+                </button>
+            </div>
+        </div>
+    </div>
     <!-- Модальное окно профиля -->
     <div class="modal-overlay" id="profile-modal">
         <div class="modal-content">
@@ -1591,37 +1804,42 @@ def create_app():
                 <h4 id="modal-username">{username}</h4>
                 <p style="color: var(--text-light); font-size: 0.9rem;" id="modal-user-description"></p>
             </div>
-            <button class="btn btn-primary" onclick="closeModal('profile-modal')" style="width: 100%;">Закрыть</button>
+            <button class="modal-btn modal-btn-secondary" onclick="closeModal('profile-modal')" style="width: 100%;">
+                Закрыть
+            </button>
         </div>
     </div>
     <!-- Модальное окно настроек -->
     <div class="modal-overlay" id="settings-modal">
         <div class="modal-content">
-            <h3 style="margin-bottom: 20px;">Настройки</h3>
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Тема</label>
-                <select id="theme-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text);">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-cog"></i> Настройки
+                </h2>
+                <button class="modal-close" onclick="closeModal('settings-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Тема</label>
+                <select id="theme-select" class="form-input">
                     <option value="dark">Темная</option>
                     <option value="light">Светлая</option>
                 </select>
             </div>
-            <button class="btn btn-primary" onclick="saveSettings()" style="width: 100%; margin-bottom: 10px;">Сохранить</button>
-            <button class="btn" onclick="closeModal('settings-modal')" style="width: 100%;">Закрыть</button>
-        </div>
-    </div>
-    <!-- Модальное окно создания канала -->
-    <div class="modal-overlay" id="create-channel-modal">
-        <div class="modal-content">
-            <h3 style="margin-bottom: 20px;">Создать канал</h3>
-            <div style="margin-bottom: 16px;">
-                <input type="text" id="channel-name" placeholder="Название канала (обязательно)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); margin-bottom: 12px;">
-                <textarea id="channel-description" placeholder="Описание (необязательно)" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-light); color: var(--text); min-height: 80px;"></textarea>
-                <div id="channel-error" style="color: #ef4444; font-size: 0.9rem; margin-top: 8px; display: none;"></div>
+            
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-primary" onclick="saveSettings()">
+                    <i class="fas fa-save"></i> Сохранить
+                </button>
+                <button class="modal-btn modal-btn-secondary" onclick="closeModal('settings-modal')">
+                    <i class="fas fa-times"></i> Отмена
+                </button>
             </div>
-            <button class="btn btn-primary" onclick="createChannel()" style="width: 100%; margin-bottom: 10px;">Создать</button>
-            <button class="btn" onclick="closeModal('create-channel-modal')" style="width: 100%;">Отмена</button>
         </div>
     </div>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
         const socket = io();
@@ -1662,6 +1880,16 @@ def create_app():
             document.getElementById('search-input').addEventListener('input', function(e) {{
                 performSearch(e.target.value);
             }});
+            
+            // Установить тему из настроек пользователя
+            fetch('/user_info/' + user)
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.success) {{
+                        document.documentElement.setAttribute('data-theme', data.theme || 'dark');
+                        document.getElementById('theme-select').value = data.theme || 'dark';
+                    }}
+                }});
         }};
         
         function checkMobile() {{
@@ -1830,6 +2058,11 @@ def create_app():
                     .then(data => {{
                         if (data.success) {{
                             document.getElementById('chat-subtitle').textContent = data.data.description || 'Канал';
+                            const avatar = document.getElementById('chat-header-avatar');
+                            if (data.data.avatar_path) {{
+                                avatar.style.backgroundImage = `url(${{data.data.avatar_path}})`;
+                                avatar.textContent = '';
+                            }}
                         }}
                     }});
             }} else {{
@@ -2140,7 +2373,286 @@ def create_app():
             input.selectionStart = input.selectionEnd = start + emoji.length;
         }}
         
+        // Функции для модального окна создания канала
+        function openCreateChannelModal() {{
+            resetCreateChannelForm();
+            openModal('create-channel-modal');
+            
+            // Скрываем сайдбар на мобильных
+            if (isMobile) {{
+                document.getElementById('sidebar').classList.remove('active');
+            }}
+        }}
+        
+        function resetCreateChannelForm() {{
+            document.getElementById('channel-id').value = '';
+            document.getElementById('channel-name').value = '';
+            document.getElementById('channel-description').value = '';
+            document.getElementById('channel-avatar-preview').style.display = 'none';
+            document.getElementById('channel-avatar-preview').src = '';
+            document.getElementById('channel-avatar-input').value = '';
+            
+            // Сбросить статусы проверки
+            document.getElementById('id-available').style.display = 'none';
+            document.getElementById('id-taken').style.display = 'none';
+            
+            // Сбросить ошибки
+            hideAllErrors();
+            
+            // Установить публичный по умолчанию
+            setPrivacy(false);
+        }}
+        
+        function formatChannelId(input) {{
+            // Форматирование ID канала: только строчные буквы, цифры и подчеркивания
+            let value = input.value.toLowerCase();
+            value = value.replace(/[^a-z0-9_]/g, '');
+            input.value = value;
+            
+            // Скрыть статусы при изменении
+            document.getElementById('id-available').style.display = 'none';
+            document.getElementById('id-taken').style.display = 'none';
+        }}
+        
+        function checkChannelId() {{
+            const channelId = document.getElementById('channel-id').value.trim();
+            const checkBtn = document.getElementById('check-id-btn');
+            
+            if (!channelId) {{
+                showError('channel-id-error', 'Введите ID канала');
+                return;
+            }}
+            
+            if (channelId.length < 2) {{
+                showError('channel-id-error', 'ID должен содержать не менее 2 символов');
+                return;
+            }}
+            
+            // Показать состояние загрузки
+            checkBtn.classList.add('loading');
+            checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Проверка...';
+            
+            fetch(`/check_channel_id/${{encodeURIComponent(channelId)}}`)
+                .then(r => r.json())
+                .then(data => {{
+                    checkBtn.classList.remove('loading');
+                    checkBtn.innerHTML = 'Проверить';
+                    
+                    if (data.success) {{
+                        if (data.available) {{
+                            document.getElementById('id-available').style.display = 'block';
+                            document.getElementById('id-taken').style.display = 'none';
+                            hideError('channel-id-error');
+                        }} else {{
+                            document.getElementById('id-available').style.display = 'none';
+                            document.getElementById('id-taken').style.display = 'block';
+                            showError('channel-id-error', 'Этот ID уже занят');
+                        }}
+                    }} else {{
+                        showError('channel-id-error', 'Ошибка проверки ID');
+                    }}
+                }})
+                .catch(error => {{
+                    checkBtn.classList.remove('loading');
+                    checkBtn.innerHTML = 'Проверить';
+                    showError('channel-id-error', 'Ошибка соединения');
+                }});
+        }}
+        
+        function setPrivacy(isPrivate) {{
+            const options = document.querySelectorAll('.privacy-option');
+            options.forEach(option => option.classList.remove('active'));
+            
+            if (isPrivate) {{
+                options[1].classList.add('active');
+            }} else {{
+                options[0].classList.add('active');
+            }}
+        }}
+        
+        function previewChannelAvatar(input) {{
+            const file = input.files[0];
+            if (file) {{
+                const reader = new FileReader();
+                reader.onload = function(e) {{
+                    const preview = document.getElementById('channel-avatar-preview');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }};
+                reader.readAsDataURL(file);
+            }}
+        }}
+        
+        function createChannel() {{
+            // Сбросить ошибки
+            hideAllErrors();
+            
+            const channelId = document.getElementById('channel-id').value.trim();
+            const channelName = document.getElementById('channel-name').value.trim();
+            const channelDescription = document.getElementById('channel-description').value.trim();
+            const avatarFile = document.getElementById('channel-avatar-input').files[0];
+            const isPrivate = document.querySelector('.privacy-option:nth-child(2)').classList.contains('active');
+            const createBtn = document.getElementById('create-channel-btn');
+            
+            // Валидация
+            let hasError = false;
+            
+            if (!channelId) {{
+                showError('channel-id-error', 'Введите ID канала');
+                hasError = true;
+            }}
+            
+            if (channelId.length < 2) {{
+                showError('channel-id-error', 'ID должен содержать не менее 2 символов');
+                hasError = true;
+            }}
+            
+            if (!channelName) {{
+                showError('channel-name-error', 'Введите название канала');
+                hasError = true;
+            }}
+            
+            if (channelName.length > 50) {{
+                showError('channel-name-error', 'Название должно быть не более 50 символов');
+                hasError = true;
+            }}
+            
+            if (hasError) return;
+            
+            // Проверить доступность ID
+            fetch(`/check_channel_id/${{encodeURIComponent(channelId)}}`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (!data.success || !data.available) {{
+                        showError('channel-id-error', 'Этот ID уже занят');
+                        return;
+                    }}
+                    
+                    // Все проверки пройдены, создаем канал
+                    submitChannelCreation(channelId, channelName, channelDescription, avatarFile, isPrivate, createBtn);
+                }})
+                .catch(error => {{
+                    showError('channel-id-error', 'Ошибка проверки ID');
+                }});
+        }}
+        
+        function submitChannelCreation(channelId, channelName, channelDescription, avatarFile, isPrivate, createBtn) {{
+            // Показать состояние загрузки
+            createBtn.classList.add('loading');
+            createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Создание...';
+            
+            const formData = new FormData();
+            formData.append('channel_id', channelId);
+            formData.append('display_name', channelName);
+            formData.append('description', channelDescription);
+            formData.append('is_private', isPrivate);
+            
+            if (avatarFile) {{
+                formData.append('avatar', avatarFile);
+            }}
+            
+            fetch('/create_channel', {{
+                method: 'POST',
+                body: formData
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                createBtn.classList.remove('loading');
+                createBtn.innerHTML = '<i class="fas fa-plus"></i> Создать канал';
+                
+                if (data.success) {{
+                    // Закрыть модальное окно
+                    closeModal('create-channel-modal');
+                    
+                    // Обновить список каналов
+                    loadChannels();
+                    
+                    // Открыть созданный канал
+                    openChat(data.channel_id, 'channel', data.display_name);
+                    
+                    // Показать уведомление
+                    showNotification('Канал успешно создан!', 'success');
+                }} else {{
+                    showError('channel-id-error', data.error || 'Ошибка при создании канала');
+                }}
+            }})
+            .catch(error => {{
+                createBtn.classList.remove('loading');
+                createBtn.innerHTML = '<i class="fas fa-plus"></i> Создать канал';
+                showError('channel-id-error', 'Ошибка соединения с сервером');
+            }});
+        }}
+        
+        function showNotification(message, type = 'success') {{
+            // Создать элемент уведомления
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${{type}}`;
+            notification.style.cssText = `
+                position: fixed; top: 20px; right: 20px;
+                background: var(--bg-light); border: 1px solid var(--border);
+                border-radius: var(--radius-sm); padding: 16px;
+                box-shadow: var(--shadow); z-index: 3000;
+                animation: slideInRight 0.3s ease;
+                max-width: 300px;
+            `;
+            
+            if (type === 'success') {{
+                notification.style.borderLeft = '4px solid var(--accent)';
+            }} else {{
+                notification.style.borderLeft = '4px solid #ef4444';
+            }}
+            
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fas fa-${{type === 'success' ? 'check-circle' : 'exclamation-circle'}}" 
+                       style="color: ${{type === 'success' ? 'var(--accent)' : '#ef4444'}}; font-size: 1.2rem;"></i>
+                    <div style="flex: 1;">${{message}}</div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Удалить уведомление через 3 секунды
+            setTimeout(() => {{
+                notification.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }}, 3000);
+        }}
+        
+        // Вспомогательные функции для ошибок
+        function showError(elementId, message) {{
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.style.display = 'block';
+        }}
+        
+        function hideError(elementId) {{
+            document.getElementById(elementId).style.display = 'none';
+        }}
+        
+        function hideAllErrors() {{
+            document.querySelectorAll('.error-message').forEach(el => {{
+                el.style.display = 'none';
+            }});
+        }}
+        
         // Модальные окна
+        function openModal(id) {{
+            const modal = document.getElementById(id);
+            modal.style.display = 'flex';
+            setTimeout(() => {{
+                modal.classList.add('active');
+            }}, 10);
+        }}
+        
+        function closeModal(id) {{
+            const modal = document.getElementById(id);
+            modal.classList.remove('active');
+            setTimeout(() => {{
+                modal.style.display = 'none';
+            }}, 300);
+        }}
+        
         function openUserProfile(username) {{
             fetch(`/user_info/${{username}}`)
                 .then(r => r.json())
@@ -2165,68 +2677,6 @@ def create_app():
             openModal('settings-modal');
         }}
         
-        function openCreateChannel() {{
-            openModal('create-channel-modal');
-        }}
-        
-        // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Создание канала
-        function createChannel() {{
-            const name = document.getElementById('channel-name').value.trim();
-            const description = document.getElementById('channel-description').value.trim();
-            const errorDiv = document.getElementById('channel-error');
-            
-            // Скрываем предыдущие ошибки
-            errorDiv.style.display = 'none';
-            errorDiv.textContent = '';
-            
-            if (!name) {{
-                errorDiv.textContent = 'Введите название канала';
-                errorDiv.style.display = 'block';
-                return;
-            }}
-            
-            // Отправляем запрос на создание канала
-            fetch('/create_channel', {{
-                method: 'POST',
-                headers: {{ 
-                    'Content-Type': 'application/json'
-                }},
-                body: JSON.stringify({{
-                    name: name,
-                    description: description
-                }})
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.success) {{
-                    closeModal('create-channel-modal');
-                    // Очищаем поля формы
-                    document.getElementById('channel-name').value = '';
-                    document.getElementById('channel-description').value = '';
-                    
-                    // Обновляем список каналов
-                    loadChannels();
-                    
-                    // Автоматически открываем созданный канал
-                    if (data.channel_name) {{
-                        openChat(data.channel_name, 'channel', data.display_name || name);
-                    }}
-                    
-                    // Показываем уведомление
-                    alert(data.message || 'Канал успешно создан!');
-                }} else {{
-                    // Показываем ошибку
-                    errorDiv.textContent = data.error || 'Ошибка при создании канала';
-                    errorDiv.style.display = 'block';
-                }}
-            }})
-            .catch(error => {{
-                console.error('Error creating channel:', error);
-                errorDiv.textContent = 'Ошибка соединения с сервером';
-                errorDiv.style.display = 'block';
-            }});
-        }}
-        
         function saveSettings() {{
             const theme = document.getElementById('theme-select').value;
             fetch('/set_theme', {{
@@ -2239,16 +2689,9 @@ def create_app():
                 if (data.success) {{
                     document.documentElement.setAttribute('data-theme', theme);
                     closeModal('settings-modal');
+                    showNotification('Настройки сохранены', 'success');
                 }}
             }});
-        }}
-        
-        function openModal(id) {{
-            document.getElementById(id).style.display = 'flex';
-        }}
-        
-        function closeModal(id) {{
-            document.getElementById(id).style.display = 'none';
         }}
         
         function openSupport() {{
@@ -2306,11 +2749,11 @@ def create_app():
                 emojiContainer.style.display = 'none';
             }}
             
-            // Закрытие модальных окон
+            // Закрытие модальных окон при клике вне контента
             const modals = document.querySelectorAll('.modal-overlay');
             modals.forEach(modal => {{
-                if (modal.style.display === 'flex' && !modal.contains(event.target)) {{
-                    modal.style.display = 'none';
+                if (modal.classList.contains('active') && !modal.querySelector('.modal-content').contains(event.target)) {{
+                    closeModal(modal.id);
                 }}
             }});
         }});
@@ -2319,10 +2762,29 @@ def create_app():
             if (event.key === 'Escape') {{
                 document.getElementById('search-results').style.display = 'none';
                 document.getElementById('emoji-container').style.display = 'none';
+                
                 const modals = document.querySelectorAll('.modal-overlay');
-                modals.forEach(modal => modal.style.display = 'none');
+                modals.forEach(modal => {{
+                    if (modal.classList.contains('active')) {{
+                        closeModal(modal.id);
+                    }}
+                }});
             }}
         }});
+        
+        // Добавить CSS для анимаций уведомлений
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {{
+                from {{ transform: translateX(100%); opacity: 0; }}
+                to {{ transform: translateX(0); opacity: 1; }}
+            }}
+            @keyframes slideOutRight {{
+                from {{ transform: translateX(0); opacity: 1; }}
+                to {{ transform: translateX(100%); opacity: 0; }}
+            }}
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>'''
