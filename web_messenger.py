@@ -1169,6 +1169,32 @@ def create_app():
             background: var(--bg); color: var(--text); height: 100vh; overflow: hidden;
             touch-action: manipulation;
         }}
+        /* Эффект нажатия для кнопок */
+        .btn-effect {{
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }}
+        .btn-effect:active {{
+            transform: scale(0.95);
+        }}
+        .btn-effect::after {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.4s, height 0.4s;
+        }}
+        .btn-effect:active::after {{
+            width: 200px;
+            height: 200px;
+        }}
+        
         /* Основной контейнер AURA */
         .app-container {{ display: flex; height: 100vh; }}
         /* Сайдбар AURA - минималистичный дизайн */
@@ -1314,9 +1340,22 @@ def create_app():
             transition: var(--transition);
         }}
         .chat-action-btn:hover {{ background: var(--glass-bg); color: var(--text); }}
-        /* Сообщения AURA - стиль из скриншота */
-        .messages {{ flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 24px; -webkit-overflow-scrolling: touch; }}
-        .message-group {{ display: flex; flex-direction: column; gap: 4px; }}
+        /* Сообщения AURA - улучшенное отображение */
+        .messages {{ 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 16px; 
+            -webkit-overflow-scrolling: touch;
+        }}
+        .message-group {{ 
+            display: flex; 
+            flex-direction: column; 
+            gap: 4px; 
+            position: relative;
+        }}
         .message-group-date {{
             text-align: center; margin: 20px 0; position: relative;
         }}
@@ -1330,100 +1369,262 @@ def create_app():
             border-radius: 20px; font-size: 0.8rem; color: var(--text-light);
             position: relative; z-index: 2;
         }}
-        .message {{ display: flex; gap: 12px; max-width: 80%; animation: fadeIn 0.3s ease; }}
-        .message.own {{ align-self: flex-end; flex-direction: row-reverse; }}
+        .message {{
+            display: flex; 
+            gap: 12px; 
+            max-width: 85%; 
+            animation: messageAppear 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition: transform 0.2s ease;
+        }}
+        .message:hover {{
+            transform: translateY(-1px);
+        }}
+        .message.own {{ 
+            align-self: flex-end; 
+            flex-direction: row-reverse;
+        }}
         .message-avatar {{
-            width: 36px; height: 36px; border-radius: 50%; background: var(--primary);
-            color: white; display: flex; align-items: center; justify-content: center;
-            font-weight: 600; font-size: 0.85rem; flex-shrink: 0; margin-top: 4px;
+            width: 36px; 
+            height: 36px; 
+            border-radius: 50%; 
+            background: var(--primary);
+            color: white; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            font-weight: 600; 
+            font-size: 0.85rem; 
+            flex-shrink: 0; 
+            margin-top: 4px;
             cursor: pointer;
+            transition: transform 0.2s ease;
+            border: 2px solid transparent;
+        }}
+        .message-avatar:hover {{
+            transform: scale(1.1);
+            border-color: var(--primary-light);
         }}
         .message-content {{
-            background: var(--glass-bg); border: 1px solid var(--glass-border);
-            border-radius: 18px; border-top-left-radius: 8px; padding: 12px 16px;
-            max-width: 100%; word-wrap: break-word;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            background: var(--glass-bg); 
+            border: 1px solid var(--glass-border);
+            border-radius: 18px; 
+            border-top-left-radius: 8px; 
+            padding: 14px 16px;
+            max-width: 100%; 
+            word-wrap: break-word;
+            backdrop-filter: blur(10px); 
+            -webkit-backdrop-filter: blur(10px);
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }}
         .message.own .message-content {{
             background: linear-gradient(135deg, var(--primary), var(--secondary));
-            border-color: transparent; border-top-left-radius: 18px;
-            border-top-right-radius: 8px; color: white;
+            border-color: transparent; 
+            border-top-left-radius: 18px;
+            border-top-right-radius: 8px; 
+            color: white;
+            box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
         }}
         .message-sender {{
-            font-weight: 700; font-size: 0.85rem; margin-bottom: 6px; color: var(--text);
+            font-weight: 700; 
+            font-size: 0.85rem; 
+            margin-bottom: 6px; 
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }}
-        .message.own .message-sender {{ color: rgba(255, 255, 255, 0.9); }}
-        .message-text {{ line-height: 1.5; font-size: 0.95rem; word-break: break-word; }}
-        .message-file {{ margin-top: 10px; border-radius: 12px; overflow: hidden; max-width: 300px; }}
+        .message.own .message-sender {{ 
+            color: rgba(255, 255, 255, 0.95);
+        }}
+        .message-text {{
+            line-height: 1.5; 
+            font-size: 0.95rem; 
+            word-break: break-word;
+            margin-bottom: 8px;
+        }}
+        .message-file {{
+            margin-top: 12px; 
+            border-radius: 12px; 
+            overflow: hidden; 
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }}
         .message-file img {{
-            width: 100%; height: auto; border-radius: 12px;
-            cursor: pointer; transition: transform 0.2s;
+            width: 100%; 
+            height: auto; 
+            border-radius: 12px;
+            cursor: pointer; 
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: block;
         }}
-        .message-file img:hover {{ transform: scale(1.02); }}
-        .message-file video {{ width: 100%; height: auto; border-radius: 12px; display: block; }}
-        .message-time {{ font-size: 0.75rem; color: var(--text-light); margin-top: 6px; text-align: right; }}
-        .message.own .message-time {{ color: rgba(255, 255, 255, 0.7); }}
+        .message-file img:hover {{ 
+            transform: scale(1.02); 
+        }}
+        .message-file video {{
+            width: 100%; 
+            height: auto; 
+            border-radius: 12px; 
+            display: block;
+        }}
+        .message-time {{
+            font-size: 0.75rem; 
+            color: var(--text-light); 
+            text-align: right;
+            opacity: 0.8;
+        }}
+        .message.own .message-time {{ 
+            color: rgba(255, 255, 255, 0.8);
+        }}
+        /* Анимация появления сообщения */
+        @keyframes messageAppear {{
+            from {{
+                opacity: 0;
+                transform: translateY(10px) scale(0.95);
+            }}
+            to {{
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }}
+        }}
         /* Поле ввода AURA */
-        .input-area {{ padding: 20px; border-top: 1px solid var(--border); background: var(--bg-light); }}
-        .input-container {{ display: flex; gap: 12px; align-items: flex-end; }}
-        .input-actions {{ display: flex; gap: 8px; }}
+        .input-area {{ 
+            padding: 20px; 
+            border-top: 1px solid var(--border); 
+            background: var(--bg-light);
+        }}
+        .input-container {{ 
+            display: flex; 
+            gap: 12px; 
+            align-items: flex-end; 
+        }}
+        .input-actions {{ 
+            display: flex; 
+            gap: 8px; 
+        }}
         .input-action-btn {{
-            background: var(--glass-bg); border: 1px solid var(--border);
-            color: var(--text); cursor: pointer; padding: 10px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            transition: var(--transition); flex-shrink: 0;
+            background: var(--glass-bg); 
+            border: 1px solid var(--border);
+            color: var(--text); 
+            cursor: pointer; 
+            padding: 12px; 
+            border-radius: 50%;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            transition: var(--transition); 
+            flex-shrink: 0;
         }}
         .input-action-btn:hover {{
-            background: var(--glass-border); border-color: var(--primary);
+            background: var(--glass-border); 
+            border-color: var(--primary);
             color: var(--primary);
+            transform: rotate(15deg);
         }}
-        .input-wrapper {{ flex: 1; position: relative; }}
+        .input-wrapper {{ 
+            flex: 1; 
+            position: relative; 
+        }}
         .msg-input {{
-            width: 100%; padding: 14px 16px; border: 1px solid var(--border);
-            border-radius: 24px; background: var(--glass-bg); color: var(--text);
-            font-size: 0.95rem; resize: none; min-height: 48px; max-height: 120px;
-            line-height: 1.5; font-family: inherit; transition: var(--transition);
+            width: 100%; 
+            padding: 16px 20px; 
+            border: 1px solid var(--border);
+            border-radius: 24px; 
+            background: var(--glass-bg); 
+            color: var(--text);
+            font-size: 0.95rem; 
+            resize: none; 
+            min-height: 52px; 
+            max-height: 120px;
+            line-height: 1.5; 
+            font-family: inherit; 
+            transition: var(--transition);
         }}
         .msg-input:focus {{
-            outline: none; border-color: var(--primary); background: var(--glass-bg);
+            outline: none; 
+            border-color: var(--primary); 
+            background: var(--glass-bg);
             box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
         }}
         .send-btn {{
             background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white; border: none; cursor: pointer; padding: 12px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; transition: var(--transition);
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            padding: 14px; 
+            border-radius: 50%;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            flex-shrink: 0; 
+            transition: var(--transition);
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
         }}
         .send-btn:hover {{
-            transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+            transform: translateY(-3px) scale(1.05); 
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
         }}
-        .send-btn:active {{ transform: translateY(0); }}
+        .send-btn:active {{
+            transform: translateY(0) scale(0.95);
+        }}
         /* Эмодзи пикер */
         .emoji-container {{
-            display: none; position: absolute; bottom: 80px; left: 20px; right: 20px;
+            display: none; 
+            position: absolute; 
+            bottom: 80px; 
+            left: 20px; 
+            right: 20px;
             z-index: 100;
         }}
         .emoji-picker {{
-            background: var(--bg-light); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
-            max-height: 300px; overflow-y: auto;
+            background: var(--bg-light); 
+            border: 1px solid var(--border);
+            border-radius: var(--radius); 
+            padding: 16px; 
+            box-shadow: var(--shadow);
+            max-height: 300px; 
+            overflow-y: auto;
         }}
-        .emoji-grid {{ display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }}
+        .emoji-grid {{ 
+            display: grid; 
+            grid-template-columns: repeat(8, 1fr); 
+            gap: 8px; 
+        }}
         .emoji-item {{
-            font-size: 1.5rem; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; padding: 8px; border-radius: 8px; transition: var(--transition);
+            font-size: 1.5rem; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            cursor: pointer; 
+            padding: 8px; 
+            border-radius: 8px; 
+            transition: var(--transition);
         }}
-        .emoji-item:hover {{ background: var(--glass-bg); }}
+        .emoji-item:hover {{ 
+            background: var(--glass-bg); 
+            transform: scale(1.2);
+        }}
         /* Модальные окна */
         .modal-overlay {{
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px); z-index: 2000;
-            align-items: center; justify-content: center; padding: 20px;
-            opacity: 0; transition: opacity 0.3s ease;
+            display: none; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7); 
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px); 
+            z-index: 2000;
+            align-items: center; 
+            justify-content: center; 
+            padding: 20px;
+            opacity: 0; 
+            transition: opacity 0.3s ease;
         }}
         .modal-overlay.active {{
-            display: flex; opacity: 1;
+            display: flex; 
+            opacity: 1;
             animation: modalFadeIn 0.3s ease;
         }}
         @keyframes modalFadeIn {{
@@ -1431,147 +1632,316 @@ def create_app():
             to {{ opacity: 1; }}
         }}
         .modal-content {{
-            background: var(--bg-light); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 30px; width: 100%; max-width: 500px;
-            max-height: 90vh; overflow-y: auto;
-            transform: translateY(20px); transition: transform 0.3s ease;
+            background: var(--bg-light); 
+            border: 1px solid var(--border);
+            border-radius: var(--radius); 
+            padding: 30px; 
+            width: 100%; 
+            max-width: 500px;
+            max-height: 90vh; 
+            overflow-y: auto;
+            transform: translateY(20px); 
+            transition: transform 0.3s ease;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }}
         .modal-overlay.active .modal-content {{
             transform: translateY(0);
-            animation: modalSlideUp 0.3s ease;
+            animation: modalSlideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         }}
         @keyframes modalSlideUp {{
             from {{ transform: translateY(30px); opacity: 0; }}
             to {{ transform: translateY(0); opacity: 1; }}
         }}
         .modal-header {{
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
             margin-bottom: 24px;
         }}
         .modal-title {{
-            font-size: 1.5rem; font-weight: 700; color: var(--text);
+            font-size: 1.5rem; 
+            font-weight: 700; 
+            color: var(--text);
         }}
         .modal-close {{
-            background: none; border: none; color: var(--text-light);
-            cursor: pointer; font-size: 1.2rem; padding: 8px;
-            border-radius: 8px; transition: var(--transition);
+            background: none; 
+            border: none; 
+            color: var(--text-light);
+            cursor: pointer; 
+            font-size: 1.2rem; 
+            padding: 8px;
+            border-radius: 8px; 
+            transition: var(--transition);
         }}
-        .modal-close:hover {{ background: var(--glass-bg); color: var(--text); }}
+        .modal-close:hover {{ 
+            background: var(--glass-bg); 
+            color: var(--text); 
+            transform: rotate(90deg);
+        }}
         .form-group {{ margin-bottom: 20px; }}
         .form-label {{
-            display: block; margin-bottom: 8px; font-weight: 500;
-            color: var(--text); font-size: 0.95rem;
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 500;
+            color: var(--text); 
+            font-size: 0.95rem;
         }}
         .form-input, .form-textarea {{
-            width: 100%; padding: 12px 16px; border: 1px solid var(--border);
-            border-radius: var(--radius-sm); background: var(--glass-bg);
-            color: var(--text); font-size: 0.95rem; transition: var(--transition);
+            width: 100%; 
+            padding: 14px 16px; 
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm); 
+            background: var(--glass-bg);
+            color: var(--text); 
+            font-size: 0.95rem; 
+            transition: var(--transition);
         }}
         .form-input:focus, .form-textarea:focus {{
-            outline: none; border-color: var(--primary);
+            outline: none; 
+            border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
         }}
-        .form-textarea {{ min-height: 100px; resize: vertical; }}
+        .form-textarea {{ 
+            min-height: 100px; 
+            resize: vertical; 
+        }}
         .id-check {{
-            display: flex; gap: 12px; margin-top: 8px;
+            display: flex; 
+            gap: 12px; 
+            margin-top: 8px;
         }}
         .id-check-input {{ flex: 1; }}
         .id-check-btn {{
-            background: var(--primary); color: white; border: none;
-            padding: 12px 16px; border-radius: var(--radius-sm);
-            cursor: pointer; font-weight: 500; transition: var(--transition);
+            background: var(--primary); 
+            color: white; 
+            border: none;
+            padding: 12px 16px; 
+            border-radius: var(--radius-sm);
+            cursor: pointer; 
+            font-weight: 500; 
+            transition: var(--transition);
             white-space: nowrap;
         }}
-        .id-check-btn:hover {{ background: var(--primary-dark); }}
-        .id-check-btn.loading {{ background: var(--text-light); cursor: not-allowed; }}
+        .id-check-btn:hover {{ 
+            background: var(--primary-dark); 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }}
+        .id-check-btn:active {{
+            transform: translateY(0);
+        }}
+        .id-check-btn.loading {{ 
+            background: var(--text-light); 
+            cursor: not-allowed; 
+        }}
         .id-check-status {{
-            margin-top: 8px; font-size: 0.85rem; display: none;
+            margin-top: 8px; 
+            font-size: 0.85rem; 
+            display: none;
         }}
-        .id-check-status.available {{ color: var(--accent); display: block; }}
-        .id-check-status.taken {{ color: #ef4444; display: block; }}
+        .id-check-status.available {{ 
+            color: var(--accent); 
+            display: block; 
+        }}
+        .id-check-status.taken {{ 
+            color: #ef4444; 
+            display: block; 
+        }}
         .avatar-upload {{
-            border: 2px dashed var(--border); border-radius: var(--radius-sm);
-            padding: 24px; text-align: center; cursor: pointer;
-            transition: var(--transition); margin-bottom: 16px;
+            border: 2px dashed var(--border); 
+            border-radius: var(--radius-sm);
+            padding: 24px; 
+            text-align: center; 
+            cursor: pointer;
+            transition: var(--transition); 
+            margin-bottom: 16px;
         }}
-        .avatar-upload:hover {{ border-color: var(--primary); background: var(--glass-bg); }}
-        .avatar-upload i {{ font-size: 2rem; color: var(--text-light); margin-bottom: 12px; }}
-        .avatar-upload-text {{ color: var(--text-light); font-size: 0.9rem; }}
+        .avatar-upload:hover {{ 
+            border-color: var(--primary); 
+            background: var(--glass-bg); 
+            transform: translateY(-2px);
+        }}
+        .avatar-upload i {{ 
+            font-size: 2rem; 
+            color: var(--text-light); 
+            margin-bottom: 12px; 
+        }}
+        .avatar-upload-text {{ 
+            color: var(--text-light); 
+            font-size: 0.9rem; 
+        }}
         .avatar-preview {{
-            width: 80px; height: 80px; border-radius: 16px;
-            object-fit: cover; display: none; margin: 0 auto 16px;
+            width: 80px; 
+            height: 80px; 
+            border-radius: 16px;
+            object-fit: cover; 
+            display: none; 
+            margin: 0 auto 16px;
+            border: 2px solid var(--border);
         }}
         .privacy-toggle {{
-            display: flex; background: var(--glass-bg); border: 1px solid var(--border);
-            border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 24px;
+            display: flex; 
+            background: var(--glass-bg); 
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm); 
+            overflow: hidden; 
+            margin-bottom: 24px;
         }}
         .privacy-option {{
-            flex: 1; padding: 12px; text-align: center; cursor: pointer;
-            transition: var(--transition); font-weight: 500;
+            flex: 1; 
+            padding: 12px; 
+            text-align: center; 
+            cursor: pointer;
+            transition: var(--transition); 
+            font-weight: 500;
         }}
-        .privacy-option:hover {{ background: var(--glass-border); }}
+        .privacy-option:hover {{ 
+            background: var(--glass-border); 
+        }}
         .privacy-option.active {{
-            background: var(--primary); color: white;
+            background: var(--primary); 
+            color: white;
         }}
         .modal-buttons {{
-            display: flex; gap: 12px; margin-top: 24px;
+            display: flex; 
+            gap: 12px; 
+            margin-top: 24px;
         }}
         .modal-btn {{
-            flex: 1; padding: 14px; border: none; border-radius: var(--radius-sm);
-            font-size: 1rem; font-weight: 600; cursor: pointer; transition: var(--transition);
-            display: flex; align-items: center; justify-content: center; gap: 8px;
+            flex: 1; 
+            padding: 14px; 
+            border: none; 
+            border-radius: var(--radius-sm);
+            font-size: 1rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: var(--transition);
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }}
+        .modal-btn:active {{
+            transform: scale(0.98);
+        }}
+        .modal-btn::after {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.4s, height 0.4s;
+        }}
+        .modal-btn:active::after {{
+            width: 200px;
+            height: 200px;
         }}
         .modal-btn-primary {{
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
         }}
         .modal-btn-primary:hover {{
-            transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
         }}
         .modal-btn-secondary {{
-            background: var(--glass-bg); border: 1px solid var(--border);
+            background: var(--glass-bg); 
+            border: 1px solid var(--border);
             color: var(--text);
         }}
-        .modal-btn-secondary:hover {{ background: var(--glass-border); }}
+        .modal-btn-secondary:hover {{ 
+            background: var(--glass-border); 
+            transform: translateY(-2px);
+        }}
         .error-message {{
-            color: #ef4444; font-size: 0.85rem; margin-top: 8px;
+            color: #ef4444; 
+            font-size: 0.85rem; 
+            margin-top: 8px;
             display: none;
         }}
         /* Избранное */
         .favorites-grid {{
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px; padding: 20px;
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px; 
+            padding: 20px;
         }}
         .favorite-item {{
-            background: var(--glass-bg); border: 1px solid var(--glass-border);
-            border-radius: var(--radius); padding: 20px; position: relative;
+            background: var(--glass-bg); 
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius); 
+            padding: 20px; 
+            position: relative;
             transition: var(--transition);
+            cursor: pointer;
         }}
         .favorite-item:hover {{
-            transform: translateY(-4px); box-shadow: var(--shadow);
+            transform: translateY(-4px) scale(1.02); 
+            box-shadow: var(--shadow);
             border-color: var(--primary);
         }}
-        .favorite-content {{ margin-bottom: 12px; font-size: 0.95rem; line-height: 1.5; }}
-        .favorite-file {{ margin-top: 12px; border-radius: 12px; overflow: hidden; }}
+        .favorite-content {{ 
+            margin-bottom: 12px; 
+            font-size: 0.95rem; 
+            line-height: 1.5; 
+        }}
+        .favorite-file {{ 
+            margin-top: 12px; 
+            border-radius: 12px; 
+            overflow: hidden; 
+        }}
         .favorite-file img, .favorite-file video {{
-            width: 100%; height: auto; border-radius: 12px;
+            width: 100%; 
+            height: auto; 
+            border-radius: 12px;
+            transition: transform 0.3s ease;
+        }}
+        .favorite-item:hover .favorite-file img,
+        .favorite-item:hover .favorite-file video {{
+            transform: scale(1.05);
         }}
         .favorite-meta {{
-            display: flex; justify-content: space-between; align-items: center;
-            font-size: 0.8rem; color: var(--text-light); margin-top: 16px;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            font-size: 0.8rem; 
+            color: var(--text-light); 
+            margin-top: 16px;
         }}
         .category-badge {{
-            background: rgba(124, 58, 237, 0.1); color: var(--primary);
-            padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 500;
+            background: rgba(124, 58, 237, 0.1); 
+            color: var(--primary);
+            padding: 4px 10px; 
+            border-radius: 12px; 
+            font-size: 0.75rem; 
+            font-weight: 500;
         }}
         /* Пустые состояния */
         .empty-state {{
-            text-align: center; padding: 60px 20px; color: var(--text-light);
+            text-align: center; 
+            padding: 60px 20px; 
+            color: var(--text-light);
         }}
-        .empty-state i {{ font-size: 3rem; margin-bottom: 16px; color: var(--border); }}
-        .empty-state h3 {{ font-size: 1.2rem; margin-bottom: 8px; color: var(--text); }}
+        .empty-state i {{ 
+            font-size: 3rem; 
+            margin-bottom: 16px; 
+            color: var(--border); 
+        }}
+        .empty-state h3 {{ 
+            font-size: 1.2rem; 
+            margin-bottom: 8px; 
+            color: var(--text); 
+        }}
         .empty-state p {{
-            font-size: 0.9rem; max-width: 300px; margin: 0 auto;
+            font-size: 0.9rem; 
+            max-width: 300px; 
+            margin: 0 auto;
         }}
         /* Скроллбар */
         ::-webkit-scrollbar {{ width: 6px; }}
@@ -1579,25 +1949,57 @@ def create_app():
         ::-webkit-scrollbar-thumb {{ background: var(--border); border-radius: 3px; }}
         ::-webkit-scrollbar-thumb:hover {{ background: var(--border-light); }}
         /* Анимации */
-        @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+        @keyframes fadeIn {{ 
+            from {{ opacity: 0; transform: translateY(10px); }} 
+            to {{ opacity: 1; transform: translateY(0); }} 
+        }}
         /* Мобильная версия */
         @media (max-width: 768px) {{
             .sidebar {{
-                position: fixed; top: 0; left: 0; bottom: 0;
-                width: 100%; max-width: 320px;
-                transform: translateX(-100%); transition: transform 0.3s ease;
+                position: fixed; 
+                top: 0; 
+                left: 0; 
+                bottom: 0;
+                width: 100%; 
+                max-width: 320px;
+                transform: translateX(-100%); 
+                transition: transform 0.3s ease;
                 z-index: 100;
             }}
-            .sidebar.active {{ transform: translateX(0); }}
-            .back-btn {{ display: flex; align-items: center; justify-content: center; }}
-            .messages {{ padding: 16px 12px; }}
-            .message {{ max-width: 90%; }}
-            .input-area {{ padding: 16px; }}
-            .modal-content {{ padding: 20px; margin: 10px; max-width: 95%; }}
-            .favorites-grid {{ grid-template-columns: 1fr; }}
-            .modal-buttons {{ flex-direction: column; }}
-            .id-check {{ flex-direction: column; }}
-            .id-check-btn {{ width: 100%; }}
+            .sidebar.active {{ 
+                transform: translateX(0); 
+            }}
+            .back-btn {{ 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+            }}
+            .messages {{ 
+                padding: 16px 12px; 
+            }}
+            .message {{ 
+                max-width: 95%; 
+            }}
+            .input-area {{ 
+                padding: 16px; 
+            }}
+            .modal-content {{ 
+                padding: 20px; 
+                margin: 10px; 
+                max-width: 95%; 
+            }}
+            .favorites-grid {{ 
+                grid-template-columns: 1fr; 
+            }}
+            .modal-buttons {{ 
+                flex-direction: column; 
+            }}
+            .id-check {{ 
+                flex-direction: column; 
+            }}
+            .id-check-btn {{ 
+                width: 100%; 
+            }}
         }}
         @media (min-width: 769px) {{ .back-btn {{ display: none; }} }}
     </style>
@@ -1850,6 +2252,21 @@ def create_app():
         let isMobile = window.innerWidth <= 768;
         let emojiData = ["😀", "😁", "😂", "🤣", "😃", "😄", "😅", "😆", "😉", "😊", "😋", "😎", "😍", "😘", "😗", "😙", "😚", "🙂", "🤗", "🤔", "👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🙈", "🙉", "🙊", "🐔", "🐧", "🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️", "🗜️", "💽", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥"];
         
+        // Добавить эффекты нажатия для всех кнопок
+        function addButtonEffects() {{
+            document.querySelectorAll('button').forEach(button => {{
+                if (!button.classList.contains('btn-effect')) {{
+                    button.classList.add('btn-effect');
+                }}
+            }});
+            document.querySelectorAll('.nav-item').forEach(item => {{
+                item.classList.add('btn-effect');
+            }});
+            document.querySelectorAll('.search-user-item, .search-channel-item').forEach(item => {{
+                item.classList.add('btn-effect');
+            }});
+        }}
+        
         // Инициализация
         window.onload = function() {{
             loadUserAvatar();
@@ -1858,6 +2275,7 @@ def create_app():
             loadFavorites();
             initEmojis();
             checkMobile();
+            addButtonEffects(); // Добавляем эффекты кнопок
             
             // Событие ресайза
             window.addEventListener('resize', checkMobile);
@@ -1986,6 +2404,9 @@ def create_app():
             if (container.children.length > 0) {{
                 container.style.display = 'block';
             }}
+            
+            // Добавить эффекты для новых элементов
+            addButtonEffects();
         }}
         
         // Загрузка личных чатов
@@ -2011,6 +2432,7 @@ def create_app():
                                 container.appendChild(item);
                             }});
                         }}
+                        addButtonEffects();
                     }}
                 }});
         }}
@@ -2034,6 +2456,7 @@ def create_app():
                             `;
                             container.appendChild(item);
                         }});
+                        addButtonEffects();
                     }}
                 }});
         }}
@@ -2087,6 +2510,11 @@ def create_app():
                     }});
             }}
             
+            // Обновляем активный элемент в навигации
+            document.querySelectorAll('.nav-item').forEach(item => {{
+                item.classList.remove('active');
+            }});
+            
             // Показываем поле ввода
             document.getElementById('input-area').style.display = 'block';
             
@@ -2107,6 +2535,12 @@ def create_app():
             if (e) e.preventDefault();
             currentRoom = "favorites";
             currentRoomType = "favorites";
+            
+            // Обновляем активный элемент
+            document.querySelectorAll('.nav-item').forEach(item => {{
+                item.classList.remove('active');
+            }});
+            e.target.closest('.nav-item').classList.add('active');
             
             document.getElementById('chat-title').textContent = "Все заметки";
             document.getElementById('chat-subtitle').textContent = "Ваши сохраненные материалы";
@@ -2189,6 +2623,7 @@ def create_app():
                             
                             container.appendChild(grid);
                         }}
+                        addButtonEffects();
                     }}
                 }});
         }}
@@ -2228,16 +2663,29 @@ def create_app():
                             msgs.forEach(msg => {{
                                 const messageDiv = document.createElement('div');
                                 messageDiv.className = `message ${{msg.user === user ? 'own' : 'other'}}`;
+                                
+                                let avatarContent = '';
+                                if (msg.avatar_path) {{
+                                    avatarContent = `<div class="message-avatar" style="background-image: url(${{msg.avatar_path}});"></div>`;
+                                }} else {{
+                                    avatarContent = `<div class="message-avatar" style="background-color: ${{msg.color}};">${{msg.user.slice(0, 2).toUpperCase()}}</div>`;
+                                }}
+                                
+                                let fileContent = '';
+                                if (msg.file) {{
+                                    if (msg.file.match(/\\.(mp4|webm|mov)$/i)) {{
+                                        fileContent = `<div class="message-file"><video src="${{msg.file}}" controls></video></div>`;
+                                    }} else {{
+                                        fileContent = `<div class="message-file"><img src="${{msg.file}}" alt="${{msg.file_name || 'Файл'}}"></div>`;
+                                    }}
+                                }}
+                                
                                 messageDiv.innerHTML = `
-                                    <div class="message-avatar"></div>
+                                    ${{avatarContent}}
                                     <div class="message-content">
                                         <div class="message-sender">${{msg.user}}</div>
                                         <div class="message-text">${{msg.message || ''}}</div>
-                                        ${{msg.file ? `
-                                            <div class="message-file">
-                                                ${{msg.file.endsWith('.mp4') || msg.file.endsWith('.webm') || msg.file.endsWith('.mov') ? `<video src="${{msg.file}}" controls></video>` : `<img src="${{msg.file}}" alt="${{msg.file_name || 'Файл'}}">`}}
-                                            </div>
-                                        ` : ''}}
+                                        ${{fileContent}}
                                         <div class="message-time">${{msg.timestamp || ''}}</div>
                                     </div>
                                 `;
@@ -2248,6 +2696,7 @@ def create_app():
                     
                     // Прокручиваем вниз
                     container.scrollTop = container.scrollHeight;
+                    addButtonEffects();
                 }});
         }}
         
@@ -2330,21 +2779,38 @@ def create_app():
             // Добавляем сообщение
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${{data.user === user ? 'own' : 'other'}}`;
+            
+            let avatarContent = '';
+            if (data.avatar_path) {{
+                avatarContent = `<div class="message-avatar" style="background-image: url(${{data.avatar_path}});"></div>`;
+            }} else {{
+                avatarContent = `<div class="message-avatar" style="background-color: ${{data.color || '#6366F1'}};">${{data.user.slice(0, 2).toUpperCase()}}</div>`;
+            }}
+            
+            let fileContent = '';
+            if (data.file) {{
+                if (data.file.match(/\\.(mp4|webm|mov)$/i)) {{
+                    fileContent = `<div class="message-file"><video src="${{data.file}}" controls></video></div>`;
+                }} else {{
+                    fileContent = `<div class="message-file"><img src="${{data.file}}" alt="${{data.fileName || 'Файл'}}"></div>`;
+                }}
+            }}
+            
             messageDiv.innerHTML = `
-                <div class="message-avatar"></div>
+                ${{avatarContent}}
                 <div class="message-content">
                     <div class="message-sender">${{data.user}}</div>
                     <div class="message-text">${{data.message || ''}}</div>
-                    ${{data.file ? `
-                        <div class="message-file">
-                            ${{data.file.endsWith('.mp4') || data.file.endsWith('.webm') || data.file.endsWith('.mov') ? `<video src="${{data.file}}" controls></video>` : `<img src="${{data.file}}" alt="${{data.fileName || 'Файл'}}">`}}
-                        </div>
-                    ` : ''}}
+                    ${{fileContent}}
                     <div class="message-time">${{data.timestamp || new Date().toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }})}}</div>
                 </div>
             `;
             container.appendChild(messageDiv);
             container.scrollTop = container.scrollHeight;
+            
+            // Добавляем анимацию
+            messageDiv.style.animation = 'messageAppear 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            addButtonEffects();
         }}
         
         // Эмодзи
@@ -2357,6 +2823,7 @@ def create_app():
                 emojiItem.onclick = () => insertEmoji(emoji);
                 emojiGrid.appendChild(emojiItem);
             }});
+            addButtonEffects();
         }}
         
         function toggleEmojiPicker() {{
@@ -2377,6 +2844,7 @@ def create_app():
         function openCreateChannelModal() {{
             resetCreateChannelForm();
             openModal('create-channel-modal');
+            addButtonEffects();
             
             // Скрываем сайдбар на мобильных
             if (isMobile) {{
@@ -2643,6 +3111,7 @@ def create_app():
             setTimeout(() => {{
                 modal.classList.add('active');
             }}, 10);
+            addButtonEffects();
         }}
         
         function closeModal(id) {{
@@ -2726,6 +3195,7 @@ def create_app():
             if (isMobile) {{
                 document.getElementById('sidebar').classList.remove('active');
             }}
+            addButtonEffects();
         }}
         
         function logout() {{
